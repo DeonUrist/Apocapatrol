@@ -66,9 +66,14 @@ namespace Apocapatrol
                 parts += AttachAll(car, new[] { "hinge_engine" }, Plugin.Engine.Value, "engine");
                 parts += AttachAll(car, new[] { "hinge_radiator" }, Plugin.Radiator.Value, "radiator");
                 parts += AttachAll(car, new[] { "hinge_steeringwheel" }, Plugin.SteeringWheel.Value, "steeringwheel");
+                parts += AttachAll(car, new[] { "hinge_seat_driver" }, Plugin.Seat.Value, "seat");
                 Plugin.Log.LogInfo(parts + " parts attached");
 
                 if (Plugin.FillFuel.Value) Fuel(car);
+                if (Plugin.ReleaseHandbrake.Value) Handbrake(car, false);
+
+                yield return null;
+                if (!string.IsNullOrEmpty(Plugin.Driver.Value)) SeatDriver(car);
 
                 yield return new WaitForSeconds(1.5f);
                 if (Plugin.VerboseLog.Value) LogHingeStates(car);
@@ -167,6 +172,54 @@ namespace Apocapatrol
             Plugin.Log.LogWarning("Fuel/LiquidAmount FSM not found");
         }
 
+        // The handbrake lever FSM: HandbrakeOn -> (click) over -> Sound -> HandbrakeOff (SetProperty input.Handbrake + lever rotation).
+        // Entering "Sound" plays the click and flows into HandbrakeOff by itself; "Sound 2" goes back to HandbrakeOn.
+        private static void Handbrake(GameObject car, bool on)
+        {
+            var f = FindFsm(car, "handbrake", "Handbrake");
+            if (f == null) { Plugin.Log.LogWarning("No handbrake/Handbrake FSM; setting NWH input.Handbrake only"); Nwh.SetHandbrake(car, on ? 1f : 0f); return; }
+            string cur = f.Fsm.Initialized ? f.ActiveStateName : "";
+            bool isOn = cur == "HandbrakeOn" || cur == "over" || cur == "Sound 2" || cur == "";
+            if (on == isOn) { Plugin.Verbose("Handbrake already " + (on ? "on" : "off") + " (" + cur + ")"); return; }
+            f.Fsm.SetState(on ? "Sound 2" : "Sound");
+            Plugin.Log.LogInfo("Handbrake " + (on ? "on" : "released") + " (was " + cur + ")");
+        }
+
+        // A ragdoll on the driver seat: the *_Dead prefab's root Rigidbody is made kinematic and parented to the car's sitPos
+        // (where the player sits), so it rides along exactly; the bones hang off it through their CharacterJoints and keep
+        // flopping. Collisions between the ragdoll and the car are ignored so it never gets thrown out by the car's colliders.
+        private static void SeatDriver(GameObject car)
+        {
+            var prefab = Prefabs.FindAny(Plugin.Driver.Value);
+            if (prefab == null) { Plugin.Log.LogWarning("Driver prefab not found: " + Plugin.Driver.Value); return; }
+            var sit = FindChild(car.transform, "sitPos") ?? FindChild(car.transform, "hinge_seat_driver");
+            if (sit == null) { Plugin.Log.LogWarning("No sitPos on " + car.name); return; }
+
+            var off = new Vector3(Plugin.DriverOffsetX.Value, Plugin.DriverOffsetY.Value, Plugin.DriverOffsetZ.Value);
+            var pos = sit.position + car.transform.right * off.x + car.transform.up * off.y + car.transform.forward * off.z;
+            var rot = Quaternion.LookRotation(car.transform.forward, car.transform.up);
+            var drv = UnityEngine.Object.Instantiate(prefab, pos, rot);
+            drv.SetActive(true);
+            if (Plugin.RegisterDriver.Value) { Register.Name(drv, prefab.name); Register.Add(drv, false); }
+            else drv.name = prefab.name + "(Driver)";
+
+            var carCols = car.GetComponentsInChildren<Collider>(true);
+            var drvCols = drv.GetComponentsInChildren<Collider>(true);
+            foreach (var a in drvCols) foreach (var b in carCols)
+                if (a != null && b != null) Physics.IgnoreCollision(a, b, true);
+
+            var root = drv.GetComponent<Rigidbody>();
+            if (root == null) root = drv.AddComponent<Rigidbody>();
+            root.isKinematic = true;
+            root.interpolation = RigidbodyInterpolation.None;
+            drv.transform.SetParent(sit, true);
+
+            int bones = 0;
+            foreach (var rb in drv.GetComponentsInChildren<Rigidbody>(true))
+                if (rb != root) { bones++; rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+            Plugin.Log.LogInfo("Driver " + drv.name + " on " + sit.name + " at " + pos + " (" + bones + " ragdoll bones, " + drvCols.Length + " colliders)");
+        }
+
         private static void LogHingeStates(GameObject car)
         {
             foreach (var f in car.GetComponentsInChildren<PlayMakerFSM>(true))
@@ -240,6 +293,24 @@ namespace Apocapatrol
             }
             Plugin.Verbose("Prefab \"" + q + "\" -> " + e.Name + (e.Display != null ? " (\"" + e.Display + "\")" : "") + " [" + e.Kind + "]");
             return e.Go;
+        }
+
+        // Any asset root prefab by name (carcasses, enemies ... anything with a PlayMaker FSM), exact then contains.
+        internal static GameObject FindAny(string query)
+        {
+            if (string.IsNullOrEmpty(query)) return null;
+            string q = query.Trim();
+            GameObject partial = null;
+            foreach (var f in Resources.FindObjectsOfTypeAll<PlayMakerFSM>())
+            {
+                if (f == null || f.gameObject == null) continue;
+                var go = f.gameObject;
+                if (go.scene.IsValid() || go.transform.parent != null) continue;
+                if (string.Equals(go.name, q, StringComparison.OrdinalIgnoreCase)) return go;
+                if (partial == null && go.name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0) partial = go;
+            }
+            if (partial != null) Plugin.Verbose("Prefab \"" + q + "\" -> " + partial.name + " (partial match)");
+            return partial;
         }
 
         private static void Scan()
@@ -384,6 +455,12 @@ namespace Apocapatrol
         {
             try { var input = Get(Vc(car), "input"); if (!Set(input, "autoSetInput", on)) Plugin.Verbose("no autoSetInput"); }
             catch (Exception e) { Plugin.Log.LogWarning("AutoInput: " + e.Message); }
+        }
+
+        internal static void SetHandbrake(GameObject car, float value)
+        {
+            try { var input = Get(Vc(car), "input"); if (!Set(input, "Handbrake", value)) Plugin.Verbose("no input.Handbrake"); }
+            catch (Exception e) { Plugin.Log.LogWarning("SetHandbrake: " + e.Message); }
         }
 
         internal static void SetInput(GameObject car, float throttle, float steering, float brakes)

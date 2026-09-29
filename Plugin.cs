@@ -15,11 +15,13 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.1.0";
+        public const string VERSION = "0.2.0";
 
         internal static ManualLogSource Log;
 
-        internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel;
+        internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel, Seat, Driver;
+        internal static ConfigEntry<bool> ReleaseHandbrake, RegisterDriver;
+        internal static ConfigEntry<float> DriverOffsetX, DriverOffsetY, DriverOffsetZ;
         internal static ConfigEntry<float> SpawnDistance;
         internal static ConfigEntry<bool> FillFuel, StartEngine, NwhStartFallback, RegisterWithGame;
         internal static ConfigEntry<float> DriveTestSeconds, DriveTestThrottle;
@@ -40,6 +42,8 @@ namespace Apocapatrol
             Engine = Config.Bind("Build", "Engine", "1.2L I4 59HP 87Nm Gasoline", "Engine item, prefab name or in-game name");
             Radiator = Config.Bind("Build", "Radiator", "radiator_small", "Radiator item, prefab name or in-game name (empty = none)");
             SteeringWheel = Config.Bind("Build", "SteeringWheel", "steeringwheel_7", "Steering wheel item, prefab name or in-game name (empty = none)");
+            Seat = Config.Bind("Build", "Seat", "poloska_seat_front_homemade", "Driver seat item, prefab name or in-game name (empty = none)");
+            ReleaseHandbrake = Config.Bind("Build", "ReleaseHandbrake", true, "Release the handbrake (handbrake lever FSM -> HandbrakeOff)");
             SpawnDistance = Config.Bind("Build", "SpawnDistance", 8f, new ConfigDescription(
                 "How far in front of the player the car appears (m)", new AcceptableValueRange<float>(3f, 100f)));
             FillFuel = Config.Bind("Build", "FillFuel", true, "Fill the tank (Fuel/LiquidAmount Liquid = LiquidCapacity)");
@@ -53,6 +57,13 @@ namespace Apocapatrol
                 new AcceptableValueRange<float>(0f, 60f)));
             DriveTestThrottle = Config.Bind("Build", "DriveTestThrottle", 0.5f, new ConfigDescription(
                 "Throttle used by the drive test (0..1)", new AcceptableValueRange<float>(0.05f, 1f)));
+
+            Driver = Config.Bind("Driver", "Driver", "Scraffa_Dead",
+                "Prefab put on the driver seat (a *_Dead ragdoll; empty = nobody). Its root Rigidbody is made kinematic and parented to the seat position, limbs stay ragdolled");
+            DriverOffsetX = Config.Bind("Driver", "OffsetX", 0f, new ConfigDescription("Driver offset from the car's sitPos, right (m)", new AcceptableValueRange<float>(-2f, 2f)));
+            DriverOffsetY = Config.Bind("Driver", "OffsetY", 0f, new ConfigDescription("Driver offset from the car's sitPos, up (m)", new AcceptableValueRange<float>(-2f, 2f)));
+            DriverOffsetZ = Config.Bind("Driver", "OffsetZ", 0f, new ConfigDescription("Driver offset from the car's sitPos, forward (m)", new AcceptableValueRange<float>(-2f, 2f)));
+            RegisterDriver = Config.Bind("Driver", "RegisterDriver", false, "Register the driver like a vanilla spawn (saved as a loose carcass; the seat pin is not saved)");
 
             SpawnKey = Config.Bind("Debug", "SpawnKey", Key.F7, "Assemble one car in front of the player. None = off");
             VerboseLog = Config.Bind("Debug", "VerboseLog", true, "Log every build step (prefab lookups, hinge states, engine state)");
