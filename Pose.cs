@@ -11,8 +11,6 @@ namespace Apocapatrol
     {
         private Transform _root, _anchor;
         private Transform _hips, _lUpLeg, _lLeg, _rUpLeg, _rLeg, _lArm, _lForeArm, _rArm, _rForeArm;
-        private Transform[] _limbs;
-        private Quaternion[] _rest;           // the prefab's rest pose of the limb bones (symmetric), captured before the Animator ran
         private bool _logged;
 
         internal static Pose Apply(GameObject driver, Transform anchor)
@@ -37,13 +35,6 @@ namespace Apocapatrol
             if (_lUpLeg == null || _lLeg == null || _rUpLeg == null || _rLeg == null) missing.Add("legs");
             if (_lArm == null || _lForeArm == null || _rArm == null || _rForeArm == null) missing.Add("arms");
             Plugin.Log.LogInfo("Pose: bones " + (missing.Count == 0 ? "all found" : "missing " + string.Join(", ", missing.ToArray())));
-
-            // The idle animation is not symmetric (one leg forward, hips turned); applying the same swing to both sides on top of it
-            // leaves one leg closer to the centre. So the limb bones (and the hips' yaw) are put back to the prefab's rest pose every
-            // frame first, and the seat pose is built from there; the animation still moves spine, head, hands.
-            _limbs = new[] { _hips, _lUpLeg, _lLeg, _rUpLeg, _rLeg, _lArm, _lForeArm, _rArm, _rForeArm };
-            _rest = new Quaternion[_limbs.Length];
-            for (int i = 0; i < _limbs.Length; i++) if (_limbs[i] != null) _rest[i] = _limbs[i].localRotation;
         }
 
         // Mixamo names are "mixamorig:LeftUpLeg" (sometimes "mixamorig_LeftUpLeg" or plain); match the tail, exact word
@@ -62,21 +53,19 @@ namespace Apocapatrol
         private void LateUpdate()
         {
             if (_root == null || _anchor == null) return;
-            if (Plugin.PoseFromRest.Value && _rest != null)
-                for (int i = 0; i < _limbs.Length; i++) if (_limbs[i] != null) _limbs[i].localRotation = _rest[i];
             var right = _anchor.right;   // the car's right axis: rotating about it swings limbs forward/back
 
             var up = _anchor.up;         // yaw about it brings a forward-pointing limb toward the body's centre line
 
             // legs: thighs forward (then closer together), shins back down (relative to the thigh)
-            float thigh = Plugin.PoseThigh.Value, knee = Plugin.PoseKnee.Value, legsIn = Plugin.PoseLegsCloser.Value;
-            Swing(_lUpLeg, -thigh, right); Swing(_lUpLeg, legsIn, up); Swing(_lLeg, knee, right);
-            Swing(_rUpLeg, -thigh, right); Swing(_rUpLeg, -legsIn, up); Swing(_rLeg, knee, right);
+            float thigh = Plugin.PoseThigh.Value, knee = Plugin.PoseKnee.Value;
+            Swing(_lUpLeg, -thigh, right); Swing(_lUpLeg, Plugin.PoseLeftLegCloser.Value, up); Swing(_lLeg, knee, right);
+            Swing(_rUpLeg, -thigh, right); Swing(_rUpLeg, -Plugin.PoseRightLegCloser.Value, up); Swing(_rLeg, knee, right);
 
             // arms: upper arms forward (then closer together), forearms bent up a little more
-            float arm = Plugin.PoseArm.Value, elbow = Plugin.PoseElbow.Value, armsIn = Plugin.PoseArmsCloser.Value;
-            Swing(_lArm, -arm, right); Swing(_lArm, armsIn, up); Swing(_lForeArm, -elbow, right);
-            Swing(_rArm, -arm, right); Swing(_rArm, -armsIn, up); Swing(_rForeArm, -elbow, right);
+            float arm = Plugin.PoseArm.Value, elbow = Plugin.PoseElbow.Value;
+            Swing(_lArm, -arm, right); Swing(_lArm, Plugin.PoseLeftArmCloser.Value, up); Swing(_lForeArm, -elbow, right);
+            Swing(_rArm, -arm, right); Swing(_rArm, -Plugin.PoseRightArmCloser.Value, up); Swing(_rForeArm, -elbow, right);
 
             // hips onto the seat point: move the whole body so the hips bone lands on anchor + offsets
             var target = _anchor.position + _anchor.right * Plugin.DriverOffsetX.Value + _anchor.up * Plugin.DriverOffsetY.Value

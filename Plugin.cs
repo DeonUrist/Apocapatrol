@@ -15,15 +15,15 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.4.3";
+        public const string VERSION = "0.4.4";
 
         internal static ManualLogSource Log;
 
         internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel, Seat, Driver;
         internal static ConfigEntry<bool> ReleaseHandbrake, RegisterDriver;
         internal static ConfigEntry<float> DriverOffsetX, DriverOffsetY, DriverOffsetZ;
-        internal static ConfigEntry<bool> PoseEnabled, PoseFromRest;
-        internal static ConfigEntry<float> PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLegsCloser, PoseArmsCloser;
+        internal static ConfigEntry<bool> PoseEnabled;
+        internal static ConfigEntry<float> PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLeftLegCloser, PoseRightLegCloser, PoseLeftArmCloser, PoseRightArmCloser;
         internal static ConfigEntry<string> DriverDisabledFsms;
         internal static ConfigEntry<float> DriveDelaySeconds, DriveThrottle, StuckPedalChance;
         internal static ConfigEntry<float> SpawnDistance;
@@ -81,13 +81,13 @@ namespace Apocapatrol
             RegisterDriver = Config.Bind("Driver", "RegisterDriver", false, "Register the driver like a vanilla spawn (saved, but the seat pin is not - after a load it is loose)");
 
             PoseEnabled = Config.Bind("Pose", "Enabled", true, "Seated pose for a live driver (bone override after the animation; Mixamo rigs)");
-            PoseFromRest = Config.Bind("Pose", "FromRestPose", true,
-                "Build the seat pose from the rig's symmetric rest pose instead of on top of the idle animation (otherwise one leg sits closer to the centre)");
             PoseThigh = Config.Bind("Pose", "ThighAngle", 85f, new ConfigDescription("Thighs swung forward from hanging straight down (degrees; 90 = horizontal)", new AcceptableValueRange<float>(0f, 130f)));
             PoseKnee = Config.Bind("Pose", "KneeAngle", 30f, new ConfigDescription("Shins swung back down relative to the thigh (degrees; = ThighAngle keeps them vertical, less = slight bend forward)", new AcceptableValueRange<float>(0f, 130f)));
             PoseArm = Config.Bind("Pose", "ArmAngle", 65f, new ConfigDescription("Upper arms swung forward from hanging down (degrees; 90 = horizontal)", new AcceptableValueRange<float>(0f, 130f)));
-            PoseLegsCloser = Config.Bind("Pose", "LegsCloser", 10f, new ConfigDescription("Whole legs turned toward each other (degrees; negative = apart)", new AcceptableValueRange<float>(-60f, 60f)));
-            PoseArmsCloser = Config.Bind("Pose", "ArmsCloser", 10f, new ConfigDescription("Whole arms turned toward each other (degrees; negative = apart)", new AcceptableValueRange<float>(-60f, 60f)));
+            PoseLeftLegCloser = Config.Bind("Pose", "LeftLegCloser", 10f, new ConfigDescription("Left leg turned toward the centre (degrees; negative = apart)", new AcceptableValueRange<float>(-60f, 60f)));
+            PoseRightLegCloser = Config.Bind("Pose", "RightLegCloser", 10f, new ConfigDescription("Right leg turned toward the centre (degrees; negative = apart)", new AcceptableValueRange<float>(-60f, 60f)));
+            PoseLeftArmCloser = Config.Bind("Pose", "LeftArmCloser", 10f, new ConfigDescription("Left arm turned toward the centre (degrees; negative = apart)", new AcceptableValueRange<float>(-60f, 60f)));
+            PoseRightArmCloser = Config.Bind("Pose", "RightArmCloser", 10f, new ConfigDescription("Right arm turned toward the centre (degrees; negative = apart)", new AcceptableValueRange<float>(-60f, 60f)));
             PoseElbow = Config.Bind("Pose", "ElbowAngle", 25f, new ConfigDescription("Extra forearm bend upward at the elbow (degrees)", new AcceptableValueRange<float>(0f, 130f)));
 
             SpawnKey = Config.Bind("Debug", "SpawnKey", Key.F7, "Assemble one car in front of the player. None = off");
