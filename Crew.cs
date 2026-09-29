@@ -209,6 +209,30 @@ namespace Apocapatrol
             return true;
         }
 
+        // Called by the Pilot when it gives up (MaxRecovers reached). With [Driver] StuckBailChance the whole crew gets out
+        // instead of waiting: the car is left standing as an ordinary vehicle. Returns true if the crew left.
+        internal bool OnStuck()
+        {
+            if (_dead || _done || !_driving) return false;
+            if (UnityEngine.Random.Range(0f, 100f) >= Plugin.StuckBailChance.Value) return false;
+            var marker = _car.GetComponent<PatrolMarker>();
+            Plugin.Log.LogInfo("Crew: stuck for good, the crew bails out (" + Plugin.StuckBailChance.Value + " % roll)");
+            if (_pilot != null) { _pilot.Detach(); _pilot = null; }
+            Nwh.SetInput(_car, 0f, 0f, 0f);
+            if (_ctl != null && _ctl.Taken) _ctl.Release();
+            SeatLocked(false);
+            var pax = marker != null ? marker.Passenger : null;
+            if (pax != null && Alive(pax, marker.PassengerHealthFsm)) Patrol.BailOut(_car, pax, marker);
+            if (_driver != null && DriverAlive())
+            {
+                if (marker != null) marker.DriverLeft();
+                Patrol.BailOut(_car, _driver, marker != null ? marker.DriverPrefab : Plugin.Driver.Value, -1f);
+            }
+            _driver = null; _health = null;
+            _dead = true; _done = true; _driving = false;    // Phase = Released: saved as an empty car
+            return true;
+        }
+
         // The passenger climbs onto the driver seat and Crew starts over with it as the driver.
         private void Promote(GameObject pax, PatrolMarker marker)
         {

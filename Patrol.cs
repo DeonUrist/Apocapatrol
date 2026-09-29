@@ -360,12 +360,12 @@ namespace Apocapatrol
                     foreach (var b in paxCols) if (b != null) Physics.IgnoreCollision(a, b, true);
                 }
                 // put it down on the ground well clear of the car (left and behind), no impulse at all
-                var target = sit.position + left * Plugin.ExitDistance.Value + Vector3.up * 2f;
+                var target = sit.position + left * Plugin.EjectDistance.Value + Vector3.up * 2f;
                 var ground = target + Vector3.down * 1.5f;
                 foreach (var h in Physics.RaycastAll(target, Vector3.down, 8f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                     if (h.collider != null && !h.collider.transform.IsChildOf(car.transform) && !h.collider.transform.IsChildOf(root) && h.point.y > ground.y) ground = h.point;
                 Throw(root, ground + Vector3.up * 0.4f, Vector3.zero);
-                Plugin.Log.LogInfo("Eject: " + root.name + " laid down " + Plugin.ExitDistance.Value + " m left of " + car.name + " (" + joints + " joints, "
+                Plugin.Log.LogInfo("Eject: " + root.name + " laid down " + Plugin.EjectDistance.Value + " m left of " + car.name + " (" + joints + " joints, "
                     + jointsToCar + " were attached to the car); car v=" + (carRb != null ? carRb.velocity.magnitude.ToString("0.0") + " w=" + carRb.angularVelocity.magnitude.ToString("0.0") : "?"));
             }
             var watch = car.AddComponent<CorpseWatch>();
@@ -426,13 +426,23 @@ namespace Apocapatrol
         // A fresh instance rather than the seated one because the seat setup rewires its FSM actions (ranged-only, melee off).
         internal static void BailOut(GameObject car, GameObject pax, PatrolMarker marker)
         {
+            marker.PassengerLeft();
+            BailOut(car, pax, marker.PassengerPrefab, 0f);
+        }
+
+        // Any occupant gets out on the given side (+1 right, -1 left, 0 = the side its seat is on relative to sitPos).
+        internal static GameObject BailOut(GameObject car, GameObject pax, string prefabName, float side)
+        {
             float health = GetHealth(pax);
-            var prefab = Prefabs.FindAny(marker.PassengerPrefab);
+            var prefab = Prefabs.FindAny(prefabName);
             var anchor = pax.transform.parent;
             var sit = FindChild(car.transform, "sitPos");
-            float side = 1f;
-            if (anchor != null && sit != null) side = Vector3.Dot(anchor.position - sit.position, car.transform.right) >= 0f ? 1f : -1f;
-            var from = (anchor != null ? anchor.position : car.transform.position) + car.transform.right * side * Plugin.ExitDistance.Value + Vector3.up * 1.5f;
+            if (side == 0f)
+            {
+                side = 1f;
+                if (anchor != null && sit != null) side = Vector3.Dot(anchor.position - sit.position, car.transform.right) >= 0f ? 1f : -1f;
+            }
+            var from = (anchor != null ? anchor.position : car.transform.position) + car.transform.right * side * Plugin.BailDistance.Value + Vector3.up * 1.5f;
             var pos = from + Vector3.down * 1.2f;
             var hits = Physics.RaycastAll(from, Vector3.down, 6f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float best = float.MaxValue;
@@ -442,13 +452,12 @@ namespace Apocapatrol
             float groundY = pos.y;
             var rot = Quaternion.LookRotation(Vector3.ProjectOnPlane(car.transform.right * side, Vector3.up).normalized, Vector3.up);
 
-            marker.PassengerLeft();
             if (prefab == null)
             {
-                Plugin.Log.LogWarning("Bail-out: passenger prefab not found: " + marker.PassengerPrefab + "; the passenger just disappears");
+                Plugin.Log.LogWarning("Bail-out: prefab not found: " + prefabName + "; " + pax.name + " just disappears");
                 UnityEngine.Object.Destroy(pax);
                 if (anchor != null && anchor.name == "Apocapatrol.PassengerPos") UnityEngine.Object.Destroy(anchor.gameObject);
-                return;
+                return null;
             }
             var mob = UnityEngine.Object.Instantiate(prefab, pos + Vector3.up * 0.5f, rot);
             mob.SetActive(true);
@@ -465,6 +474,7 @@ namespace Apocapatrol
             UnityEngine.Object.Destroy(pax);
             if (anchor != null && anchor.name == "Apocapatrol.PassengerPos") UnityEngine.Object.Destroy(anchor.gameObject);
             Plugin.Log.LogInfo("Bail-out: " + mob.name + " got out of " + car.name + " with " + (health > 0f ? health.ToString("0") : "full") + " health at " + pos);
+            return mob;
         }
 
         internal static float GetHealth(GameObject who)
@@ -526,7 +536,7 @@ namespace Apocapatrol
                 if (d.magnitude >= 1.8f) continue;
                 anyInside = true;
                 _pushes++;
-                Patrol.Throw(root, _sit.position + _left * (Plugin.ExitDistance.Value + _pushes) + Vector3.up * 1f, Vector3.zero);
+                Patrol.Throw(root, _sit.position + _left * (Plugin.EjectDistance.Value + _pushes) + Vector3.up * 1f, Vector3.zero);
                 Plugin.Log.LogInfo("Eject: " + root.name + " was still in the car, moved out again (" + _pushes + ")");
             }
             if (!anyInside && _t > 1f || _t > 6f) { Plugin.Verbose("Eject: done, " + _pushes + " extra push(es)"); Destroy(this); }

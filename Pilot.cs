@@ -41,7 +41,7 @@ namespace Apocapatrol
         private bool _reverseChecked;
         private int _reverseTries;
 
-        private bool _hitPending, _hitIsTarget, _rearHit;
+        private bool _hitPending, _hitIsTarget, _rearHit, _abandoned;
         private float _hitSide;
         private float _pushTime, _pushStamp = -1f;   // slow continuous push against an obstacle ahead
         private string _pushName = "";
@@ -82,6 +82,7 @@ namespace Apocapatrol
 
         internal void Step()
         {
+            if (_abandoned) return;
             float dt = Time.fixedDeltaTime;
             _stateTime += dt;
 
@@ -304,6 +305,8 @@ namespace Apocapatrol
             if (_recoverCount > Plugin.AiMaxRecovers.Value)
             {
                 Apply(0f, _steer, 0.5f);
+                var crew = _car.GetComponent<Crew>();
+                if (crew != null && crew.OnStuck()) { _abandoned = true; return; }   // the crew got out; this component is being destroyed
                 Enter(PilotState.Wait, why + " (" + _recoverCount + " recoveries)");
                 return;
             }

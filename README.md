@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.10.3)
+# Apocapatrol (prototype 0.11.0)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -80,10 +80,15 @@ the close-range state from visually drawing a blade without affecting the left-h
 Their melee `Damage` and contact `FireDamage` FSM actions are neutralized and `FireDamageCollider` is disabled as well, so native FSMs cannot
 re-enable an invisible close-range hit. Projectile damage continues through the separate `Damage Ranged` FSM.
 
+### When the car is stuck for good
+When the pilot has reversed out `MaxRecovers` times in a row without getting anywhere, `[Driver] StuckBailChance` % (50) of the time the whole crew
+gets out (driver on the left, passenger on its side, `BailDistance` m from their seats, as fresh vanilla mobs with their remaining health) and the
+car is left standing, seat free; otherwise the car waits `WaitSeconds` and tries again.
+
 ### When the driver dies
 A passenger that outlives the driver acts as soon as the car stands still (a stuck pedal is kicked off after `StuckPedalTakeoverSeconds`, 6 s):
-with `BailChance` % (25) it **bails out** - it is replaced by a fresh instance of its prefab `ExitDistance` m beside its seat, stood on the ground, fully vanilla AI, registered like a
-spawned enemy (so the game saves it), with the health it had left; otherwise it **takes the wheel**: the dead driver's carcass is laid down on the ground `ExitDistance` m to the left of the seat first, with no impulse (its
+with `BailChance` % (25) it **bails out** - it is replaced by a fresh instance of its prefab `BailDistance` m beside its seat, stood on the ground, fully vanilla AI, registered like a
+spawned enemy (so the game saves it), with the health it had left; otherwise it **takes the wheel**: the dead driver's carcass is laid down on the ground `EjectDistance` m to the left of the seat first, with no impulse (its
 colliders ignore the car and the new driver, joints to the car are cut, and it is moved out again if it is still inside a moment later).
 Occupant-vs-car collision ignores are re-applied at the takeover and once a second while seated: Unity drops an ignore pair whenever a
 collider is toggled (weapon props, hitboxes), and a kinematic occupant with one live pair shoves the car around unopposed, then it climbs onto the driver seat, the seat

@@ -17,7 +17,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.10.3";
+        public const string VERSION = "0.11.0";
 
         internal static ManualLogSource Log;
 
@@ -26,7 +26,7 @@ namespace Apocapatrol
         internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
         internal static ConfigEntry<bool> PassengerRangedCombat;
         internal static ConfigEntry<float> PassengerFireArc, PassengerMaxAimPitch, PassengerAimTurnSpeed;
-        internal static ConfigEntry<float> PassengerBailChance, PassengerTakeoverSeconds, StuckPedalTakeoverSeconds, ExitDistance;
+        internal static ConfigEntry<float> PassengerBailChance, PassengerTakeoverSeconds, StuckPedalTakeoverSeconds, EjectDistance, BailDistance, StuckBailChance;
         internal static PoseBool PoseEnabled;
         internal static PoseFloat PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLeftLegCloser, PoseRightLegCloser, PoseLeftArmCloser, PoseRightArmCloser;
         internal static ConfigEntry<float> DriveDelaySeconds, DriveThrottle, StuckPedalChance;
@@ -88,6 +88,10 @@ namespace Apocapatrol
                 "Throttle with the driving AI off (straight ahead) and of a stuck pedal (0..1); the AI has its own [AI] Throttle", new AcceptableValueRange<float>(0.05f, 1f)));
             StuckPedalChance = Config.Bind("Driver", "StuckPedalChance", 5f, new ConfigDescription(
                 "% chance that a killed driver's gas pedal stays stuck; otherwise the gas is released and the car slowly rolls to a stop",
+                new AcceptableValueRange<float>(0f, 100f)));
+            StuckBailChance = Config.Bind("Driver", "StuckBailChance", 50f, new ConfigDescription(
+                "% chance that, when the driving AI gives up on a stuck car (after [AI] MaxRecovers), the driver and the passenger get out and " +
+                "fight on foot instead of the car waiting [AI] WaitSeconds and trying again; the car is left standing",
                 new AcceptableValueRange<float>(0f, 100f)));
             var offsetRange = new AcceptableValueRange<float>(-2f, 2f);
             DriverOffsetX = PoseFloat.Create(Config, "Driver", "OffsetX", 0f, "Where each occupant's hips go: offset from its seat anchor, right (m)", offsetRange, exposePose);
@@ -172,10 +176,13 @@ namespace Apocapatrol
                 new AcceptableValueRange<float>(0f, 100f)));
             PassengerTakeoverSeconds = Config.Bind("Passenger", "TakeoverSeconds", 2f, new ConfigDescription(
                 "A passenger that takes the wheel drives off this long after climbing over, s", new AcceptableValueRange<float>(0f, 60f)));
-            ExitDistance = Config.Bind("Passenger", "ExitDistance", 1.8f, new ConfigDescription(
-                "How far from its seat an occupant lands when leaving the car: a bailing passenger on its side, the dead driver's carcass on the left, m",
-                new AcceptableValueRange<float>(1f, 15f)));
-            Config.Remove(new ConfigDefinition("Passenger", "EjectDistance"));
+            EjectDistance = Config.Bind("Passenger", "EjectDistance", 1.8f, new ConfigDescription(
+                "Before a passenger takes the wheel, the dead driver's carcass is laid down this far to the left of the driver seat, m",
+                new AcceptableValueRange<float>(0.1f, 15f)));
+            BailDistance = Config.Bind("Passenger", "BailDistance", 1.8f, new ConfigDescription(
+                "An occupant that gets out of the car appears this far beside its seat (passenger on its side, driver on the left), m",
+                new AcceptableValueRange<float>(0.1f, 15f)));
+            Config.Remove(new ConfigDefinition("Passenger", "ExitDistance"));
             StuckPedalTakeoverSeconds = Config.Bind("Passenger", "StuckPedalTakeoverSeconds", 6f, new ConfigDescription(
                 "With a dead driver's foot stuck on the gas, a live passenger kicks it off after this long so the car can stop, s",
                 new AcceptableValueRange<float>(0f, 120f)));
