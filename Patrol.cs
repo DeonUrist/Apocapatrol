@@ -267,6 +267,7 @@ namespace Apocapatrol
             root.isKinematic = true;
             root.interpolation = RigidbodyInterpolation.None;
             drv.transform.SetParent(sit, true);
+            if (Plugin.PoseEnabled.Value) Pose.Apply(drv, sit);
             Plugin.Log.LogInfo("Live driver " + drv.name + " on " + sit.name + " at " + pos);
             return true;
         }
