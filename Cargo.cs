@@ -85,31 +85,54 @@ namespace Apocapatrol
                 + " y " + floorY.ToString("0.00") + ".." + ceilY.ToString("0.00") + " (local, scale " + scale + ")");
             if (maxX <= minX || maxZ <= minZ || ceilY <= floorY) { Plugin.Log.LogWarning("Cargo: PhysicsLock volume is degenerate on " + car.name); return items; }
 
-            float x = minX, z = minZ, y = floorY, rowDepth = 0f, layerHeight = 0f;
+            // scatter over the bed floor: random XZ that keeps clear of the items already placed (a few tries, then stack on top)
+            var placedPos = new List<Vector3>(); var placedR = new List<float>(); var placedTop = new List<float>();
             int placed = 0, wanted = 0;
             foreach (var slot in slots)
             {
                 wanted += slot.Count;
                 for (int i = 0; i < slot.Count; i++)
                 {
-                    var go = UnityEngine.Object.Instantiate(slot.Prefab, t.TransformPoint(new Vector3(x, y + 5f, z)), t.rotation);
+                    var go = UnityEngine.Object.Instantiate(slot.Prefab, t.TransformPoint(new Vector3(0f, ceilY + 5f, 0f)), t.rotation);
                     go.SetActive(true);
-                    // footprint from its renderers (world AABB, item aligned with the truck so it is close enough)
+                    // orientation: random yaw; cans / bottles / canisters lie on their side more often than not
+                    var rot = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
+                    if (IsCanLike(slot.Prefab.name) && UnityEngine.Random.value < 0.6f)
+                        rot = rot * Quaternion.Euler(UnityEngine.Random.value < 0.5f ? 90f : -90f, 0f, UnityEngine.Random.Range(-10f, 10f));
+                    go.transform.rotation = t.rotation * rot;
                     var b = Bounds(go);
-                    float w = Mathf.Max(0.1f, b.size.x / Mathf.Max(scale.x, 0.01f)) + 0.04f;
-                    float d = Mathf.Max(0.1f, b.size.z / Mathf.Max(scale.z, 0.01f)) + 0.04f;
-                    float h = Mathf.Max(0.05f, b.size.y / Mathf.Max(scale.y, 0.01f)) + 0.02f;
-                    if (x + w > maxX) { x = minX; z += rowDepth; rowDepth = 0f; }
-                    if (z + d > maxZ) { z = minZ; y += layerHeight; layerHeight = 0f; x = minX; rowDepth = 0f; }
-                    if (y + h > ceilY) { Plugin.Log.LogInfo("Cargo: bed full after " + placed + " of " + wanted + " items"); UnityEngine.Object.Destroy(go); goto done; }
-                    // put it down: pivot offset so the renderer bottom sits on the floor and the AABB corner on the cursor
-                    var local = new Vector3(x + w / 2f, y, z + d / 2f);
+                    float r = Mathf.Max(b.size.x, b.size.z) / 2f / Mathf.Max(scale.x, 0.01f) + 0.03f;
+                    float h = b.size.y / Mathf.Max(scale.y, 0.01f);
+                    float lx = 0f, lz = 0f, baseY = -1f; bool free = false;
+                    for (int attempt = 0; attempt < 25 && !free; attempt++)
+                    {
+                        lx = UnityEngine.Random.Range(minX + r, maxX - r); lz = UnityEngine.Random.Range(minZ + r, maxZ - r);
+                        if (maxX - minX < 2f * r) lx = (minX + maxX) / 2f;
+                        if (maxZ - minZ < 2f * r) lz = (minZ + maxZ) / 2f;
+                        free = true;
+                        for (int k = 0; k < placedPos.Count && free; k++)
+                        {
+                            float dx = placedPos[k].x - lx, dz = placedPos[k].z - lz;
+                            if (dx * dx + dz * dz < (placedR[k] + r) * (placedR[k] + r)) free = false;
+                        }
+                    }
+                    if (!free)
+                    {
+                        // no free spot: put it on top of whatever is there
+                        for (int k = 0; k < placedPos.Count; k++)
+                        {
+                            float dx = placedPos[k].x - lx, dz = placedPos[k].z - lz;
+                            if (dx * dx + dz * dz < (placedR[k] + r) * (placedR[k] + r)) baseY = Mathf.Max(baseY, placedTop[k]);
+                        }
+                    }
+                    if (baseY < 0f) baseY = FloorAt(car, t, lx, lz, floorY, ceilY);
+                    if (baseY + h > ceilY) { Plugin.Log.LogInfo("Cargo: bed full after " + placed + " of " + wanted + " items"); UnityEngine.Object.Destroy(go); goto done; }
+                    // move the renderer bottom-centre onto (lx, baseY, lz)
                     var pivotWorld = go.transform.position;
                     var bottomWorld = new Vector3(b.center.x, b.min.y, b.center.z);
                     var pivotOffsetLocal = t.InverseTransformVector(pivotWorld - bottomWorld);
-                    go.transform.position = t.TransformPoint(local + pivotOffsetLocal);
-                    go.transform.rotation = t.rotation * Quaternion.Euler(0f, UnityEngine.Random.Range(-8f, 8f), 0f);
-                    x += w; rowDepth = Mathf.Max(rowDepth, d); layerHeight = Mathf.Max(layerHeight, h);
+                    go.transform.position = t.TransformPoint(new Vector3(lx, baseY + 0.01f, lz) + pivotOffsetLocal);
+                    placedPos.Add(new Vector3(lx, baseY, lz)); placedR.Add(r); placedTop.Add(baseY + h + 0.01f);
 
                     Register.Name(go, slot.Prefab.name); Register.Add(go, false);
                     Lock(go, t);
@@ -120,6 +143,27 @@ namespace Apocapatrol
             done:
             Plugin.Log.LogInfo("Cargo: " + placed + " item(s) loaded into " + car.name);
             return items;
+        }
+
+        private static bool IsCanLike(string prefab)
+        {
+            string n = prefab.ToLowerInvariant();
+            return n.Contains("can") || n.Contains("bottle") || n.Contains("canister") || n.Contains("jerry") || n.Contains("barrel");
+        }
+
+        // the real floor under (lx, lz): highest car collider hit below the zone ceiling, else the zone bottom
+        private static float FloorAt(GameObject car, Transform t, float lx, float lz, float floorY, float ceilY)
+        {
+            var from = t.TransformPoint(new Vector3(lx, ceilY - 0.05f, lz));
+            float best = -1f;
+            foreach (var h in Physics.RaycastAll(from, -t.up, ceilY - floorY + 0.5f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                if (h.collider == null || !h.collider.transform.IsChildOf(car.transform)) continue;
+                float ly = t.InverseTransformPoint(h.point).y;
+                if (ly < floorY - 0.3f) continue;
+                if (best < 0f || ly > best) best = ly;
+            }
+            return best >= 0f ? best : floorY;
         }
 
         // what the item's own LockPhysics FSM would do 3 s later: parent to the PhysicsLock object, no Rigidbody

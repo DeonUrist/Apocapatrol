@@ -60,8 +60,8 @@ namespace Apocapatrol
 
         private void LateUpdate()
         {
-            if (!_open || _hasSetter) return;
-            // the game re-locks the cursor every frame; keep it free while the window is up
+            if (!_open) return;
+            // the game re-locks the cursor every frame (and the input blocker does not free it); keep it free while the window is up
             if (Cursor.lockState != CursorLockMode.None) Cursor.lockState = CursorLockMode.None;
             if (!Cursor.visible) Cursor.visible = true;
         }
@@ -70,14 +70,15 @@ namespace Apocapatrol
         {
             Resolve();
             _open = true;
+            _prevLock = Cursor.lockState; _prevVisible = Cursor.visible;
             if (_hasSetter) { try { _blockerSet.Invoke(null, new object[] { true }); } catch (Exception e) { Plugin.Log.LogWarning("InputBlocker: " + e.Message); } }
             else
             {
-                _prevTimeScale = Time.timeScale; _prevLock = Cursor.lockState; _prevVisible = Cursor.visible;
+                _prevTimeScale = Time.timeScale;
                 Time.timeScale = 0f;
-                Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
             }
-            float w = 520f, h = Mathf.Min(Screen.height - 80f, 120f + CarTemplate.Park.Length * 58f);
+            Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
+            float w = 420f, h = Mathf.Min(Screen.height - 80f, 110f + CarTemplate.Park.Length * 34f);
             _rect = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
         }
 
@@ -86,11 +87,8 @@ namespace Apocapatrol
             if (!_open) return;
             _open = false;
             if (_hasSetter) { try { _blockerSet.Invoke(null, new object[] { false }); } catch (Exception e) { Plugin.Log.LogWarning("InputBlocker: " + e.Message); } }
-            else
-            {
-                if (Time.timeScale == 0f) Time.timeScale = _prevTimeScale > 0f ? _prevTimeScale : 1f;
-                Cursor.lockState = _prevLock; Cursor.visible = _prevVisible;
-            }
+            else if (Time.timeScale == 0f) Time.timeScale = _prevTimeScale > 0f ? _prevTimeScale : 1f;
+            Cursor.lockState = _prevLock; Cursor.visible = _prevVisible;
         }
 
         private void OnDestroy() { Close(); }
@@ -114,7 +112,7 @@ namespace Apocapatrol
             CarTemplate chosen = null;
             foreach (var t in CarTemplate.Park)
             {
-                if (GUILayout.Button(t.Name + "\n" + Summary(t), GUILayout.Height(52f))) chosen = t;
+                if (GUILayout.Button(t.Name, GUILayout.Height(28f))) chosen = t;
                 GUILayout.Space(2f);
             }
             GUILayout.EndScrollView();

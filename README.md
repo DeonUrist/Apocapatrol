@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.18.0)
+# Apocapatrol (prototype 0.18.1)
 
 BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
 car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
@@ -35,8 +35,9 @@ destroys its Rigidbody - that is how cargo rides along until the player grabs it
 **Rustcargo_Loot** (Rustcargo_Basic with a loaded bed) rolls its load by the `[Loot] XChance` weights (Food 30, Gasoline 20, Water 25, Medicine 15,
 Drugs 10 - they should add up to 100) and fills the largest zone with the items of that `[Loot]` entry (`prefab:count;prefab:min-max;...`):
 Food dogfood_can ×6, Gasoline Gasoline_Can ×4, Water Water_Can_Plastic ×4, Medicine bandage_1 ×4 + first_aid_1 ×2, Drugs alcohol_canister ×2 +
-weed_bag ×3 + plant_weed ×1. The items are spawned with the vanilla recipe (registered, so the game saves them), packed on the bed floor in rows
-and layers, and locked at once.
+weed_bag ×3 + plant_weed ×1. The items are spawned with the vanilla recipe (registered, so the game saves them), scattered at random over the bed
+floor (rested on the actual floor collider, random yaw, cans and canisters lying on their side more often than not, stacked only when there is no
+free spot left), and locked at once.
 
 Parts with a `Condition` FSM (engine, radiator, wheels) get a rolled condition between `[Loot] MinPartHealth` (2) and `MaxPartHealth` (35) %,
 weighted toward two thirds of the way up (triangular distribution), so raider cars are worn but not dead.
