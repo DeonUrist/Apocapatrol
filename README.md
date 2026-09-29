@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.2.1)
+# Apocapatrol (prototype 0.2.2)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -19,7 +19,8 @@ What happens on the key:
    `NwhStartFallback` calls `powertrain.engine.StartEngine()` directly.
 5. `DriveTestSeconds` > 0: throttle is pushed with nobody inside — checks that the NWH vehicle drives without a player (needed for AI cars).
    The car's own `DriveTrigger/INPUT` FSMs copy the keyboard axes into `input.*` every frame, so they are paused while the mod drives and
-   restored afterwards (or as soon as the player gets in, which ends the test). At the end the car is braked and the handbrake set.
+   restored afterwards (or as soon as the player gets in, which ends the test). The automatic gearbox is shifted out of Neutral into 1st
+   (`input.ShiftInto = 1`, it stays in N otherwise). At the end the car is braked and the handbrake set.
 
 Everything is logged to `BepInEx\LogOutput.log` (`VerboseLog` adds prefab lookups, hinge FSM states, speeds).
 

@@ -113,6 +113,8 @@ namespace Apocapatrol
                     {
                         if (drive != null && drive.Fsm.Initialized && drive.ActiveStateName == "inCar")
                         { Plugin.Log.LogInfo("Drive test aborted: player got in at t=" + t.ToString("0.0")); break; }
+                        // the automatic gearbox stays in neutral until told to shift into 1st (D) once
+                        if (Nwh.GearIndex(car) <= 0) Nwh.ShiftInto(car, 1);
                         Nwh.SetInput(car, Plugin.DriveTestThrottle.Value, 0f, 0f);
                         t += Time.deltaTime;
                         if (t >= report) { report += 1f; Plugin.Verbose("  t=" + t.ToString("0.0") + " speed " + (rb != null ? (rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h  gear " + Nwh.Gear(car)); }
@@ -508,6 +510,26 @@ namespace Apocapatrol
                 return was is bool ? (bool)was : false;
             }
             catch (Exception e) { Plugin.Log.LogWarning("AutoInput: " + e.Message); return false; }
+        }
+
+        internal static int GearIndex(GameObject car)
+        {
+            try { var g = Get(Get(Get(Vc(car), "powertrain"), "transmission"), "Gear"); return g is int ? (int)g : 0; }
+            catch (Exception) { return 0; }
+        }
+
+        private static bool _shiftLogged;
+        // input.ShiftInto = gear index (-1 R, 0 N, 1 = 1st/D); the vehicle consumes it on its next update
+        internal static void ShiftInto(GameObject car, int gear)
+        {
+            try
+            {
+                var input = Get(Vc(car), "input");
+                bool ok = Set(input, "ShiftInto", gear);
+                if (!ok) ok = Set(input, "shiftInto", gear);
+                if (!_shiftLogged) { _shiftLogged = true; Plugin.Verbose("ShiftInto " + gear + (ok ? "" : " FAILED (no ShiftInto on input)")); }
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("ShiftInto: " + e.Message); }
         }
 
         internal static string Gear(GameObject car)
