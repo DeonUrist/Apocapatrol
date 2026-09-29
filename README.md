@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.4.1)
+# Apocapatrol (prototype 0.4.2)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -8,7 +8,7 @@ Default build: **PipeRat** frame, 4 × `small_wheel_1`, `1.2L I4 59HP 87Nm Gasol
 
 ## Seated pose (Pose.cs)
 The game has no sit animation, so after the Animator has posed the driver each frame the mod swings the Mixamo bones into a seat:
-thighs forward (`[Pose] ThighAngle`), shins back down (`KneeAngle`), upper arms forward (`ArmAngle`), forearms up (`ElbowAngle`), and
+thighs forward (`[Pose] ThighAngle`), shins back down (`KneeAngle`), upper arms forward (`ArmAngle`), forearms up (`ElbowAngle`), legs and arms turned toward each other (`LegsCloser`, `ArmsCloser`), and
 moves the body so the hips land on `sitPos` + `[Driver] OffsetX/Y/Z`. All values are live, so tune them in the Apocasetter menu while looking at him.
 
 ## The driver (Crew.cs)

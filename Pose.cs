@@ -55,15 +55,17 @@ namespace Apocapatrol
             if (_root == null || _anchor == null) return;
             var right = _anchor.right;   // the car's right axis: rotating about it swings limbs forward/back
 
-            // legs: thighs forward, shins back down (relative to the thigh)
-            float thigh = Plugin.PoseThigh.Value, knee = Plugin.PoseKnee.Value;
-            Swing(_lUpLeg, -thigh, right); Swing(_lLeg, knee, right);
-            Swing(_rUpLeg, -thigh, right); Swing(_rLeg, knee, right);
+            var up = _anchor.up;         // yaw about it brings a forward-pointing limb toward the body's centre line
 
-            // arms: upper arms forward, forearms bent up a little more
-            float arm = Plugin.PoseArm.Value, elbow = Plugin.PoseElbow.Value;
-            Swing(_lArm, -arm, right); Swing(_lForeArm, -elbow, right);
-            Swing(_rArm, -arm, right); Swing(_rForeArm, -elbow, right);
+            // legs: thighs forward (then closer together), shins back down (relative to the thigh)
+            float thigh = Plugin.PoseThigh.Value, knee = Plugin.PoseKnee.Value, legsIn = Plugin.PoseLegsCloser.Value;
+            Swing(_lUpLeg, -thigh, right); Swing(_lUpLeg, legsIn, up); Swing(_lLeg, knee, right);
+            Swing(_rUpLeg, -thigh, right); Swing(_rUpLeg, -legsIn, up); Swing(_rLeg, knee, right);
+
+            // arms: upper arms forward (then closer together), forearms bent up a little more
+            float arm = Plugin.PoseArm.Value, elbow = Plugin.PoseElbow.Value, armsIn = Plugin.PoseArmsCloser.Value;
+            Swing(_lArm, -arm, right); Swing(_lArm, armsIn, up); Swing(_lForeArm, -elbow, right);
+            Swing(_rArm, -arm, right); Swing(_rArm, -armsIn, up); Swing(_rForeArm, -elbow, right);
 
             // hips onto the seat point: move the whole body so the hips bone lands on anchor + offsets
             var target = _anchor.position + _anchor.right * Plugin.DriverOffsetX.Value + _anchor.up * Plugin.DriverOffsetY.Value
