@@ -7,7 +7,9 @@ namespace Apocapatrol
     // Ram damage: the game's own CarAttack bumper trigger only hurts creatures, and the player's car's CrashDamage FSM scales
     // with the player's own speed - a parked player is never hurt by an AI car. This applies damage the vanilla way instead:
     // Player [Bodypart].Damage = -amount (damage values are negative in this game: BumperDamage -3, speedDamage -0.5) and the
-    // event "Damage" on that FSM (armor, health, hurt sound all handled by the game's own damage state).
+    // event "Damage" on that FSM (armor first, then health). The hurt sound, camera kick and red blood splash live in the
+    // DamageEffectSound / DamageEffectSound_InCar FSMs (one of them enabled, toggled by InCar); Bodypart's own SendEvent to them
+    // is disabled in the prefab - every attacker sends "Damage" to the effect FSM itself (FallDamage does), so we do too.
     internal static class Ram
     {
         // sits on every AI car root (next to PatrolMarker); the Rigidbody is there, so every collision of the car arrives here
@@ -54,10 +56,12 @@ namespace Apocapatrol
             var player = PlayerRef.Player;
             if (player == null) return;
             PlayMakerFSM bodypart = null, health = null;
+            var effects = new List<PlayMakerFSM>();
             foreach (var f in player.GetComponents<PlayMakerFSM>())
             {
                 if (f.FsmName == "Bodypart") bodypart = f;
                 else if (f.FsmName == "Health") health = f;
+                else if (f.FsmName == "DamageEffectSound" || f.FsmName == "DamageEffectSound_InCar") effects.Add(f);
             }
             float before = -1f;
             if (health != null && health.Fsm.Initialized) { var h = health.FsmVariables.GetFsmFloat("Health"); if (h != null) before = h.Value; }
@@ -73,6 +77,9 @@ namespace Apocapatrol
                 var h = health.FsmVariables.GetFsmFloat("Health");
                 if (h != null) { h.Value -= amount; applied = true; }
             }
+            if (applied)
+                foreach (var f in effects)
+                    if (f.enabled && f.Fsm.Initialized) f.SendEvent("Damage");   // the disabled one ignores it
             Plugin.Log.LogInfo("Ram: " + car.name + " (" + (body ?? "?") + ") hit the player " + (kind == 2 ? "in their car" : "on foot")
                 + " at " + kmh.ToString("0") + " km/h -> " + amount + " damage" + (applied ? "" : " (no Player FSM found!)")
                 + (before >= 0f ? ", health " + before.ToString("0") : "") + (hit != null ? ", collider " + hit.name + " layer " + LayerMask.LayerToName(hit.gameObject.layer) : ""));

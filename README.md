@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.20.0)
+# Apocapatrol (prototype 0.20.1)
 
 BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
 car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
@@ -128,7 +128,8 @@ The game's own bumper damage (`CarAttack` FSM, a trigger that hurts what it touc
 every AI car carries a collision sensor: a hit on you (on foot or on your car) faster than `RamMinSpeedKmh` (10, relative speed) deals
 `RamDamageByBody` (`Junker=50, Rust*=70, Scrapwagon=70, PigPen=50`, everything else 30) × `RamDamageMultiplier` (0-3, default 1), scaled down
 linearly below `RamFullSpeedKmh` (40) and by `RamInCarFactor` while you sit in your car (default 1 = no protection). At most one hit per car per
-second. The damage goes through the player's vanilla `Bodypart` FSM (`Damage` = -amount + event `Damage`), so armour and the hurt sound apply;
+second. The damage goes through the player's vanilla `Bodypart` FSM (`Damage` = -amount + event `Damage`), so armour applies, and the `Damage` event also goes to the enabled `DamageEffectSound` / `_InCar` FSM for the hurt sound, camera kick and red splash
+(the game's attackers do that themselves - `Bodypart`'s own link to the effect FSM is disabled in the prefab);
 each hit is logged ("Ram: <car> (<body>) hit the player ... -> N damage, health H").
 
 ### When the car is stuck for good
