@@ -1,0 +1,88 @@
+using System;
+using BepInEx;
+using BepInEx.Configuration;
+using BepInEx.Logging;
+using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
+
+namespace Apocapatrol
+{
+    // Prototype: press a key, a complete car (frame + wheels + engine + radiator + steering wheel) is assembled in front of
+    // the player with the game's own part-attach recipe, fuelled and started. Groundwork for AI-driven raider cars.
+    [BepInPlugin(GUID, NAME, VERSION)]
+    public class Plugin : BaseUnityPlugin
+    {
+        public const string GUID = "com.denis.apocalypter.apocapatrol";
+        public const string NAME = "Apocapatrol";
+        public const string VERSION = "0.1.0";
+
+        internal static ManualLogSource Log;
+
+        internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel;
+        internal static ConfigEntry<float> SpawnDistance;
+        internal static ConfigEntry<bool> FillFuel, StartEngine, NwhStartFallback, RegisterWithGame;
+        internal static ConfigEntry<float> DriveTestSeconds, DriveTestThrottle;
+        internal static ConfigEntry<Key> SpawnKey;
+        internal static ConfigEntry<bool> VerboseLog;
+
+        private static GameObject _runner;
+
+        private void Awake()
+        {
+            Log = Logger;
+
+            Config.Bind("General", "Apocasetter", true, "Show this mod in the Apocasetter Mods menu");
+
+            Body = Config.Bind("Build", "Body", "PipeRat", "Vehicle frame prefab (e.g. PipeRat, Duke, TinyTyrant)");
+            Wheel = Config.Bind("Build", "Wheel", "small_wheel_1",
+                "Wheel item, prefab name or in-game name (e.g. small_wheel_1 or \"Small rubbish wheel\"); one per hinge_wheel_*");
+            Engine = Config.Bind("Build", "Engine", "1.2L I4 59HP 87Nm Gasoline", "Engine item, prefab name or in-game name");
+            Radiator = Config.Bind("Build", "Radiator", "radiator_small", "Radiator item, prefab name or in-game name (empty = none)");
+            SteeringWheel = Config.Bind("Build", "SteeringWheel", "steeringwheel_7", "Steering wheel item, prefab name or in-game name (empty = none)");
+            SpawnDistance = Config.Bind("Build", "SpawnDistance", 8f, new ConfigDescription(
+                "How far in front of the player the car appears (m)", new AcceptableValueRange<float>(3f, 100f)));
+            FillFuel = Config.Bind("Build", "FillFuel", true, "Fill the tank (Fuel/LiquidAmount Liquid = LiquidCapacity)");
+            StartEngine = Config.Bind("Build", "StartEngine", true, "Start the engine through the frame's own START key FSM (Ignition -> Start)");
+            NwhStartFallback = Config.Bind("Build", "NwhStartFallback", true,
+                "If the engine is not running 3 s after the FSM start, call NWH powertrain.engine.StartEngine() directly");
+            RegisterWithGame = Config.Bind("Build", "RegisterWithGame", true,
+                "Name and register the car (ArrayList_Cars) and every part (ArrayList_Items) like vanilla spawns so they are saved");
+            DriveTestSeconds = Config.Bind("Build", "DriveTestSeconds", 0f, new ConfigDescription(
+                "After starting, push the throttle for this long with nobody inside (tests driving without a player). 0 = off",
+                new AcceptableValueRange<float>(0f, 60f)));
+            DriveTestThrottle = Config.Bind("Build", "DriveTestThrottle", 0.5f, new ConfigDescription(
+                "Throttle used by the drive test (0..1)", new AcceptableValueRange<float>(0.05f, 1f)));
+
+            SpawnKey = Config.Bind("Debug", "SpawnKey", Key.F7, "Assemble one car in front of the player. None = off");
+            VerboseLog = Config.Bind("Debug", "VerboseLog", true, "Log every build step (prefab lookups, hinge states, engine state)");
+
+            SceneManager.sceneLoaded += (s, m) => { EnsureRunner(); Patrol.ResetForScene(); };
+            EnsureRunner();
+            Log.LogInfo(NAME + " " + VERSION + " loaded");
+        }
+
+        private static void EnsureRunner()
+        {
+            // the game destroys the plugin's GameObject on scene load; the logic lives on a hidden object it can't find
+            if (_runner != null) return;
+            _runner = new GameObject("Apocapatrol.Runner") { hideFlags = HideFlags.HideAndDontSave };
+            UnityEngine.Object.DontDestroyOnLoad(_runner);
+            _runner.AddComponent<Patrol>();
+        }
+
+        internal static void Verbose(string msg)
+        {
+            if (VerboseLog.Value) Log.LogInfo(msg);
+        }
+
+        internal static bool Pressed(Key key)
+        {
+            if (key == Key.None) return false;
+            var kb = Keyboard.current;
+            if (kb == null) return false;
+            try { return kb[key].wasPressedThisFrame; }
+            catch (Exception) { return false; }
+        }
+    }
+}
