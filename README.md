@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.4.2)
+# Apocapatrol (prototype 0.4.3)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
