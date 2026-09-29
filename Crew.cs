@@ -16,6 +16,7 @@ namespace Apocapatrol
         private Collider _enterTrigger;       // DriveTrigger SphereCollider = the "press F to drive" trigger
         private Rigidbody _rb;
         private InputControl _ctl;
+        private Pilot _pilot;                 // the driving AI while the driver drives and [AI] Enabled
         private static readonly string[] MutedFsms =
             { "Movement", "Unstuck", "Rotate", "Detection", "Attack", "RangedAttackWait", "Damage Ranged", "Codex", "Sound", "Sound2", "Sound3" };
 
@@ -130,19 +131,30 @@ namespace Apocapatrol
                 _seated += Time.deltaTime;
                 float delay = Plugin.DriveDelaySeconds.Value;
                 if (!_driving && delay >= 0f && _seated >= delay && Nwh.EngineRunning(_car)) StartDriving();   // -1 = never
-                if (_driving) Drive();
                 return;
             }
 
-            // Dead driver: preserve a stuck pedal until takeover, or hold zero while the car rolls out.
+            // Dead driver: preserve a stuck pedal until takeover, or hold zero while the car rolls out (inputs written in FixedUpdate).
             if (PlayerInside()) { Plugin.Log.LogInfo("Crew: player took the car after its driver died"); _ctl.Release(); _done = true; return; }
-            Nwh.SetInput(_car, _stuck ? Plugin.DriveThrottle.Value : 0f, 0f, 0f);
             if (_stuck) return;
             _rolling += Time.deltaTime;
             if (_rb != null && _rb.velocity.magnitude > 0.3f && _rolling < 120f) return;
             Plugin.Log.LogInfo("Crew: car rolled to a stop after " + _rolling.ToString("0.0") + " s");
             _ctl.Release();
             _done = true;
+        }
+
+        // NWH samples its input on the physics step, so the inputs are written here, not in Update.
+        private void FixedUpdate()
+        {
+            if (_car == null || _done || Time.timeScale <= 0f) return;
+            if (!_dead)
+            {
+                if (!_driving) return;
+                if (_pilot != null) _pilot.Step(); else Drive();
+                return;
+            }
+            Nwh.SetInput(_car, _stuck ? Plugin.DriveThrottle.Value : 0f, 0f, 0f);
         }
 
         private bool DriverAlive() { return Alive(_driver, _health); }
@@ -156,7 +168,8 @@ namespace Apocapatrol
         {
             _driving = true;
             _ctl.Take();
-            Plugin.Log.LogInfo("Crew: driver drives off (throttle " + Plugin.DriveThrottle.Value + ")");
+            if (Plugin.AiEnabled.Value) _pilot = Pilot.Attach(_car);
+            Plugin.Log.LogInfo("Crew: driver drives off (" + (_pilot != null ? "driving AI" : "straight ahead") + ", throttle " + Plugin.DriveThrottle.Value + ")");
         }
 
         private void Drive()
@@ -174,6 +187,8 @@ namespace Apocapatrol
         {
             _dead = true;
             SeatLocked(false);                 // the player may take the car from now on
+            if (_pilot != null) { _pilot.Detach(); _pilot = null; }
+            if (Nwh.GearIndex(_car) < 0) Nwh.ShiftInto(_car, 1);   // died while reversing: a stuck pedal pushes forward, not back
             if (!_driving)
             {
                 Plugin.Log.LogInfo("Crew: driver died before driving off; seat free");
@@ -195,6 +210,11 @@ namespace Apocapatrol
             _ctl.Take();
             Nwh.SetInput(_car, 0f, 0f, 0f);
             Plugin.Log.LogInfo("Crew: driver died at " + Speed() + " km/h - gas released, rolling out, seat free");
+        }
+
+        private void OnDestroy()
+        {
+            if (_pilot != null) { _pilot.Detach(); _pilot = null; }
         }
 
         private string Speed() { return _rb != null ? (_rb.velocity.magnitude * 3.6f).ToString("0.0") : "?"; }

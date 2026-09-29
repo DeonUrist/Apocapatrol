@@ -338,7 +338,7 @@ namespace Apocapatrol
 
         private static bool PlayerPose(out Vector3 p, out Vector3 fwd)
         {
-            var pl = GameObject.Find("Player");
+            var pl = PlayerRef.Player;
             var cam = Camera.main;
             if (pl == null && cam == null) { p = Vector3.zero; fwd = Vector3.forward; return false; }
             p = pl != null ? pl.transform.position : cam.transform.position;

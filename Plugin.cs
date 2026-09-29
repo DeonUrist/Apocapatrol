@@ -17,7 +17,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.8.7";
+        public const string VERSION = "0.9.0";
 
         internal static ManualLogSource Log;
 
@@ -29,6 +29,11 @@ namespace Apocapatrol
         internal static PoseBool PoseEnabled;
         internal static PoseFloat PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLeftLegCloser, PoseRightLegCloser, PoseLeftArmCloser, PoseRightArmCloser;
         internal static ConfigEntry<float> DriveDelaySeconds, DriveThrottle, StuckPedalChance;
+        internal static ConfigEntry<bool> AiEnabled, AiInvertSteering, AiOverlay;
+        internal static ConfigEntry<float> AiLeadTime, AiCommitSeconds, AiSteerRate, AiSteerAngle, AiMaxSteerAtSpeed, AiTurnSafeSpeed,
+            AiRamDistance, AiPassWidth, AiRunOutMeters, AiRunOutMaxSeconds, AiReverseSeconds, AiReverseThrottle, AiStuckSeconds,
+            AiRecoverWindow, AiMaxRecovers, AiWaitSeconds, AiFeelerRange, AiFeelerSpeedFactor, AiFrontOffset, AiMaxSlopeDeg, AiAvoidGain,
+            AiIgnoreMassBelow, AiGiveUpDistance;
         internal static ConfigEntry<float> SpawnDistance;
         internal static ConfigEntry<bool> FillFuel, StartEngine, NwhStartFallback, RegisterWithGame;
         internal static ConfigEntry<float> DriveTestSeconds, DriveTestThrottle;
@@ -79,7 +84,7 @@ namespace Apocapatrol
                 "The driver sits still this long after spawning before driving off (0 = drives as soon as the engine runs, -1 = never drives, just sits)",
                 new AcceptableValueRange<float>(-1f, 600f)));
             DriveThrottle = Config.Bind("Driver", "DriveThrottle", 0.5f, new ConfigDescription(
-                "Throttle the driver holds (0..1); steering straight for now", new AcceptableValueRange<float>(0.05f, 1f)));
+                "Maximum throttle the driver uses (0..1)", new AcceptableValueRange<float>(0.05f, 1f)));
             StuckPedalChance = Config.Bind("Driver", "StuckPedalChance", 5f, new ConfigDescription(
                 "% chance that a killed driver's gas pedal stays stuck; otherwise the gas is released and the car slowly rolls to a stop",
                 new AcceptableValueRange<float>(0f, 100f)));
@@ -89,6 +94,71 @@ namespace Apocapatrol
             DriverOffsetZ = PoseFloat.Create(Config, "Driver", "OffsetZ", 0f, "Where each occupant's hips go: offset from its seat anchor, forward (m)", offsetRange, exposePose);
             RegisterDriver = Config.Bind("Driver", "RegisterDriver", false,
                 "Deprecated: occupants are persisted by Apocapatrol sidecars; vanilla item registration is no longer used");
+
+            AiEnabled = Config.Bind("AI", "Enabled", true,
+                "Driving AI: chase and ram the player (on foot or in a car) hit-and-run style, reverse out of obstacles and steer around them. " +
+                "false = the driver just drives straight ahead like before");
+            AiLeadTime = Config.Bind("AI", "LeadTime", 1f, new ConfigDescription(
+                "Aim this many seconds ahead of the target's movement (intercept), s", new AcceptableValueRange<float>(0f, 4f)));
+            AiCommitSeconds = Config.Bind("AI", "CommitSeconds", 0.5f, new ConfigDescription(
+                "The aim point is re-taken only this often, so the car commits to a heading instead of twitching after the target, s",
+                new AcceptableValueRange<float>(0.05f, 3f)));
+            AiSteerRate = Config.Bind("AI", "SteerRate", 1.5f, new ConfigDescription(
+                "How fast the wheel turns: full-lock units per second (1.5 = straight to full lock in 0.67 s). Lower = lazier, wider turns",
+                new AcceptableValueRange<float>(0.2f, 10f)));
+            AiSteerAngle = Config.Bind("AI", "SteerAngle", 30f, new ConfigDescription(
+                "Angle to the aim point at which the driver asks for full lock, degrees (smaller = sharper corrections)",
+                new AcceptableValueRange<float>(5f, 90f)));
+            AiMaxSteerAtSpeed = Config.Bind("AI", "MaxSteerAtSpeed", 0.35f, new ConfigDescription(
+                "Steering limit at 72 km/h and above (0..1); full lock is allowed below 18 km/h, blended in between. Keeps the car on its wheels",
+                new AcceptableValueRange<float>(0.05f, 1f)));
+            AiTurnSafeSpeed = Config.Bind("AI", "TurnSafeSpeed", 12f, new ConfigDescription(
+                "Above this speed (m/s) the driver lifts off and brakes lightly when the target is more than 40 degrees off the nose",
+                new AcceptableValueRange<float>(3f, 40f)));
+            AiRamDistance = Config.Bind("AI", "RamDistance", 15f, new ConfigDescription(
+                "Within this distance of the target (m), obstacle avoidance is switched off: go straight for the ram",
+                new AcceptableValueRange<float>(0f, 50f)));
+            AiPassWidth = Config.Bind("AI", "PassWidth", 12f, new ConfigDescription(
+                "The target counts as passed when it is behind the car and within this many metres of the car's track",
+                new AcceptableValueRange<float>(2f, 40f)));
+            AiRunOutMeters = Config.Bind("AI", "RunOutMeters", 30f, new ConfigDescription(
+                "After passing or ramming the target the car keeps going this far before turning around, m",
+                new AcceptableValueRange<float>(0f, 200f)));
+            AiRunOutMaxSeconds = Config.Bind("AI", "RunOutMaxSeconds", 4f, new ConfigDescription(
+                "... or at most this long, s", new AcceptableValueRange<float>(0.5f, 20f)));
+            AiReverseSeconds = Config.Bind("AI", "ReverseSeconds", 2f, new ConfigDescription(
+                "How long the car reverses after hitting an obstacle or getting stuck, s (grows with repeated attempts)",
+                new AcceptableValueRange<float>(0.5f, 10f)));
+            AiReverseThrottle = Config.Bind("AI", "ReverseThrottle", 0.6f, new ConfigDescription(
+                "Throttle (or brake, depending on how NWH reverses) used while reversing", new AcceptableValueRange<float>(0.1f, 1f)));
+            AiStuckSeconds = Config.Bind("AI", "StuckSeconds", 2f, new ConfigDescription(
+                "Not moving for this long while trying to drive forward = stuck, reverse out", new AcceptableValueRange<float>(0.5f, 10f)));
+            AiRecoverWindow = Config.Bind("AI", "RecoverWindow", 12f, new ConfigDescription(
+                "Recoveries closer together than this count as repeated attempts, s", new AcceptableValueRange<float>(1f, 60f)));
+            AiMaxRecovers = Config.Bind("AI", "MaxRecovers", 4f, new ConfigDescription(
+                "After this many repeated recoveries the car gives up for WaitSeconds", new AcceptableValueRange<float>(1f, 20f)));
+            AiWaitSeconds = Config.Bind("AI", "WaitSeconds", 4f, new ConfigDescription(
+                "How long a car that gave up sits still before trying again, s", new AcceptableValueRange<float>(1f, 60f)));
+            AiFeelerRange = Config.Bind("AI", "FeelerRange", 10f, new ConfigDescription(
+                "Base length of the centre obstacle feeler ray, m (side rays are shorter)", new AcceptableValueRange<float>(2f, 40f)));
+            AiFeelerSpeedFactor = Config.Bind("AI", "FeelerSpeedFactor", 0.6f, new ConfigDescription(
+                "Extra feeler length per m/s of speed", new AcceptableValueRange<float>(0f, 2f)));
+            AiFrontOffset = Config.Bind("AI", "FrontOffset", 2f, new ConfigDescription(
+                "Feelers start this far in front of the car's centre of mass, m (should be just outside the bumper)",
+                new AcceptableValueRange<float>(0f, 5f)));
+            AiMaxSlopeDeg = Config.Bind("AI", "MaxSlopeDeg", 35f, new ConfigDescription(
+                "Surfaces flatter than this are driven over, steeper ones are obstacles (rocks, walls), degrees",
+                new AcceptableValueRange<float>(10f, 80f)));
+            AiAvoidGain = Config.Bind("AI", "AvoidGain", 1.2f, new ConfigDescription(
+                "How hard the feelers steer away from obstacles", new AcceptableValueRange<float>(0f, 4f)));
+            AiIgnoreMassBelow = Config.Bind("AI", "IgnoreMassBelow", 40f, new ConfigDescription(
+                "Loose physics objects lighter than this (kg) are not obstacles; the car drives through them",
+                new AcceptableValueRange<float>(0f, 1000f)));
+            AiGiveUpDistance = Config.Bind("AI", "GiveUpDistance", 250f, new ConfigDescription(
+                "Beyond this distance from the player the car stops chasing and coasts until the player comes closer, m",
+                new AcceptableValueRange<float>(20f, 2000f)));
+            AiInvertSteering = Config.Bind("AI", "InvertSteering", false,
+                "Flip the steering sign if the car turns away from the target instead of toward it");
 
             Passenger = Config.Bind("Passenger", "Passenger", "Flexa",
                 "Who sits in the front passenger seat; Boltjaw/Flexa/Lugnut/Scrud/Sprokka shoot, Scraffa/Spanna remain passive; empty = nobody");
@@ -123,8 +193,9 @@ namespace Apocapatrol
 
             SpawnKey = Config.Bind("Debug", "SpawnKey", Key.F7, "Assemble one car in front of the player. None = off");
             VerboseLog = Config.Bind("Debug", "VerboseLog", true, "Log every build step (prefab lookups, hinge states, engine state)");
+            AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances");
 
-            SceneManager.sceneLoaded += (s, m) => { EnsureRunner(); Patrol.ResetForScene(); PatrolPersistence.ResetForScene(); };
+            SceneManager.sceneLoaded += (s, m) => { EnsureRunner(); Patrol.ResetForScene(); PlayerRef.Reset(); PatrolPersistence.ResetForScene(); };
             EnsureRunner();
             Log.LogInfo(NAME + " " + VERSION + " loaded");
         }

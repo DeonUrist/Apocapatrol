@@ -1,0 +1,578 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Apocapatrol
+{
+    internal enum PilotState { Charge, Overshoot, Turnaround, Recover, Wait, Idle }
+
+    // The driving AI. Lives on the car next to Crew, which decides WHETHER the car drives (driver alive, delay, death);
+    // Pilot decides HOW: every physics step it writes throttle / steering / brakes into the NWH input.
+    //
+    // Hit and run: Charge at an intercept point ahead of the player (on foot or in a car, same thing), with the steering
+    // rate-limited and reduced at speed so the turn is a wide arc, not a pivot. Once the player is passed (or rammed) the car
+    // runs out straight for a bit (Overshoot), turns around (Turnaround) and charges again. A hit against something that is
+    // not the player, or being stuck, reverses out (Recover) and charges again; repeated failures escalate to a short Wait.
+    // Front feelers (raycasts) steer around obstacles ahead; the player, the player's car, NPCs and loose items are not
+    // obstacles - the car is meant to ram them.
+    internal class Pilot : MonoBehaviour
+    {
+        private GameObject _car;
+        private Transform _tf;
+        private Rigidbody _rb;
+
+        private PilotState _state = PilotState.Charge;
+        private float _stateTime;
+        private string _why = "start";
+
+        private float _steer;                 // current steering command (-1..1), rate-limited
+        private float _throttle, _brakes;
+        private Vector3 _aim;                 // committed intercept point
+        private float _nextAim;
+        private float _stuckTime;
+        private Vector3 _runStart;
+        private float _turnSlow;
+
+        private int _recoverCount;
+        private float _lastRecover = -999f;
+        private float _recoverDur, _recoverSteer;
+        private static bool _reverseByBrake;  // NWH reverse mode that turned out to work (auto-detected, shared by all cars)
+        private static bool _reverseKnown;
+        private bool _reverseChecked;
+
+        private bool _hitPending, _hitIsTarget;
+        private float _hitSide;
+
+        private float _nextLog, _nextEngine, _flipLogged;
+        private bool _hasTarget;
+        private float _angle, _dist;          // last computed, for the overlay/log
+        private readonly float[] _feelerAngle = { 0f, -22f, 22f, -48f, 48f };
+        private readonly float[] _feelerLen = new float[5];
+        private readonly float[] _feelerHit = new float[5];      // hit distance or -1
+        private float _cliffAt = -1f;
+        private readonly Dictionary<Collider, bool> _obstacleCache = new Dictionary<Collider, bool>();
+        private float _cacheClear;
+        private static readonly List<Transform> _ownRoots = new List<Transform>();
+
+        internal PilotState State { get { return _state; } }
+
+        internal static Pilot Attach(GameObject car)
+        {
+            var p = car.GetComponent<Pilot>() ?? car.AddComponent<Pilot>();
+            p._car = car; p._tf = car.transform; p._rb = car.GetComponent<Rigidbody>();
+            p.Enter(PilotState.Charge, "start");
+            if (!_ownRoots.Contains(car.transform)) _ownRoots.Add(car.transform);
+            Plugin.Log.LogInfo("Pilot: driving AI on " + car.name);
+            return p;
+        }
+
+        internal void Detach()
+        {
+            _ownRoots.Remove(_tf);
+            Destroy(this);
+        }
+
+        private void OnDestroy() { _ownRoots.Remove(_tf); }
+
+        // ------------------------------------------------------------ main step (called by Crew from FixedUpdate)
+
+        internal void Step()
+        {
+            float dt = Time.fixedDeltaTime;
+            _stateTime += dt;
+
+            Vector3 tpos, tvel; GameObject tcar;
+            _hasTarget = PlayerRef.Target(out tpos, out tvel, out tcar);
+            Vector3 fwd = Flat(_tf.forward);
+            Vector3 vel = _rb != null ? _rb.velocity : Vector3.zero;
+            float speed = vel.magnitude;
+            float forwardSpeed = Vector3.Dot(vel, _tf.forward);
+
+            if (_hasTarget)
+            {
+                var to = Flat(tpos - _tf.position);
+                _dist = to.magnitude;
+                _angle = Vector3.SignedAngle(fwd, to.sqrMagnitude > 1e-3f ? to.normalized : fwd, Vector3.up);
+            }
+            else { _dist = 9999f; _angle = 0f; }
+
+            // flipped over: nothing to do but wait for the game's own flip-over handling
+            if (_tf.up.y < 0.2f)
+            {
+                if (Time.time > _flipLogged + 10f) { _flipLogged = Time.time; Plugin.Log.LogInfo("Pilot: " + _car.name + " is on its side/roof, waiting"); }
+                Apply(0f, 0f, 0.3f);
+                return;
+            }
+            if (!Nwh.EngineRunning(_car) && Time.time >= _nextEngine)
+            {
+                _nextEngine = Time.time + 5f;
+                Nwh.StartEngine(_car);
+                Plugin.Verbose("Pilot: engine off, StartEngine()");
+            }
+
+            // collision that came in since the last step
+            if (_hitPending)
+            {
+                _hitPending = false;
+                if (_hitIsTarget)
+                {
+                    if (_state == PilotState.Charge || _state == PilotState.Turnaround) StartOvershoot("rammed the target");
+                }
+                else if (_state != PilotState.Recover && _state != PilotState.Wait)
+                    StartRecover("hit an obstacle" + (_hitSide != 0f ? (_hitSide > 0f ? " on the right" : " on the left") : " head-on"), _hitSide);
+            }
+
+            if (!_hasTarget || _dist > Plugin.AiGiveUpDistance.Value)
+            {
+                if (_state != PilotState.Idle) Enter(PilotState.Idle, _hasTarget ? "target too far" : "no target");
+            }
+            else if (_state == PilotState.Idle) Enter(PilotState.Charge, "target in range");
+
+            switch (_state)
+            {
+                case PilotState.Charge: StepCharge(tpos, tvel, speed, forwardSpeed, dt, false); break;
+                case PilotState.Turnaround: StepCharge(tpos, tvel, speed, forwardSpeed, dt, true); break;
+                case PilotState.Overshoot: StepOvershoot(speed, forwardSpeed, dt); break;
+                case PilotState.Recover: StepRecover(forwardSpeed, dt); break;
+                case PilotState.Wait:
+                    Apply(0f, MoveSteer(0f, dt), 0.4f);
+                    if (_stateTime >= Plugin.AiWaitSeconds.Value) { _recoverCount = 0; Enter(PilotState.Charge, "waited"); }
+                    break;
+                case PilotState.Idle:
+                    Apply(0f, MoveSteer(0f, dt), speed > 1f ? 0.2f : 0f);
+                    break;
+            }
+
+            if (Time.time >= _nextLog)
+            {
+                _nextLog = Time.time + 5f;
+                Plugin.Verbose("Pilot: " + _state + " " + (speed * 3.6f).ToString("0") + " km/h gear " + Nwh.Gear(_car)
+                    + " target " + _dist.ToString("0") + " m at " + _angle.ToString("0") + "° steer " + _steer.ToString("0.00")
+                    + " thr " + _throttle.ToString("0.00") + " brk " + _brakes.ToString("0.00") + Feelers());
+            }
+        }
+
+        // ------------------------------------------------------------ states
+
+        private void StepCharge(Vector3 tpos, Vector3 tvel, float speed, float forwardSpeed, float dt, bool turning)
+        {
+            if (Nwh.GearIndex(_car) <= 0) Nwh.ShiftInto(_car, 1);
+
+            // intercept point, re-sampled every CommitSeconds so the car commits to a heading instead of twitching
+            if (Time.time >= _nextAim)
+            {
+                _nextAim = Time.time + Plugin.AiCommitSeconds.Value;
+                float lead = Mathf.Min(Plugin.AiLeadTime.Value, _dist / Mathf.Max(speed, 3f));
+                var leadVec = Flat(tvel) * lead;
+                if (leadVec.magnitude > 25f) leadVec = leadVec.normalized * 25f;
+                _aim = tpos + leadVec;
+            }
+            var toAim = Flat(_aim - _tf.position);
+            float aimAngle = toAim.sqrMagnitude > 1e-3f ? Vector3.SignedAngle(Flat(_tf.forward), toAim.normalized, Vector3.up) : 0f;
+            float absAngle = Mathf.Abs(aimAngle);
+
+            float desired = Mathf.Clamp(aimAngle / Plugin.AiSteerAngle.Value, -1f, 1f);
+            if (turning && absAngle > 20f) desired = Mathf.Sign(aimAngle);           // full lock until we face them again
+
+            // obstacle feelers; the target itself is never an obstacle, and close to it we go straight for the ram
+            float avoidSteer, avoidThrottle, avoidBrake;
+            bool ramming = _dist < Plugin.AiRamDistance.Value && Mathf.Abs(_angle) < 35f;
+            Sense(speed, out avoidSteer, out avoidThrottle, out avoidBrake);
+            if (!ramming) desired = Mathf.Clamp(desired + avoidSteer, -1f, 1f);
+
+            float maxSteer = MaxSteerFor(speed);
+            desired = Mathf.Clamp(desired, -maxSteer, maxSteer);
+            float steer = MoveSteer(desired, dt);
+
+            float throttle = Plugin.DriveThrottle.Value * Mathf.Lerp(1f, 0.45f, Mathf.Clamp01((absAngle - 15f) / 75f));
+            float brakes = 0f;
+            if (speed > Plugin.AiTurnSafeSpeed.Value && absAngle > 40f) { throttle = 0f; brakes = 0.5f; }
+            if (turning) throttle = Mathf.Min(throttle, Plugin.DriveThrottle.Value * 0.7f);
+            if (!ramming) { throttle *= avoidThrottle; brakes = Mathf.Max(brakes, avoidBrake); }
+            Apply(throttle, steer, brakes);
+
+            // passed the target: it is behind us and close to our track
+            if (!turning)
+            {
+                var to = Flat(tpos - _tf.position);
+                float along = Vector3.Dot(to, Flat(_tf.forward).normalized);
+                float lateral = Vector3.Cross(Flat(_tf.forward).normalized, to).magnitude;
+                if (along < -1f && lateral < Plugin.AiPassWidth.Value && _dist < Plugin.AiPassWidth.Value * 2f && forwardSpeed > 2f)
+                { StartOvershoot("passed the target"); return; }
+            }
+            else
+            {
+                if (absAngle < 25f) { Enter(PilotState.Charge, "facing the target again"); return; }
+                // cannot make the turn (too slow, way off): three-point turn
+                if (speed < 2.5f && absAngle > 90f) _turnSlow += dt; else _turnSlow = 0f;
+                if (_turnSlow > 2f) { _turnSlow = 0f; StartRecover("three-point turn", 0f); return; }
+            }
+
+            Stuck(throttle, speed, dt);
+        }
+
+        private void StepOvershoot(float speed, float forwardSpeed, float dt)
+        {
+            if (Nwh.GearIndex(_car) <= 0) Nwh.ShiftInto(_car, 1);
+            float avoidSteer, avoidThrottle, avoidBrake;
+            Sense(speed, out avoidSteer, out avoidThrottle, out avoidBrake);
+            float steer = MoveSteer(Mathf.Clamp(avoidSteer, -MaxSteerFor(speed), MaxSteerFor(speed)), dt);
+            Apply(Plugin.DriveThrottle.Value * avoidThrottle, steer, avoidBrake);
+            float ran = Flat(_tf.position - _runStart).magnitude;
+            if (ran >= Plugin.AiRunOutMeters.Value || _stateTime >= Plugin.AiRunOutMaxSeconds.Value)
+            { Enter(PilotState.Turnaround, "ran out " + ran.ToString("0") + " m"); return; }
+            Stuck(Plugin.DriveThrottle.Value * avoidThrottle, speed, dt);
+        }
+
+        private void StepRecover(float forwardSpeed, float dt)
+        {
+            // reverse: NWH either takes a reverse gear + throttle, or brake input at standstill; find out which works once
+            if (!_reverseByBrake)
+            {
+                if (Nwh.GearIndex(_car) >= 0) Nwh.ShiftInto(_car, -1);
+                Apply(Plugin.AiReverseThrottle.Value, MoveSteer(_recoverSteer, dt), 0f);
+            }
+            else Apply(0f, MoveSteer(_recoverSteer, dt), Plugin.AiReverseThrottle.Value);
+
+            if (!_reverseChecked && _stateTime >= 1.2f)
+            {
+                _reverseChecked = true;
+                if (forwardSpeed < -0.3f)
+                {
+                    if (!_reverseKnown) Plugin.Log.LogInfo("Pilot: reversing works with " + (_reverseByBrake ? "brake input" : "gear -1 + throttle"));
+                    _reverseKnown = true;
+                }
+                else if (!_reverseKnown)
+                {
+                    _reverseByBrake = !_reverseByBrake;
+                    Plugin.Log.LogInfo("Pilot: not reversing with " + (_reverseByBrake ? "gear -1 + throttle" : "brake input") + ", trying " + (_reverseByBrake ? "brake input" : "gear -1 + throttle"));
+                    _stateTime = 0f;   // give the other mode its own time
+                }
+            }
+            if (_stateTime >= _recoverDur)
+            {
+                if (Nwh.GearIndex(_car) < 0) Nwh.ShiftInto(_car, 1);
+                Enter(PilotState.Charge, "reversed " + _recoverDur.ToString("0.0") + " s");
+            }
+        }
+
+        // ------------------------------------------------------------ transitions
+
+        private void StartOvershoot(string why)
+        {
+            _runStart = _tf.position;
+            Enter(PilotState.Overshoot, why);
+        }
+
+        private void StartRecover(string why, float obstacleSide)
+        {
+            bool repeat = Time.time - _lastRecover < Plugin.AiRecoverWindow.Value;
+            _recoverCount = repeat ? _recoverCount + 1 : 1;
+            _lastRecover = Time.time;
+            if (_recoverCount > Plugin.AiMaxRecovers.Value)
+            {
+                Apply(0f, _steer, 0.5f);
+                Enter(PilotState.Wait, why + " (" + _recoverCount + " recoveries)");
+                return;
+            }
+            _recoverDur = Plugin.AiReverseSeconds.Value * (1f + 0.5f * (_recoverCount - 1));
+            // reversing with the wheels turned to +s swings the nose to -s: away from an obstacle on side s, or toward the target
+            float s = obstacleSide != 0f ? Mathf.Sign(obstacleSide) : -Mathf.Sign(_angle == 0f ? 1f : _angle);
+            if (_recoverCount >= 3) s = UnityEngine.Random.value < 0.5f ? -1f : 1f;
+            _recoverSteer = s * 0.9f;
+            _reverseChecked = false;
+            _stuckTime = 0f;
+            Enter(PilotState.Recover, why);
+        }
+
+        private void Enter(PilotState s, string why)
+        {
+            if (_state != s || _stateTime > 0f) Plugin.Verbose("Pilot: " + _state + " -> " + s + " (" + why + ")");
+            _state = s; _stateTime = 0f; _why = why; _turnSlow = 0f;
+            if (s != PilotState.Recover) _stuckTime = 0f;
+            _nextAim = 0f;
+        }
+
+        // Not moving in a forward state for StuckSeconds = stuck (whatever the pedals say: the feelers may be holding the car
+        // in front of a wall with the throttle cut, and that is exactly when it has to back out).
+        private void Stuck(float throttle, float speed, float dt)
+        {
+            if (speed < 0.8f) _stuckTime += dt; else _stuckTime = 0f;
+            if (_stuckTime >= Plugin.AiStuckSeconds.Value) { _stuckTime = 0f; StartRecover("stuck " + Plugin.AiStuckSeconds.Value + " s", 0f); }
+        }
+
+        // ------------------------------------------------------------ steering / input helpers
+
+        private float MaxSteerFor(float speed)
+        {
+            return Mathf.Lerp(1f, Plugin.AiMaxSteerAtSpeed.Value, Mathf.InverseLerp(5f, 20f, speed));
+        }
+
+        private float MoveSteer(float desired, float dt)
+        {
+            _steer = Mathf.MoveTowards(_steer, desired, Plugin.AiSteerRate.Value * dt);
+            return _steer;
+        }
+
+        private void Apply(float throttle, float steer, float brakes)
+        {
+            _throttle = throttle; _brakes = brakes;
+            Nwh.SetInput(_car, throttle, Plugin.AiInvertSteering.Value ? -steer : steer, brakes);
+        }
+
+        private static Vector3 Flat(Vector3 v) { v.y = 0f; return v; }
+
+        // ------------------------------------------------------------ obstacle feelers
+
+        // Casts the front feelers and the cliff probe; returns a steering correction (+ = right), a throttle factor and a brake amount.
+        private void Sense(float speed, out float steer, out float throttleFactor, out float brake)
+        {
+            steer = 0f; throttleFactor = 1f; brake = 0f;
+            float range = Plugin.AiFeelerRange.Value + speed * Plugin.AiFeelerSpeedFactor.Value;
+            var origin = _tf.position + _tf.forward * Plugin.AiFrontOffset.Value + _tf.up * 0.6f;
+            if (_rb != null) origin = _rb.worldCenterOfMass + _tf.forward * Plugin.AiFrontOffset.Value + _tf.up * 0.3f;
+            float minSlopeNormalY = Mathf.Cos(Plugin.AiMaxSlopeDeg.Value * Mathf.Deg2Rad);
+
+            if (Time.time > _cacheClear) { _cacheClear = Time.time + 5f; _obstacleCache.Clear(); }
+
+            float leftRoom = 0f, rightRoom = 0f;
+            for (int i = 0; i < _feelerAngle.Length; i++)
+            {
+                float a = _feelerAngle[i];
+                float len = range * (a == 0f ? 1f : Mathf.Abs(a) < 30f ? 0.75f : 0.5f);
+                _feelerLen[i] = len;
+                var dir = Quaternion.AngleAxis(a, _tf.up) * _tf.forward;
+                _feelerHit[i] = Cast(origin, dir, len, a == 0f ? 0.6f : 0.25f, minSlopeNormalY);
+                float d = _feelerHit[i] < 0f ? len : _feelerHit[i];
+                if (a < 0f) leftRoom += d; else if (a > 0f) rightRoom += d;
+            }
+
+            // cliff / steep drop probe: a point ahead with no ground under it counts as a centre obstacle
+            float probeAhead = 4f + speed * 0.8f;
+            var probe = _tf.position + Flat(_tf.forward).normalized * probeAhead + Vector3.up * 3f;
+            _cliffAt = -1f;
+            if (!GroundBelow(probe, 15f)) { _cliffAt = probeAhead; if (_feelerHit[0] < 0f || _feelerHit[0] > probeAhead) _feelerHit[0] = probeAhead; }
+
+            float gain = Plugin.AiAvoidGain.Value;
+            for (int i = 1; i < _feelerAngle.Length; i++)
+            {
+                if (_feelerHit[i] < 0f) continue;
+                float w = 1f - _feelerHit[i] / _feelerLen[i];
+                steer += (_feelerAngle[i] < 0f ? 1f : -1f) * w * gain * (Mathf.Abs(_feelerAngle[i]) < 30f ? 1f : 0.6f);
+            }
+            if (_feelerHit[0] >= 0f)
+            {
+                float w = 1f - _feelerHit[0] / _feelerLen[0];
+                steer += (rightRoom >= leftRoom ? 1f : -1f) * w * gain * 1.5f;
+                throttleFactor = Mathf.Clamp(_feelerHit[0] / _feelerLen[0] + 0.2f, 0.2f, 1f);
+                float brakeDist = 3f + speed * 0.6f;
+                if (_feelerHit[0] < brakeDist && speed > 4f) { throttleFactor = 0f; brake = 0.6f; }
+            }
+            steer = Mathf.Clamp(steer, -1f, 1f);
+        }
+
+        // first hit along the ray that counts as an obstacle, or -1
+        private float Cast(Vector3 origin, Vector3 dir, float len, float radius, float minSlopeNormalY)
+        {
+            RaycastHit[] hits = radius > 0f
+                ? Physics.SphereCastAll(origin, radius, dir, len, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+                : Physics.RaycastAll(origin, dir, len, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float best = -1f;
+            for (int i = 0; i < hits.Length; i++)
+            {
+                var h = hits[i];
+                if (best >= 0f && h.distance >= best) continue;
+                if (h.collider == null) continue;
+                if (h.normal.y >= minSlopeNormalY) continue;           // ground / gentle slope, drivable
+                if (!IsObstacle(h.collider)) continue;
+                best = h.distance;
+            }
+            return best;
+        }
+
+        private bool GroundBelow(Vector3 from, float depth)
+        {
+            var hits = Physics.RaycastAll(from, Vector3.down, depth, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < hits.Length; i++)
+            {
+                var c = hits[i].collider;
+                if (c == null || c.transform.IsChildOf(_tf)) continue;
+                return true;
+            }
+            return false;
+        }
+
+        // What the car should NOT steer around: itself, other patrol cars' occupants... no - the player, the player's car,
+        // any creature/NPC (they have a Health FSM) and loose light items. Everything else (terrain walls, rocks, buildings,
+        // wrecks, parked cars) is an obstacle.
+        private bool IsObstacle(Collider c)
+        {
+            bool obstacle;
+            if (_obstacleCache.TryGetValue(c, out obstacle)) return obstacle;
+            obstacle = Classify(c);
+            _obstacleCache[c] = obstacle;
+            return obstacle;
+        }
+
+        private bool Classify(Collider c)
+        {
+            var t = c.transform;
+            if (t.IsChildOf(_tf)) return false;
+            if (PlayerRef.IsPlayerOrPlayerCar(t)) return false;
+            bool creature = false;
+            for (var a = t; a != null; a = a.parent)
+            {
+                if (PlayerRef.HasVehicleController(a)) return true;       // another car (parked, wreck, patrol): obstacle
+                foreach (var f in a.GetComponents<PlayMakerFSM>())
+                    if (f.FsmName == "Health" || f.FsmName == "Detection") creature = true;
+            }
+            if (creature) return false;                                   // creature / NPC: run it over
+            var rb = c.attachedRigidbody;
+            if (rb != null && !rb.isKinematic && rb.mass < Plugin.AiIgnoreMassBelow.Value) return false;   // loose item
+            return true;
+        }
+
+        private string Feelers()
+        {
+            var s = " feelers";
+            for (int i = 0; i < _feelerAngle.Length; i++) s += " " + (_feelerHit[i] < 0f ? "-" : _feelerHit[i].ToString("0.0"));
+            if (_cliffAt >= 0f) s += " CLIFF@" + _cliffAt.ToString("0");
+            return s;
+        }
+
+        // ------------------------------------------------------------ collisions (the car's Rigidbody is on the root, so they arrive here)
+
+        private void OnCollisionEnter(Collision col)
+        {
+            if (col.collider == null || col.contactCount == 0) return;
+            float rel = col.relativeVelocity.magnitude;
+            if (rel < 2f) return;
+            var contact = col.GetContact(0);
+            var local = _tf.InverseTransformPoint(contact.point);
+            if (local.z < 0.3f) return;                                  // not a frontal hit
+            bool target = PlayerRef.IsPlayerOrPlayerCar(col.collider.transform);
+            bool npc = !target && !IsObstacle(col.collider);
+            if (npc) return;                                              // ran over a creature or a loose item: keep going
+            _hitPending = true;
+            _hitIsTarget = target;
+            _hitSide = Mathf.Abs(local.x) > 0.6f ? Mathf.Sign(local.x) : 0f;
+            Plugin.Verbose("Pilot: " + (target ? "rammed " : "hit ") + col.collider.name + " at " + rel.ToString("0.0") + " m/s, local " + local.ToString("0.0"));
+        }
+
+        // ------------------------------------------------------------ overlay
+
+        private void OnGUI()
+        {
+            if (!Plugin.AiOverlay.Value || Time.timeScale <= 0f) return;
+            int line = 0;
+            foreach (var t in _ownRoots) { if (t == _tf) break; line++; }
+            var vel = _rb != null ? _rb.velocity : Vector3.zero;
+            string s = _car.name + ": " + _state + " (" + _why + ")  " + (vel.magnitude * 3.6f).ToString("0") + " km/h  gear " + Nwh.Gear(_car)
+                + "  target " + _dist.ToString("0") + " m @ " + _angle.ToString("0") + "°  steer " + _steer.ToString("0.00")
+                + "  thr " + _throttle.ToString("0.00") + "  brk " + _brakes.ToString("0.00") + Feelers()
+                + "  recovers " + _recoverCount + (_reverseByBrake ? "  rev=brake" : "  rev=gear");
+            GUI.Label(new Rect(10, 10 + 18 * line, 1400, 22), s);
+        }
+    }
+
+    // Cached references to the player and, while driving, the player's car. Refreshed lazily; reset on scene load.
+    internal static class PlayerRef
+    {
+        private static Transform _player;
+        private static float _nextFind;
+        private static GameObject _playerCar;
+        private static PlayMakerFSM _playerCarDrive;
+        private static float _nextCarScan;
+        private static Vector3 _lastPos, _vel;
+        private static float _lastStamp = -1f;
+
+        internal static void Reset() { _player = null; _playerCar = null; _playerCarDrive = null; _nextFind = 0f; _nextCarScan = 0f; _lastStamp = -1f; }
+
+        internal static Transform Player
+        {
+            get
+            {
+                if (_player == null && Time.unscaledTime >= _nextFind)
+                {
+                    _nextFind = Time.unscaledTime + 2f;
+                    var go = GameObject.Find("Player");
+                    _player = go != null ? go.transform : null;
+                }
+                return _player;
+            }
+        }
+
+        // The car the player is driving, or null. The DriveTrigger [Drive] FSM of that car sits in "inCar".
+        internal static GameObject PlayerCar
+        {
+            get
+            {
+                if (_playerCar != null && _playerCarDrive != null && _playerCarDrive.Fsm.Initialized && _playerCarDrive.ActiveStateName == "inCar") return _playerCar;
+                _playerCar = null; _playerCarDrive = null;
+                var p = Player;
+                if (p == null) return null;
+                // fast path: the player is parented under the car while driving
+                for (var a = p.parent; a != null; a = a.parent)
+                    if (HasVehicleController(a)) { _playerCar = a.gameObject; _playerCarDrive = Patrol.FindFsm(_playerCar, "DriveTrigger", "Drive"); return _playerCar; }
+                if (Time.unscaledTime < _nextCarScan) return null;
+                _nextCarScan = Time.unscaledTime + 2f;
+                foreach (var f in UnityEngine.Object.FindObjectsOfType<PlayMakerFSM>())
+                {
+                    if (f.FsmName != "Drive" || f.gameObject.name != "DriveTrigger" || !f.Fsm.Initialized || f.ActiveStateName != "inCar") continue;
+                    for (var a = f.transform; a != null; a = a.parent)
+                        if (HasVehicleController(a)) { _playerCar = a.gameObject; _playerCarDrive = f; return _playerCar; }
+                }
+                return null;
+            }
+        }
+
+        internal static bool HasVehicleController(Transform t)
+        {
+            foreach (var c in t.GetComponents<Component>())
+                if (c != null && c.GetType().Name == "VehicleController") return true;
+            return false;
+        }
+
+        // Position and velocity of what an AI car should ram: the player's car while driving, the player on foot otherwise.
+        internal static bool Target(out Vector3 pos, out Vector3 vel, out GameObject car)
+        {
+            car = PlayerCar;
+            var p = Player;
+            if (car != null)
+            {
+                var rb = car.GetComponent<Rigidbody>();
+                pos = rb != null ? rb.worldCenterOfMass : car.transform.position;
+                vel = rb != null ? rb.velocity : Vector3.zero;
+                return true;
+            }
+            if (p == null) { pos = Vector3.zero; vel = Vector3.zero; return false; }
+            pos = p.position;
+            // on foot: velocity from the position delta, once per physics step (several pilots may ask)
+            if (_lastStamp != Time.fixedTime)
+            {
+                float dt = _lastStamp < 0f ? 0f : Time.fixedTime - _lastStamp;
+                if (dt > 0f && dt < 1f) { var v = (pos - _lastPos) / dt; _vel = Vector3.Lerp(_vel, v, 0.3f); }
+                else _vel = Vector3.zero;
+                _lastPos = pos; _lastStamp = Time.fixedTime;
+            }
+            vel = _vel;
+            return true;
+        }
+
+        internal static bool IsPlayerOrPlayerCar(Transform t)
+        {
+            if (t == null) return false;
+            var p = _player;                       // no lookup here; a null player means nothing to ram anyway
+            if (p != null && (t == p || t.IsChildOf(p))) return true;
+            var car = _playerCar;
+            if (car != null && t.IsChildOf(car.transform)) return true;
+            // the player object may not be parented under its car: anything the player is inside of counts
+            if (p != null && car == null)
+            {
+                for (var a = p.parent; a != null; a = a.parent)
+                    if (t.IsChildOf(a) && HasVehicleController(a)) return true;
+            }
+            return false;
+        }
+    }
+}

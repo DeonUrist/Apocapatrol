@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.8.7)
+# Apocapatrol (prototype 0.9.0)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -29,11 +29,35 @@ A live enemy prefab is put on the car's `sitPos`: its AI and body-mover FSMs (`D
 ranged attack, Codex, sounds) are switched off before they start and kept off every frame; `Health`, `Damage` and the `Bodypart` colliders stay
 vanilla, so it can be shot and killed like any enemy (its own death flow drops the carcass). Root Rigidbody kinematic, parented to the seat,
 collisions with the car ignored. While it lives the player cannot take the car: the `DriveTrigger` enter collider and the `Drive` FSM are off.
-After `DriveDelaySeconds` (and once the engine runs; 0 = at once, -1 = never) it drives: shifts into 1st and holds `DriveThrottle`, steering straight for now.
+After `DriveDelaySeconds` (and once the engine runs; 0 = at once, -1 = never) it drives: the driving AI below takes the wheel (`[AI] Enabled`),
+or with the AI off it shifts into 1st and holds `DriveThrottle` straight ahead. Inputs are written on the physics step (FixedUpdate), where NWH reads them.
 When it dies: with `StuckPedalChance` % its leg stays on the gas (throttle kept, car keeps going); otherwise the gas is simply released and the car rolls out
 on engine braking and drag until it stands still. Either way the seat is free again and the player can drive the car. A `*_Dead` prefab as `Driver` gives the old ragdoll
 passenger instead; an empty `Driver` falls back to the `[Build]` drive test.
 Every part is configurable by prefab name or in-game item name (`[Build]`; edit live in the Apocasetter Mods menu).
+
+## The driving AI (Pilot.cs)
+Hit and run. The target is the player - the player's car while they drive, the player on foot otherwise; the car behaves the same either way.
+- **Charge**: aim at an intercept point (`LeadTime` seconds ahead of the target's movement, re-taken every `CommitSeconds`) and steer toward it.
+  The wheel turns at `SteerRate` (full-lock units per second) and is limited at speed (`MaxSteerAtSpeed`), so the car sweeps toward the player
+  in a wide arc instead of pivoting onto them; above `TurnSafeSpeed` with the target far off the nose it lifts off and brakes lightly.
+- **Overshoot**: once the target is passed (behind the car, within `PassWidth` of its track) or rammed (collision with the player / their car),
+  the car keeps going for `RunOutMeters` (at most `RunOutMaxSeconds`), then
+- **Turnaround**: full lock toward the target until it faces them again (back to Charge). Too slow and too far off for two seconds = a three-point turn.
+- **Recover**: a frontal hit against anything that is not the target, or not moving for `StuckSeconds` in a forward state, reverses for
+  `ReverseSeconds` with the wheels turned so the nose swings away from the obstacle (or toward the target), then charges again. Recoveries
+  within `RecoverWindow` of each other reverse longer and, from the third on, in a random direction; after `MaxRecovers` the car gives up for
+  `WaitSeconds`. How NWH reverses (gear -1 + throttle, or brake input at standstill) is detected on the first recovery and logged.
+- **Feelers**: five rays from just outside the bumper (`FrontOffset`), the centre one `FeelerRange` + `FeelerSpeedFactor` × speed long, the side
+  ones at ±22° / ±48° and shorter, plus a probe for missing ground ahead (cliffs). A hit steers away (`AvoidGain`, the centre ray toward the freer
+  side), throttles down and brakes when it is close. Surfaces flatter than `MaxSlopeDeg` are ground, steeper ones (rocks, walls, wrecks, other
+  cars) are obstacles. NOT obstacles: the player and the player's car, creatures/NPCs (anything with a Health/Detection FSM), loose items lighter
+  than `IgnoreMassBelow` kg - those get rammed or run over. Within `RamDistance` of the target with it roughly ahead, avoidance is off entirely.
+- Beyond `GiveUpDistance` from the player the car coasts (Idle) until they come closer. On its side or roof it just waits. `InvertSteering` flips
+  the steering sign should the car turn away from the target.
+`[Debug] AiOverlay` draws one line per AI car on screen (state and why, speed, gear, target distance/angle, steering, pedals, feeler hit
+distances); the verbose log has the same every 5 s plus every state change with its reason. Nothing of the AI state is saved: a car restored
+while driving starts charging again.
 
 ## The passenger (Passenger.cs)
 A configured `[Passenger] Passenger` is independent of the driver and appears even if the driver is empty, a ragdoll, or fails to spawn. Its
