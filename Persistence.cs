@@ -42,6 +42,7 @@ namespace Apocapatrol
             string passengerPrefab, GameObject passenger, RamTargets rams)
         {
             var marker = car.GetComponent<PatrolMarker>() ?? car.AddComponent<PatrolMarker>();
+            if (car.GetComponent<Ram.Sensor>() == null) car.AddComponent<Ram.Sensor>();
             marker._rams = rams;
             marker._bodyPrefab = bodyPrefab ?? "";
             marker._driverPrefab = driverPrefab ?? "";
@@ -69,6 +70,7 @@ namespace Apocapatrol
         // the passenger left the car (it lives on as an ordinary registered mob, saved by the game itself)
         internal void PassengerLeft() { _passenger = null; }
         internal string DriverPrefab { get { return _driverPrefab; } }
+        internal string BodyPrefab { get { return _bodyPrefab; } }
         internal void DriverLeft() { _driver = null; }
 
         internal PatrolCarData Snapshot()

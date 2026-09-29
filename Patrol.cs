@@ -21,7 +21,7 @@ namespace Apocapatrol
         {
             PatrolPersistence.Tick(this);
             if (!InGame()) return;
-
+            Ram.Tick();
         }
 
         // builds a template (from the F8 menu); one at a time

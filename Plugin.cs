@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.19.0";
+        public const string VERSION = "0.20.0";
 
         internal static ManualLogSource Log;
 
@@ -45,6 +45,9 @@ namespace Apocapatrol
         // [Combat]
         internal static ConfigEntry<bool> RangedCombat;
         internal static ConfigEntry<float> FireArc, MaxAimPitch, AimTurnSpeed, FireBurstSeconds, FireIntervalMin, FireIntervalMax, ShootDistance;
+        internal static ConfigEntry<bool> RamDamage;
+        internal static ConfigEntry<float> RamDamageMultiplier, RamMinSpeedKmh, RamFullSpeedKmh, RamInCarFactor;
+        internal static ConfigEntry<string> RamDamageByBody;
         // [Driving]
         internal static ConfigEntry<float> StuckPedalChance, StuckPedalTakeoverSeconds, BailChance, StuckBailChance;
         // [AI]
@@ -86,7 +89,7 @@ namespace Apocapatrol
             RangedCombat = Config.Bind("Combat", "RangedCombat", true,
                 "Ranged humans (Boltjaw/Flexa/Lugnut/Scrud/Sprokka) in a car use their vanilla targeting and ranged attack: the passenger whenever a target " +
                 "is in the fire arc, the driver in bursts. Off = everybody just rides along");
-            ShootDistance = Config.Bind("Combat", "ShootDistance", 15f, new ConfigDescription(
+            ShootDistance = Config.Bind("Combat", "ShootDistance", 40f, new ConfigDescription(
                 "Occupants only shoot at a target closer than this, m", new AcceptableValueRange<float>(1f, 200f)));
             FireArc = Config.Bind("Combat", "FireArcHalfAngle", 100f, new ConfigDescription(
                 "Occupants may fire this many degrees left or right of the car's forward direction", new AcceptableValueRange<float>(0f, 180f)));
@@ -100,6 +103,19 @@ namespace Apocapatrol
                 "Shortest pause between two bursts of the driver, s", new AcceptableValueRange<float>(0f, 120f)));
             FireIntervalMax = Config.Bind("Combat", "FireIntervalMax", 20f, new ConfigDescription(
                 "Longest pause between two bursts of the driver, s", new AcceptableValueRange<float>(0f, 300f)));
+            RamDamage = Config.Bind("Combat", "RamDamage", true,
+                "An AI car that hits you (on foot or in your car) hurts you. The game's own bumper damage only works against creatures, not the player");
+            RamDamageMultiplier = Config.Bind("Combat", "RamDamageMultiplier", 1f, new ConfigDescription(
+                "Ram damage scale: at 1 a full-speed hit takes 30 health with a small car, 50 with a Junker, 70 with a truck (RamDamageByBody)",
+                new AcceptableValueRange<float>(0f, 3f)));
+            RamDamageByBody = Config.Bind("Combat", "RamDamageByBody", "Junker=50, Rust*=70, Scrapwagon=70, PigPen=50",
+                "Full-speed damage per car body, 'Body=damage' pairs; * = prefix. Bodies not listed take " + Ram.DefaultDamage + ". Applied before the multiplier");
+            RamFullSpeedKmh = Config.Bind("Combat", "RamFullSpeedKmh", 40f, new ConfigDescription(
+                "Impact speed (km/h, relative) at which the full damage applies; slower hits scale down linearly", new AcceptableValueRange<float>(5f, 200f)));
+            RamMinSpeedKmh = Config.Bind("Combat", "RamMinSpeedKmh", 10f, new ConfigDescription(
+                "Hits slower than this (km/h, relative) do nothing", new AcceptableValueRange<float>(0f, 100f)));
+            RamInCarFactor = Config.Bind("Combat", "RamInCarFactor", 1f, new ConfigDescription(
+                "Damage factor while you sit in your own car (1 = same as on foot)", new AcceptableValueRange<float>(0f, 1f)));
 
             StuckPedalChance = Config.Bind("Driving", "StuckPedalChance", 5f, new ConfigDescription(
                 "% chance that a killed driver's gas pedal stays stuck; otherwise the gas is released and the car rolls to a stop",
@@ -176,7 +192,7 @@ namespace Apocapatrol
             AiIgnoreMassBelow = Config.Bind("AI", "IgnoreMassBelow", 40f, new ConfigDescription(
                 "Loose physics objects lighter than this (kg) are not obstacles; the car drives through them",
                 new AcceptableValueRange<float>(0f, 1000f)));
-            AiGiveUpDistance = Config.Bind("AI", "GiveUpDistance", 250f, new ConfigDescription(
+            AiGiveUpDistance = Config.Bind("AI", "GiveUpDistance", 500f, new ConfigDescription(
                 "Beyond this distance from the player the car stops chasing and coasts until the player comes closer, m",
                 new AcceptableValueRange<float>(20f, 2000f)));
             AiInvertSteering = Config.Bind("AI", "InvertSteering", false,
