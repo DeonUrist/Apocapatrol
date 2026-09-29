@@ -18,12 +18,14 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.17.0";
+        public const string VERSION = "0.18.0";
 
         internal static ManualLogSource Log;
 
         internal static ConfigEntry<Key> MenuKey;
         internal static readonly Dictionary<string, ConfigEntry<string>> CargoSpecs = new Dictionary<string, ConfigEntry<string>>(StringComparer.OrdinalIgnoreCase);
+        internal static readonly Dictionary<string, ConfigEntry<float>> LootChances = new Dictionary<string, ConfigEntry<float>>(StringComparer.OrdinalIgnoreCase);
+        internal static ConfigEntry<float> MinPartHealth, MaxPartHealth;
 
         internal static string CargoSpec(string key)
         {
@@ -31,9 +33,25 @@ namespace Apocapatrol
             return key != null && CargoSpecs.TryGetValue(key, out e) ? e.Value : "";
         }
 
+        internal static float LootChance(string key)
+        {
+            ConfigEntry<float> e;
+            return key != null && LootChances.TryGetValue(key, out e) ? e.Value : 0f;
+        }
+
+        // Condition of a spawned part: min..max, weighted toward two thirds of the way up (triangular distribution)
+        internal static float RollPartHealth()
+        {
+            float lo = Mathf.Min(MinPartHealth.Value, MaxPartHealth.Value), hi = Mathf.Max(MinPartHealth.Value, MaxPartHealth.Value);
+            if (hi - lo < 0.01f) return lo;
+            float mode = lo + (hi - lo) * 2f / 3f;
+            float u = UnityEngine.Random.value, f = (mode - lo) / (hi - lo);
+            return u < f ? lo + Mathf.Sqrt(u * (hi - lo) * (mode - lo)) : hi - Mathf.Sqrt((1f - u) * (hi - lo) * (hi - mode));
+        }
+
         // [Combat]
         internal static ConfigEntry<bool> RangedCombat;
-        internal static ConfigEntry<float> FireArc, MaxAimPitch, AimTurnSpeed, FireBurstSeconds, FireIntervalMin, FireIntervalMax;
+        internal static ConfigEntry<float> FireArc, MaxAimPitch, AimTurnSpeed, FireBurstSeconds, FireIntervalMin, FireIntervalMax, ShootDistance;
         // [Driving]
         internal static ConfigEntry<float> StuckPedalChance, StuckPedalTakeoverSeconds, BailChance, StuckBailChance;
         // [AI]
@@ -75,6 +93,8 @@ namespace Apocapatrol
             RangedCombat = Config.Bind("Combat", "RangedCombat", true,
                 "Ranged humans (Boltjaw/Flexa/Lugnut/Scrud/Sprokka) in a car use their vanilla targeting and ranged attack: the passenger whenever a target " +
                 "is in the fire arc, the driver in bursts. Off = everybody just rides along");
+            ShootDistance = Config.Bind("Combat", "ShootDistance", 15f, new ConfigDescription(
+                "Occupants only shoot at a target closer than this, m", new AcceptableValueRange<float>(1f, 200f)));
             FireArc = Config.Bind("Combat", "FireArcHalfAngle", 100f, new ConfigDescription(
                 "Occupants may fire this many degrees left or right of the car's forward direction", new AcceptableValueRange<float>(0f, 180f)));
             MaxAimPitch = Config.Bind("Combat", "MaxAimPitch", 35f, new ConfigDescription(
@@ -169,10 +189,19 @@ namespace Apocapatrol
             AiInvertSteering = Config.Bind("AI", "InvertSteering", false,
                 "Flip the steering sign if the car turns away from the target instead of toward it");
 
-            foreach (var d in CarTemplate.CargoDefaults)
-                CargoSpecs[d[0]] = Config.Bind("Cargo", d[0], d[1],
-                    "Items loaded into the bed of the Rustcargo_" + d[0] + " truck: prefab:count;prefab:min-max;... (prefab or in-game item names). " +
-                    "They are locked in the covered bed like vanilla cargo until the player grabs them");
+            foreach (var d in CarTemplate.LootDefaults)
+            {
+                CargoSpecs[d[0]] = Config.Bind("Loot", d[0], d[1],
+                    d[0] + " load of a loot truck: prefab:count;prefab:min-max;... (prefab or in-game item names). " +
+                    "The items are locked in the covered bed like vanilla cargo until the player grabs them");
+                LootChances[d[0]] = Config.Bind("Loot", d[0] + "Chance", float.Parse(d[2]), new ConfigDescription(
+                    "% chance that a loot truck carries " + d[0] + " (all XChance values should add up to 100)", new AcceptableValueRange<float>(0f, 100f)));
+            }
+            MinPartHealth = Config.Bind("Loot", "MinPartHealth", 2f, new ConfigDescription(
+                "Lowest condition (%) of a spawned car's parts that have one (engine, radiator, wheels)", new AcceptableValueRange<float>(0f, 100f)));
+            MaxPartHealth = Config.Bind("Loot", "MaxPartHealth", 35f, new ConfigDescription(
+                "Highest condition (%) of a spawned car's parts; the roll is weighted toward two thirds of the way from Min to Max",
+                new AcceptableValueRange<float>(0f, 100f)));
 
             var offsetRange = new AcceptableValueRange<float>(-2f, 2f);
             DriverOffsetX = PoseFloat.Create(Config, "Pose", "OffsetX", 0f, "Where each occupant's hips go: offset from its seat anchor, right (m)", offsetRange, exposePose);

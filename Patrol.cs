@@ -83,7 +83,12 @@ namespace Apocapatrol
                 if (tpl.FillFuel) Fuel(car);
                 if (tpl.ReleaseHandbrake) Handbrake(car, false);
                 List<GameObject> cargo = null;
-                if (!string.IsNullOrEmpty(tpl.Cargo)) cargo = Cargo.Load(car, Plugin.CargoSpec(tpl.Cargo));
+                if (!string.IsNullOrEmpty(tpl.Cargo))
+                {
+                    string lootKey = tpl.Cargo.Equals("Random", StringComparison.OrdinalIgnoreCase) ? Cargo.RollLootType() : tpl.Cargo;
+                    Plugin.Log.LogInfo("Loot: " + lootKey + " (" + Plugin.CargoSpec(lootKey) + ")");
+                    cargo = Cargo.Load(car, Plugin.CargoSpec(lootKey));
+                }
 
                 yield return null;
                 GameObject driver = null, passenger = null;
@@ -97,6 +102,7 @@ namespace Apocapatrol
 
                 yield return new WaitForSeconds(1.5f);
                 if (cargo != null) Cargo.SettleFsms(cargo);
+                SetPartConditions(car);
                 if (Plugin.VerboseLog.Value) LogHingeStates(car);
 
                 {
@@ -505,6 +511,26 @@ namespace Apocapatrol
             var f = who.GetComponents<PlayMakerFSM>().FirstOrDefault(x => x.FsmName == "Health");
             var h = f != null ? f.FsmVariables.GetFsmFloat("Health") : null;
             if (h != null) h.Value = value;
+        }
+
+        // Parts with a Condition FSM (engine, radiator, wheels) get a rolled condition; the FSM's tiers react to the variable.
+        private static void SetPartConditions(GameObject car)
+        {
+            int n = 0;
+            foreach (var f in car.GetComponentsInChildren<PlayMakerFSM>(true))
+            {
+                if (f.FsmName != "Condition" || !f.Fsm.Initialized) continue;
+                var v = f.FsmVariables.GetFsmFloat("Condition");
+                if (v == null) continue;
+                float c = Plugin.RollPartHealth();
+                v.Value = c;
+                var repair = f.gameObject.GetComponents<PlayMakerFSM>();
+                foreach (var r in repair)
+                    if (r.FsmName == "Repair" && r.Fsm.Initialized) { var rv = r.FsmVariables.GetFsmFloat("Condition"); if (rv != null) rv.Value = c; }
+                Plugin.Verbose("  " + f.gameObject.name + " condition " + c.ToString("0"));
+                n++;
+            }
+            Plugin.Log.LogInfo("Part conditions set on " + n + " part(s) (" + Plugin.MinPartHealth.Value + ".." + Plugin.MaxPartHealth.Value + " %)");
         }
 
         private static void LogHingeStates(GameObject car)

@@ -236,7 +236,8 @@ namespace Apocapatrol
                 aimPoint = AimPoint(target);
                 var flat = Vector3.ProjectOnPlane(aimPoint - _passenger.transform.position, _car.transform.up);
                 if (flat.sqrMagnitude > 0.001f)
-                    inArc = Mathf.Abs(Vector3.SignedAngle(_car.transform.forward, flat, _car.transform.up)) <= Plugin.FireArc.Value;
+                    inArc = Mathf.Abs(Vector3.SignedAngle(_car.transform.forward, flat, _car.transform.up)) <= Plugin.FireArc.Value
+                         && (aimPoint - _passenger.transform.position).magnitude <= Plugin.ShootDistance.Value;
             }
 
             if (_driverMode)

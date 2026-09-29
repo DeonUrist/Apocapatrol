@@ -41,6 +41,21 @@ namespace Apocapatrol
             return slots;
         }
 
+        // Picks a loot type by the [Loot] XChance weights (they should add up to 100; any total works, it is normalised).
+        internal static string RollLootType()
+        {
+            float total = 0f;
+            foreach (var d in CarTemplate.LootDefaults) total += Mathf.Max(0f, Plugin.LootChance(d[0]));
+            if (total <= 0f) return "";
+            float r = UnityEngine.Random.Range(0f, total), acc = 0f;
+            foreach (var d in CarTemplate.LootDefaults)
+            {
+                acc += Mathf.Max(0f, Plugin.LootChance(d[0]));
+                if (r < acc) return d[0];
+            }
+            return CarTemplate.LootDefaults[CarTemplate.LootDefaults.Length - 1][0];
+        }
+
         // Fills the car's PhysicsLock volume with the items of the spec. Returns the spawned items (already locked).
         internal static List<GameObject> Load(GameObject car, string spec)
         {
@@ -50,22 +65,22 @@ namespace Apocapatrol
 
             var lockGo = Patrol.FindChild(car.transform, "PhysicsLock");
             var boxes = lockGo != null ? lockGo.GetComponents<BoxCollider>() : null;
-            if (boxes == null || boxes.Length < 2)
+            if (boxes == null || boxes.Length < 1)
             {
-                Plugin.Log.LogWarning("Cargo: " + car.name + " has no parts/PhysicsLock with two boxes; no cargo");
+                Plugin.Log.LogWarning("Cargo: " + car.name + " has no parts/PhysicsLock box; no cargo");
                 return items;
             }
-            var lower = boxes[0].center.y <= boxes[1].center.y ? boxes[0] : boxes[1];
-            var upper = lower == boxes[0] ? boxes[1] : boxes[0];
+            // each BoxCollider is one lock zone (an item inside it, or up to 10 m above it, gets locked by its own LockPhysics raycasts);
+            // the bed is the zone with the largest footprint
+            BoxCollider bed = boxes[0];
+            foreach (var bx in boxes) if (bx.size.x * bx.size.z > bed.size.x * bed.size.z) bed = bx;
             var t = lockGo;
-            // cargo volume in the PhysicsLock object's local space: XZ = overlap of both boxes, Y = between them
-            float minX = Mathf.Max(lower.center.x - lower.size.x / 2f, upper.center.x - upper.size.x / 2f) + 0.15f;
-            float maxX = Mathf.Min(lower.center.x + lower.size.x / 2f, upper.center.x + upper.size.x / 2f) - 0.15f;
-            float minZ = Mathf.Max(lower.center.z - lower.size.z / 2f, upper.center.z - upper.size.z / 2f) + 0.15f;
-            float maxZ = Mathf.Min(lower.center.z + lower.size.z / 2f, upper.center.z + upper.size.z / 2f) - 0.15f;
-            float floorY = lower.center.y + lower.size.y / 2f;
-            float ceilY = upper.center.y - upper.size.y / 2f;
+            float minX = bed.center.x - bed.size.x / 2f + 0.15f, maxX = bed.center.x + bed.size.x / 2f - 0.15f;
+            float minZ = bed.center.z - bed.size.z / 2f + 0.15f, maxZ = bed.center.z + bed.size.z / 2f - 0.15f;
+            float floorY = bed.center.y - bed.size.y / 2f + 0.02f;
+            float ceilY = bed.center.y + bed.size.y / 2f;
             var scale = t.lossyScale;
+            foreach (var bx in boxes) Plugin.Verbose("Cargo: lock zone centre " + bx.center.ToString("0.00") + " size " + bx.size.ToString("0.00") + (bx == bed ? " (bed)" : ""));
             Plugin.Verbose("Cargo: volume x " + minX.ToString("0.00") + ".." + maxX.ToString("0.00") + " z " + minZ.ToString("0.00") + ".." + maxZ.ToString("0.00")
                 + " y " + floorY.ToString("0.00") + ".." + ceilY.ToString("0.00") + " (local, scale " + scale + ")");
             if (maxX <= minX || maxZ <= minZ || ceilY <= floorY) { Plugin.Log.LogWarning("Cargo: PhysicsLock volume is degenerate on " + car.name); return items; }
