@@ -39,6 +39,7 @@ namespace Apocapatrol
         private static bool _reverseByBrake;  // NWH reverse mode that turned out to work (auto-detected, shared by all cars)
         private static bool _reverseKnown;
         private bool _reverseChecked;
+        private int _reverseTries;
 
         private bool _hitPending, _hitIsTarget;
         private float _hitSide;
@@ -146,9 +147,10 @@ namespace Apocapatrol
             if (Time.time >= _nextLog)
             {
                 _nextLog = Time.time + 5f;
-                Plugin.Verbose("Pilot: " + _state + " " + (speed * 3.6f).ToString("0") + " km/h gear " + Nwh.Gear(_car)
+                Plugin.Verbose("Pilot: " + _state + " " + (speed * 3.6f).ToString("0") + " km/h (fwd " + (forwardSpeed * 3.6f).ToString("0") + ") gear " + Nwh.Gear(_car)
                     + " target " + _dist.ToString("0") + " m at " + _angle.ToString("0") + "° steer " + _steer.ToString("0.00")
-                    + " thr " + _throttle.ToString("0.00") + " brk " + _brakes.ToString("0.00") + Feelers());
+                    + " thr " + _throttle.ToString("0.00") + " brk " + _brakes.ToString("0.00") + Feelers()
+                    + " w=" + (_rb != null ? _rb.angularVelocity.magnitude.ToString("0.0") : "?") + " up.y=" + _tf.up.y.ToString("0.00"));
             }
         }
 
@@ -244,11 +246,19 @@ namespace Apocapatrol
                     if (!_reverseKnown) Plugin.Log.LogInfo("Pilot: reversing works with " + (_reverseByBrake ? "brake input" : "gear -1 + throttle"));
                     _reverseKnown = true;
                 }
-                else if (!_reverseKnown)
+                else if (!_reverseKnown && _reverseTries == 0)
                 {
+                    // not moving back: try the other mode once; if that fails too the car is simply blocked, keep the gear mode
+                    _reverseTries = 1;
                     _reverseByBrake = !_reverseByBrake;
+                    _reverseChecked = false;
                     Plugin.Log.LogInfo("Pilot: not reversing with " + (_reverseByBrake ? "gear -1 + throttle" : "brake input") + ", trying " + (_reverseByBrake ? "brake input" : "gear -1 + throttle"));
                     _stateTime = 0f;   // give the other mode its own time
+                }
+                else if (!_reverseKnown)
+                {
+                    _reverseByBrake = false;
+                    Plugin.Log.LogInfo("Pilot: neither reverse mode moved the car (blocked?), keeping gear -1 + throttle");
                 }
             }
             if (_stateTime >= _recoverDur)
@@ -282,7 +292,7 @@ namespace Apocapatrol
             float s = obstacleSide != 0f ? Mathf.Sign(obstacleSide) : -Mathf.Sign(_angle == 0f ? 1f : _angle);
             if (_recoverCount >= 3) s = UnityEngine.Random.value < 0.5f ? -1f : 1f;
             _recoverSteer = s * 0.9f;
-            _reverseChecked = false;
+            _reverseChecked = false; _reverseTries = 0;
             _stuckTime = 0f;
             Enter(PilotState.Recover, why);
         }

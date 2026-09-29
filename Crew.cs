@@ -216,7 +216,7 @@ namespace Apocapatrol
             Init(_car, drv);
             _seated = 0f;
             MuteAi();
-            Plugin.Log.LogInfo("Crew: " + drv.name + " took the wheel");
+            Plugin.Log.LogInfo("Crew: " + drv.name + " took the wheel, drives off in " + _delayOverride + " s; car " + Speed() + " km/h, " + Nwh.Diag(_car));
         }
 
         private bool PlayerInside()
@@ -229,7 +229,7 @@ namespace Apocapatrol
             _driving = true;
             _ctl.Take();
             if (Plugin.AiEnabled.Value) _pilot = Pilot.Attach(_car);
-            Plugin.Log.LogInfo("Crew: driver drives off (" + (_pilot != null ? "driving AI" : "straight ahead") + ", throttle " + Plugin.DriveThrottle.Value + ")");
+            Plugin.Log.LogInfo("Crew: driver drives off (" + (_pilot != null ? "driving AI" : "straight ahead") + ") at " + Speed() + " km/h, " + Nwh.Diag(_car));
         }
 
         private void Drive()
