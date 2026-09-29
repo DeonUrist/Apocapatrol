@@ -108,7 +108,7 @@ namespace Apocapatrol
             var header = _hasSetter && _themeHeader != null ? _themeHeader.GetValue(null) as GUIStyle : null;
             GUILayout.BeginVertical();
             GUILayout.Label("Template spawner", header ?? GUI.skin.label);
-            GUILayout.Label("Click a car to build it " + Plugin.SpawnDistance.Value.ToString("0") + " m in front of you.  [Esc] Close");
+            GUILayout.Label("Click a car to build it " + Plugin.SpawnDistance.ToString("0") + " m in front of you.  [Esc] Close");
             GUILayout.Space(6f);
             _scroll = GUILayout.BeginScrollView(_scroll);
             CarTemplate chosen = null;

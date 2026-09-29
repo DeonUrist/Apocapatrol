@@ -96,7 +96,7 @@ namespace Apocapatrol
                     go.transform.rotation = t.rotation * Quaternion.Euler(0f, UnityEngine.Random.Range(-8f, 8f), 0f);
                     x += w; rowDepth = Mathf.Max(rowDepth, d); layerHeight = Mathf.Max(layerHeight, h);
 
-                    if (Plugin.RegisterWithGame.Value) { Register.Name(go, slot.Prefab.name); Register.Add(go, false); }
+                    Register.Name(go, slot.Prefab.name); Register.Add(go, false);
                     Lock(go, t);
                     items.Add(go);
                     placed++;

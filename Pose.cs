@@ -134,12 +134,12 @@ namespace Apocapatrol
                 if (flat > 0.001f)
                 {
                     wantedYaw = Mathf.Clamp(Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg,
-                        -Plugin.PassengerFireArc.Value, Plugin.PassengerFireArc.Value);
+                        -Plugin.FireArc.Value, Plugin.FireArc.Value);
                     wantedPitch = Mathf.Clamp(Mathf.Atan2(local.y, flat) * Mathf.Rad2Deg,
-                        -Plugin.PassengerMaxAimPitch.Value, Plugin.PassengerMaxAimPitch.Value);
+                        -Plugin.MaxAimPitch.Value, Plugin.MaxAimPitch.Value);
                 }
             }
-            float step = Plugin.PassengerAimTurnSpeed.Value * Time.deltaTime;
+            float step = Plugin.AimTurnSpeed.Value * Time.deltaTime;
             _aimYaw = Mathf.MoveTowardsAngle(_aimYaw, wantedYaw, step);
             _aimPitch = Mathf.MoveTowardsAngle(_aimPitch, wantedPitch, step);
             AimSpine(_spine, 0.25f, up, right);

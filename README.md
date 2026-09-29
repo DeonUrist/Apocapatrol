@@ -1,23 +1,23 @@
-# Apocapatrol (prototype 0.16.2)
+# Apocapatrol (prototype 0.17.0)
 
-BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
-press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
+BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
+car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
+driver goes hunting the player.
 
-Default build: **PipeRat** frame, 4 × `small_wheel_1`, `1.2L I4 59HP 87Nm Gasoline` engine, `radiator_small`, `steeringwheel_7`,
-`poloska_seat_front_homemade` on both front seats (`Seat`, `PassengerSeat`), handbrake released (to be able to drive), a live **Scraffa** at the
-wheel and a **Flexa** on the passenger seat (`[Driver] Driver`, `[Passenger] Passenger`). The passenger has no AI either: it sits (same pose and
-offsets, at sitPos shifted by the distance between the two seat hinges) until killed; its death changes nothing about the driving.
+Config (all live in the Apocasetter Mods menu): `[Combat]` RangedCombat (one switch for driver and passenger), FireArcHalfAngle, MaxAimPitch,
+AimTurnSpeed, FireBurstSeconds, FireIntervalMin/Max · `[Driving]` StuckPedalChance, StuckPedalTakeoverSeconds, BailChance, StuckBailChance ·
+`[AI]` the driving AI's tuning · `[Cargo]` the truck loads · `[Debug]` TemplateSpawnerKey, VerboseLog, AiOverlay. What used to be settings and is
+now fixed: spawn distance 8 m, takeover delay 2 s, carcass eject 0.3 m at 4 m/s, bail-out distance 0.5 m; stale settings from earlier versions are
+removed from the .cfg on load (the hidden `PoseConfiguration` switch is kept).
 
 ## Car templates - the park (Templates.cs)
 The park is hardcoded: `CarTemplate.Park[]` lists each car as name, body, wheel, engine, radiator, steering wheel, exhaust, driver seat, passenger seat,
 driver, passenger (prefab names or in-game item names, empty = no part) and `ramsTargets`: what the driving AI runs into on purpose - `None`
 (rams nothing: the player, their car, creatures and cars are all obstacles; it makes drive-by runs `DriveByOffset` m beside the player instead),
 `Pedestrians` (runs over the player on foot and creatures, avoids cars - drive-bys on a driving player) or `Cars` (rams the player's car and
-other vehicles too, and pedestrians). All small cars in the park are `Pedestrians`. A car built from the `[Build]` fields uses `[AI] RamTargets`.
+other vehicles too, and pedestrians). All small cars in the park are `Pedestrians`, the trucks `Cars`.
 **Template spawner**: `F8` (`[Debug] TemplateSpawnerKey`) opens a window listing the park; click a car to build it in front of you (uses
-Apocasetter's theme and input blocker when installed, a plain window otherwise). `[Build] Template` names the one the spawn key builds (empty = the
-`[Build]`/`[Driver]`/`[Passenger]` fields as before). To add a car: set it up in the fields, press `F9` (`TemplateKey`) - the log prints the
-matching `new CarTemplate(...)` line named `[Build] TemplateName` - and paste it into `Park`. Currently: **PipeRat_Basic** (PipeRat, 4× small_wheel_1,
+Apocasetter's theme and input blocker when installed, a plain window otherwise). To add a car, add a `new CarTemplate(...)` line to `Park`. Currently: **PipeRat_Basic** (PipeRat, 4× small_wheel_1,
 1.2L I4 engine, radiator_small, steeringwheel_7, poloska homemade seats, Scraffa driving, Sprokka passenger), **PipeRat_Advanced** (PipeRat,
 4× small_wheel_2, 2.8L V6 engine, Medium Radiator, steeringwheel_7, poloska homemade seats, Spanna driving, Lugnut passenger), **Poloska_Basic**
 (PipeRat_Basic on a Poloska frame, Boltjaw passenger), **Poloska_Advanced** (Poloska frame, the 2.8L V6, otherwise PipeRat_Basic: Scraffa driving,
@@ -40,7 +40,7 @@ otherwise (Spanna driving, Flexa passenger, rams Cars). Edit the amounts live in
 
 ## Seated pose (Pose.cs)
 The game has no sit animation, so after the Animator has posed an occupant each frame the mod overrides the Mixamo bones into a seated pose and
-moves the hips onto the seat anchor + `[Driver] OffsetX/Y/Z`. The shared `[Pose]` settings control both legs. Arms have independent profiles for
+moves the hips onto the seat anchor + `[Pose] OffsetX/Y/Z`. The shared `[Pose]` settings control both legs. Arms have independent profiles for
 all seven human types: `[Pose.Boltjaw]`, `[Pose.Flexa]`, `[Pose.Lugnut]`, `[Pose.Scrud]`, `[Pose.Sprokka]`, `[Pose.Scraffa]`, and `[Pose.Spanna]`.
 Each profile exposes `Vertical`, `Horizontal`, and `Rotation` for the left and right `Arm`, `Elbow`, and `Hand` (18 live controls per human).
 Positive vertical swings forward/up, positive horizontal turns toward the occupant's right, and rotation twists around the limb axis. All values
@@ -59,12 +59,10 @@ A live enemy prefab is put on the car's `sitPos`: its AI and body-mover FSMs (`D
 ranged attack, Codex, sounds) are switched off before they start and kept off every frame; `Health`, `Damage` and the `Bodypart` colliders stay
 vanilla, so it can be shot and killed like any enemy (its own death flow drops the carcass). Root Rigidbody kinematic, parented to the seat,
 collisions with the car ignored. While it lives the player cannot take the car: the `DriveTrigger` enter collider and the `Drive` FSM are off.
-After `DriveDelaySeconds` (and once the engine runs; 0 = at once, -1 = never) it drives: the driving AI below takes the wheel (`[AI] Enabled`),
-or with the AI off it shifts into 1st and holds `DriveThrottle` straight ahead. Inputs are written on the physics step (FixedUpdate), where NWH reads them.
+As soon as the engine runs the driving AI below takes the wheel. Inputs are written on the physics step (FixedUpdate), where NWH reads them.
 When it dies: with `StuckPedalChance` % its leg stays on the gas (throttle kept, car keeps going); otherwise the gas is simply released and the car rolls out
-on engine braking and drag until it stands still. Either way the seat is free again and the player can drive the car. A `*_Dead` prefab as `Driver` gives the old ragdoll
-passenger instead; an empty `Driver` falls back to the `[Build]` drive test.
-Every part is configurable by prefab name or in-game item name (`[Build]`; edit live in the Apocasetter Mods menu).
+on engine braking and drag until it stands still. Either way the seat is free again and the player can drive the car. A `*_Dead` prefab as a
+template's driver gives a ragdoll passenger instead.
 
 ## The driving AI (Pilot.cs)
 Hit and run. The target is the player - the player's car while they drive, the player on foot otherwise; the car behaves the same either way.
@@ -92,14 +90,14 @@ distances); the verbose log has the same every 5 s plus every state change with 
 while driving starts charging again.
 
 ## The passenger (Passenger.cs)
-A configured `[Passenger] Passenger` is independent of the driver and appears even if the driver is empty, a ragdoll, or fails to spawn. Its
+A template's passenger is independent of the driver and appears even if the driver is empty, a ragdoll, or fails to spawn. Its
 seat point is the driver's `sitPos` shifted by the distance between the driver and passenger seat hinges. It uses the same seated pose and offsets,
 keeps the same AI/body FSMs disabled, and retains vanilla health and death. It never changes driving, throttle, or driver-seat locking.
 
 Boltjaw, Flexa, Lugnut, Scrud, and Sprokka use ranged passenger logic when their expected `RangedAttackWait` FSM and `AttackRaycast_Ranged` child
 are present. Scraffa and Spanna are always passive like the driver. For ranged humans, vanilla detection, target selection,
 range/line-of-sight checks, weapon, cadence, effects and damage remain active, but `Attack` is allowed only while the vanilla-selected target is
-inside the car's front firing arc (`[Passenger] FireArcHalfAngle`, 90 degrees by default). `Movement` remains disabled, so the passenger always
+inside the car's front firing arc (`[Combat] FireArcHalfAngle`, 100 degrees by default). `Movement` remains disabled, so the passenger always
 uses exactly the same fixed arms-and-legs pose and offsets as the driver. The root stays locked to the seat; only the three-bone spine chain turns
 and pitches that fixed upper-body pose toward the target. Native arm animation is never enabled. The ranged attack's `Sound2` FSM remains active
 so weapon shots keep their vanilla audio. Their native close-range `d_melee` branch is redirected to ranged damage and the melee `Damage` FSM stays
@@ -111,26 +109,26 @@ Their melee `Damage` and contact `FireDamage` FSM actions are neutralized and `F
 re-enable an invisible close-range hit. Projectile damage continues through the separate `Damage Ranged` FSM.
 
 ### A shooting driver
-With `[Driver] RangedCombat` a ranged human at the wheel gets the same treatment as a ranged passenger (vanilla detection, ranged-only attack
+With `[Combat] RangedCombat` a ranged human at the wheel gets the same treatment as a ranged passenger (vanilla detection, ranged-only attack
 inside `FireArcHalfAngle`, spine aiming) but only in **bursts**: every `FireIntervalMin`..`FireIntervalMax` seconds, once a target is inside the
 arc, it fires for `FireBurstSeconds`. Between bursts its Attack FSM is off and it sits in the generic driver pose (`[Pose]` ArmAngle / ElbowAngle /
 ArmCloser, hands on the wheel); the per-human `[Pose.<human>]` shooting profile and weapon offsets apply only while it fires. A passenger promoted
 to the wheel switches to this mode.
 
 ### When the car is stuck for good
-When the pilot has reversed out `MaxRecovers` times in a row without getting anywhere, `[Driver] StuckBailChance` % (50) of the time the whole crew
+When the pilot has reversed out `MaxRecovers` times in a row without getting anywhere, `[Driving] StuckBailChance` % (50) of the time the whole crew
 gets out (driver on the left, passenger on its side, `BailDistance` m from their seats, as fresh vanilla mobs with their remaining health) and the
 car is left standing, seat free; otherwise the car waits `WaitSeconds` and tries again.
 
 ### When the driver dies
-A passenger that outlives the driver acts as soon as the car stands still (a stuck pedal is kicked off after `StuckPedalTakeoverSeconds`, 6 s):
-with `BailChance` % (25) it **bails out** - it is replaced by a fresh instance of its prefab `BailDistance` m beside its seat, stood on the ground, fully vanilla AI, registered like a
+A passenger that outlives the driver acts as soon as the car stands still (a stuck pedal is kicked off after `[Driving] StuckPedalTakeoverSeconds`, 4 s):
+with `[Driving] BailChance` % (25) it **bails out** - it is replaced by a fresh instance of its prefab 0.5 m beside its seat, stood on the ground, fully vanilla AI, registered like a
 spawned enemy (so the game saves it), with the health it had left; otherwise it **takes the wheel**: the dead driver's carcass is first thrown out to the left by physics (`EjectSpeed`; its colliders ignore the car and the new
-driver, joints to the car are cut) and the passenger climbs over only once it is `EjectDistance` from the seat - if it has not got there after 3 s
+driver, joints to the car are cut) and the passenger climbs over only once it is 0.3 m from the seat - if it has not got there after 3 s
 (caught on something) it is put down at that distance once.
 Occupant-vs-car collision ignores are re-applied at the takeover and once a second while seated: Unity drops an ignore pair whenever a
 collider is toggled (weapon props, hitboxes), and a kinematic occupant with one live pair shoves the car around unopposed, then it climbs onto the driver seat, the seat
-locks again, and after `TakeoverSeconds` (2) it drives off with the driving AI. If the player got into the car first, the passenger always bails.
+locks again, and after 2 s it drives off with the driving AI. If the player got into the car first, the passenger always bails.
 The save sidecar follows: a promoted passenger is saved as the driver with an empty passenger seat.
 
 ## Saving and loading
@@ -142,24 +140,15 @@ driven restarts its engine if necessary and resumes immediately; a waiting drive
 
 Sidecars are written atomically and checked against the save slot, world seed, vehicle name/body and saved position. A missing, corrupt or mismatched
 sidecar is logged and ignored without changing the game save. Persistence begins with saves made by version 0.8.0 or later; older saves contain no
-reliable patrol marker and are intentionally not guessed. `[Driver] RegisterDriver` is deprecated and ignored because vanilla item registration
-would restore enemies loose rather than seated.
+reliable patrol marker and are intentionally not guessed.
 
-What happens on the key:
-1. The frame prefab is instantiated `SpawnDistance` m ahead, named and registered like a vanilla spawn (`ArrayList_Cars`).
-2. Each part is instantiated at its hinge (`hinge_wheel_FL/FR/RL/RR`, `hinge_engine`, `hinge_radiator`, `hinge_steeringwheel`) and attached
-   exactly like the game's `vehPart_Attach` FSM does: Rigidbody destroyed, tag `vehPart`, layer 8, parented with local pos/rot reset;
-   parts are registered in `ArrayList_Items` so the car saves like a player-built one.
-3. `FillFuel`: the tank (`Fuel/LiquidAmount`) is filled to capacity. `ReleaseHandbrake`: the handbrake lever FSM is stepped to `HandbrakeOff`.
-   `[Driver] Driver` is put on the car's `sitPos`; `[Passenger] Passenger` independently uses the matching front-seat position. Each root Rigidbody is made kinematic and parented
-   to the seat so it rides along, bones keep flopping on their CharacterJoints, collisions with the car are ignored.
-4. `StartEngine`: the frame's `START` key FSM is stepped through `Ignition` → `Start`; if NWH reports the engine not running after 3 s,
-   `NwhStartFallback` calls `powertrain.engine.StartEngine()` directly.
-5. `DriveTestSeconds` > 0: throttle is pushed with nobody inside — checks that the NWH vehicle drives without a player (needed for AI cars).
-   The car's own `DriveTrigger/INPUT` FSMs copy the keyboard axes into `input.*` every frame, so they are paused while the mod drives and
-   restored afterwards (or as soon as the player gets in, which ends the test). The automatic gearbox is shifted out of Neutral into 1st
-   (`input.ShiftInto = 1`, it stays in N otherwise). At the end the car is braked and the handbrake set.
-
-Everything is logged to `BepInEx\LogOutput.log` (`VerboseLog` adds prefab lookups, hinge FSM states, speeds).
-
-Build: `build.sh` (mcs against the game's `Managed` + `BepInEx\core`) or `dotnet build` (deploys to `BepInEx\plugins`).
+What happens on a spawn:
+1. The frame prefab is instantiated 8 m ahead, named and registered like a vanilla spawn (`ArrayList_Cars`).
+2. Each part is instantiated at its hinge (`hinge_wheel_FL/FR/RL/RR`, `hinge_engine`, `hinge_radiator`, `hinge_steeringwheel`, `hinge_exhaust`,
+   the seat hinges) and attached exactly like the game's `vehPart_Attach` FSM does: Rigidbody destroyed, tag `vehPart`, layer 8, parented with
+   local pos/rot reset; parts are registered in `ArrayList_Items` so the car saves like a player-built one.
+3. The tank (`Fuel/LiquidAmount`) is filled to capacity, the handbrake lever FSM is stepped to `HandbrakeOff`, cargo is loaded (trucks).
+   The driver is put on the car's `sitPos`, the passenger on the matching front-seat position. Each root Rigidbody is made kinematic and parented
+   to the seat so it rides along, collisions with the car are ignored.
+4. The frame's `START` key FSM is stepped through `Ignition` → `Start`; if NWH reports the engine not running after 3 s,
+   `powertrain.engine.StartEngine()` is called directly. Then the Crew component drives.

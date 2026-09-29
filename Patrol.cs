@@ -21,11 +21,7 @@ namespace Apocapatrol
         {
             PatrolPersistence.Tick(this);
             if (!InGame()) return;
-            if (Plugin.Pressed(Plugin.SaveTemplateKey.Value)) { CarTemplate.PrintCurrentAsParkEntry(); return; }
-            var menu = GetComponent<TemplateMenu>();
-            if (menu != null && menu.IsOpen) return;
-            if (_busy || !Plugin.Pressed(Plugin.SpawnKey.Value)) return;
-            StartCoroutine(Build(CarTemplate.Current()));
+
         }
 
         // builds a template (from the F8 menu); one at a time
@@ -66,10 +62,10 @@ namespace Apocapatrol
                 var body = Prefabs.Find(tpl.Body, "vehicle");
                 if (body == null) { Plugin.Log.LogWarning("Body prefab not found: " + tpl.Body); yield break; }
 
-                var pos = p + fwd * Plugin.SpawnDistance.Value + Vector3.up * 1.0f;
+                var pos = p + fwd * Plugin.SpawnDistance + Vector3.up * 1.0f;
                 var car = UnityEngine.Object.Instantiate(body, pos, Quaternion.LookRotation(fwd));
                 car.SetActive(true);
-                if (Plugin.RegisterWithGame.Value) { Register.Name(car, body.name); Register.Add(car, true); }
+                Register.Name(car, body.name); Register.Add(car, true);
                 Plugin.Log.LogInfo("Car frame " + car.name + " at " + pos);
 
                 yield return null;   // let the frame's FSMs start (hinges, getEngine, START ...)
@@ -103,7 +99,6 @@ namespace Apocapatrol
                 if (cargo != null) Cargo.SettleFsms(cargo);
                 if (Plugin.VerboseLog.Value) LogHingeStates(car);
 
-                if (Plugin.StartEngine.Value)
                 {
                     var start = FindFsm(car, "START", "Start");
                     if (start == null) Plugin.Log.LogWarning("No START/Start FSM on the frame");
@@ -117,7 +112,7 @@ namespace Apocapatrol
                         yield return new WaitForSeconds(3f);
                         bool running = Nwh.EngineRunning(car);
                         Plugin.Log.LogInfo("START state: " + start.ActiveStateName + "  engine running: " + running);
-                        if (!running && Plugin.NwhStartFallback.Value)
+                        if (!running)
                         {
                             Nwh.StartEngine(car);
                             yield return new WaitForSeconds(1f);
@@ -127,35 +122,7 @@ namespace Apocapatrol
                 }
 
                 if (driver != null && !tpl.Driver.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase))
-                { Plugin.Log.LogInfo("Driver in place; the Crew component takes it from here"); yield break; }
-
-                if (Plugin.DriveTestSeconds.Value > 0f)
-                {
-                    Plugin.Log.LogInfo("Drive test: throttle " + Plugin.DriveTestThrottle.Value + " for " + Plugin.DriveTestSeconds.Value + " s");
-                    var drive = FindFsm(car, "DriveTrigger", "Drive");
-                    var ctl = new InputControl(car);   // silences the game's INPUT FSMs, which write input.* from the axes every frame
-                    ctl.Take();
-                    float t = 0f; var rb = car.GetComponent<Rigidbody>();
-                    float report = 1f;
-                    while (t < Plugin.DriveTestSeconds.Value && car != null)
-                    {
-                        if (drive != null && drive.Fsm.Initialized && drive.ActiveStateName == "inCar")
-                        { Plugin.Log.LogInfo("Drive test aborted: player got in at t=" + t.ToString("0.0")); break; }
-                        // the automatic gearbox stays in neutral until told to shift into 1st (D) once
-                        if (Nwh.GearIndex(car) <= 0) Nwh.ShiftInto(car, 1);
-                        Nwh.SetInput(car, Plugin.DriveTestThrottle.Value, 0f, 0f);
-                        t += Time.deltaTime;
-                        if (t >= report) { report += 1f; Plugin.Verbose("  t=" + t.ToString("0.0") + " speed " + (rb != null ? (rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h  gear " + Nwh.Gear(car) + "  " + Nwh.Diag(car)); }
-                        yield return null;
-                    }
-                    if (car != null)
-                    {
-                        Plugin.Log.LogInfo("Drive test over: " + (rb != null ? (rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h");
-                        bool playerIn = drive != null && drive.Fsm.Initialized && drive.ActiveStateName == "inCar";
-                        if (!playerIn) Nwh.SetInput(car, 0f, 0f, 0f);   // gas released; the car rolls out by itself
-                        ctl.Release();
-                    }
-                }
+                    Plugin.Log.LogInfo("Driver in place; the Crew component takes it from here");
             }
             finally { _busy = false; }
         }
@@ -190,7 +157,7 @@ namespace Apocapatrol
             part.transform.SetParent(hinge, true);
             part.transform.localPosition = Vector3.zero;
             part.transform.localRotation = Quaternion.identity;
-            if (Plugin.RegisterWithGame.Value) { Register.Name(part, prefab.name); Register.Add(part, false); }
+            Register.Name(part, prefab.name); Register.Add(part, false);
             Plugin.Verbose("  " + part.name + " -> " + hinge.name);
         }
 
@@ -269,7 +236,7 @@ namespace Apocapatrol
             if (sit == null) { Plugin.Log.LogWarning("No sitPos on " + car.name); return null; }
             var drv = SeatOccupant(car, prefabName, sit, "Driver", false, health);
             if (drv == null) return null;
-            if (Plugin.DriverRangedCombat.Value && PassengerGuard.IsRangedHuman(drv)) PassengerGuard.AttachDriver(drv, car, sit);
+            if (Plugin.RangedCombat.Value && PassengerGuard.IsRangedHuman(drv)) PassengerGuard.AttachDriver(drv, car, sit);
             var crew = phase == CrewPhase.Waiting && seated <= 0f ? Crew.Attach(car, drv) : Crew.Restore(car, drv, phase, seated);
             crew.MuteAi();
             return drv;
@@ -306,8 +273,8 @@ namespace Apocapatrol
             var rot = Quaternion.LookRotation(car.transform.forward, car.transform.up);
             var go = UnityEngine.Object.Instantiate(prefab, pos, rot);
             go.SetActive(true);
-            if (passenger) PassengerGuard.Prepare(go, Plugin.PassengerRangedCombat.Value);
-            else if (Plugin.DriverRangedCombat.Value) PassengerGuard.Prepare(go, true);   // ranged-only rewiring + mute, before the FSMs' Start
+            if (passenger) PassengerGuard.Prepare(go, Plugin.RangedCombat.Value);
+            else if (Plugin.RangedCombat.Value) PassengerGuard.Prepare(go, true);   // ranged-only rewiring + mute, before the FSMs' Start
             else Crew.MuteAi(go);
             go.name = prefab.name + "(" + role + ")";
 
@@ -398,7 +365,7 @@ namespace Apocapatrol
                     foreach (var b in carCols) if (b != null) Physics.IgnoreCollision(a, b, true);
                     foreach (var b in paxCols) if (b != null) Physics.IgnoreCollision(a, b, true);
                 }
-                var velocity = left * Plugin.EjectSpeed.Value + Vector3.up * (Plugin.EjectSpeed.Value * 0.5f) - car.transform.forward * 0.5f;
+                var velocity = left * Plugin.EjectSpeed + Vector3.up * (Plugin.EjectSpeed * 0.5f) - car.transform.forward * 0.5f;
                 Launch(root, velocity);
                 Plugin.Log.LogInfo("Eject: " + root.name + " thrown out of " + car.name + " at " + velocity.magnitude.ToString("0.0") + " m/s ("
                     + joints + " joints, " + jointsToCar + " were attached to the car)");
@@ -453,7 +420,7 @@ namespace Apocapatrol
             if (sit == null || pax == null) return null;
             var guard = pax.GetComponent<PassengerGuard>();
             var oldAnchor = pax.transform.parent;
-            if (guard != null && Plugin.DriverRangedCombat.Value) Crew.MuteAi(pax, PassengerGuard.CombatFsms);
+            if (guard != null && Plugin.RangedCombat.Value) Crew.MuteAi(pax, PassengerGuard.CombatFsms);
             else { if (guard != null) UnityEngine.Object.Destroy(guard); guard = null; Crew.MuteAi(pax); }
             var off = new Vector3(Plugin.DriverOffsetX.Value, Plugin.DriverOffsetY.Value, Plugin.DriverOffsetZ.Value);
             pax.transform.SetParent(sit, true);
@@ -490,7 +457,7 @@ namespace Apocapatrol
                 side = 1f;
                 if (anchor != null && sit != null) side = Vector3.Dot(anchor.position - sit.position, car.transform.right) >= 0f ? 1f : -1f;
             }
-            var from = (anchor != null ? anchor.position : car.transform.position) + car.transform.right * side * Plugin.BailDistance.Value + Vector3.up * 1.5f;
+            var from = (anchor != null ? anchor.position : car.transform.position) + car.transform.right * side * Plugin.BailDistance + Vector3.up * 1.5f;
             var pos = from + Vector3.down * 1.2f;
             var hits = Physics.RaycastAll(from, Vector3.down, 6f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float best = float.MaxValue;
@@ -517,7 +484,7 @@ namespace Apocapatrol
                 mob.transform.position += Vector3.up * (groundY + 0.15f - bottom);
             }
             pos = mob.transform.position;
-            if (Plugin.RegisterWithGame.Value) { Register.Name(mob, prefab.name); Register.Add(mob, false); }
+            Register.Name(mob, prefab.name); Register.Add(mob, false);
             if (health > 0f) { SetHealth(mob, health); mob.AddComponent<LateHealth>().Value = health; }
             UnityEngine.Object.Destroy(pax);
             if (anchor != null && anchor.name == "Apocapatrol.PassengerPos") UnityEngine.Object.Destroy(anchor.gameObject);
@@ -581,18 +548,18 @@ namespace Apocapatrol
             _nextCheck = _t + 0.1f;
             bool clear = true;
             foreach (var root in _roots)
-                if (root != null && Distance(root) < Plugin.EjectDistance.Value) clear = false;
+                if (root != null && Distance(root) < Plugin.EjectDistance) clear = false;
             if (clear) { Done = true; Plugin.Verbose("Eject: carcass clear of the seat after " + _t.ToString("0.0") + " s"); return; }
             if (_t < 3f) return;
             foreach (var root in _roots)
             {
-                if (root == null || Distance(root) >= Plugin.EjectDistance.Value) continue;
-                var target = _sit.position + _left * Plugin.EjectDistance.Value + Vector3.up * 2f;
+                if (root == null || Distance(root) >= Plugin.EjectDistance) continue;
+                var target = _sit.position + _left * Plugin.EjectDistance + Vector3.up * 2f;
                 var ground = target + Vector3.down * 1.5f;
                 foreach (var h in Physics.RaycastAll(target, Vector3.down, 8f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                     if (h.collider != null && !h.collider.transform.IsChildOf(transform) && !h.collider.transform.IsChildOf(root) && h.point.y > ground.y) ground = h.point;
                 Patrol.Throw(root, ground + Vector3.up * 0.4f, Vector3.zero);
-                Plugin.Log.LogInfo("Eject: " + root.name + " did not get clear in 3 s, put down " + Plugin.EjectDistance.Value + " m left of the seat");
+                Plugin.Log.LogInfo("Eject: " + root.name + " did not get clear in 3 s, put down " + Plugin.EjectDistance + " m left of the seat");
             }
             Done = true;
         }

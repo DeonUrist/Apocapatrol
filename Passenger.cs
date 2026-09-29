@@ -53,7 +53,7 @@ namespace Apocapatrol
             Crew.MuteAi(passenger, ranged && combatAllowed ? CombatFsms : null);
         }
 
-        private bool CombatAllowed { get { return _driverMode ? Plugin.DriverRangedCombat.Value : Plugin.PassengerRangedCombat.Value; } }
+        private bool CombatAllowed { get { return Plugin.RangedCombat.Value; } }
 
         // A shooting mob at the wheel: like a passenger, but it only shoots in bursts at random intervals and sits in the
         // generic driver pose (hands on the wheel) in between.
@@ -70,17 +70,17 @@ namespace Apocapatrol
             _anchor = sit;
             _driverMode = true;
             _shooting = false;
-            _ranged = _rangedPrefab && Plugin.DriverRangedCombat.Value;
+            _ranged = _rangedPrefab && Plugin.RangedCombat.Value;
             if (_ranged) foreach (var fsm in _combat) if (fsm != null) fsm.enabled = true;
             if (_attack != null) _attack.enabled = false;
             if (_pose != null) { _pose.SetShooting(false); _pose.SetAim(Vector3.zero, false); }
             ScheduleBurst();
-            Plugin.Log.LogInfo("Driver: " + _passenger.name + (_ranged ? " shoots in bursts every " + Plugin.DriverFireIntervalMin.Value + "-" + Plugin.DriverFireIntervalMax.Value + " s" : " does not shoot"));
+            Plugin.Log.LogInfo("Driver: " + _passenger.name + (_ranged ? " shoots in bursts every " + Plugin.FireIntervalMin.Value + "-" + Plugin.FireIntervalMax.Value + " s" : " does not shoot"));
         }
 
         private void ScheduleBurst()
         {
-            _nextBurst = Time.time + UnityEngine.Random.Range(Plugin.DriverFireIntervalMin.Value, Mathf.Max(Plugin.DriverFireIntervalMin.Value, Plugin.DriverFireIntervalMax.Value));
+            _nextBurst = Time.time + UnityEngine.Random.Range(Plugin.FireIntervalMin.Value, Mathf.Max(Plugin.FireIntervalMin.Value, Plugin.FireIntervalMax.Value));
         }
 
         // Ranged enemies normally switch to their separate melee Damage FSM when Attack's distance FloatCompare emits
@@ -151,7 +151,7 @@ namespace Apocapatrol
             guard._car = car;
             guard._anchor = anchor;
             guard._rangedPrefab = IsRanged(passenger);
-            guard._ranged = guard._rangedPrefab && Plugin.PassengerRangedCombat.Value;
+            guard._ranged = guard._rangedPrefab && Plugin.RangedCombat.Value;
             guard._combat = Array.FindAll(passenger.GetComponents<PlayMakerFSM>(), f => Array.IndexOf(CombatFsms, f.FsmName) >= 0);
             guard._attack = Array.Find(guard._combat, f => f.FsmName == "Attack");
             guard._meleeWeapons = guard._rangedPrefab ? FindMeleeWeapons(passenger) : new GameObject[0];
@@ -159,9 +159,9 @@ namespace Apocapatrol
             guard.HideMeleeWeapons();
             guard._pose = passenger.GetComponent<Pose>();
             if (guard._pose != null) guard._pose.ConfigurePassengerAim();
-            MuteNonCombatAi(passenger, Plugin.PassengerRangedCombat.Value);
+            MuteNonCombatAi(passenger, Plugin.RangedCombat.Value);
             Plugin.Log.LogInfo("Passenger: " + passenger.name + " fixed in driver pose; "
-                + (guard._ranged ? "vanilla ranged fire and Sound2 enabled in +/-" + Plugin.PassengerFireArc.Value + " degree arc" : "passive"));
+                + (guard._ranged ? "vanilla ranged fire and Sound2 enabled in +/-" + Plugin.FireArc.Value + " degree arc" : "passive"));
         }
 
         private static GameObject[] FindMeleeWeapons(GameObject passenger)
@@ -236,7 +236,7 @@ namespace Apocapatrol
                 aimPoint = AimPoint(target);
                 var flat = Vector3.ProjectOnPlane(aimPoint - _passenger.transform.position, _car.transform.up);
                 if (flat.sqrMagnitude > 0.001f)
-                    inArc = Mathf.Abs(Vector3.SignedAngle(_car.transform.forward, flat, _car.transform.up)) <= Plugin.PassengerFireArc.Value;
+                    inArc = Mathf.Abs(Vector3.SignedAngle(_car.transform.forward, flat, _car.transform.up)) <= Plugin.FireArc.Value;
             }
 
             if (_driverMode)
@@ -245,9 +245,9 @@ namespace Apocapatrol
                 if (!_shooting && Time.time >= _nextBurst && target != null && inArc)
                 {
                     _shooting = true;
-                    _burstUntil = Time.time + Plugin.DriverFireBurstSeconds.Value;
+                    _burstUntil = Time.time + Plugin.FireBurstSeconds.Value;
                     if (_pose != null) _pose.SetShooting(true);
-                    Plugin.Verbose("Driver: " + _passenger.name + " opens fire for " + Plugin.DriverFireBurstSeconds.Value + " s");
+                    Plugin.Verbose("Driver: " + _passenger.name + " opens fire for " + Plugin.FireBurstSeconds.Value + " s");
                 }
                 else if (_shooting && (Time.time >= _burstUntil || target == null))
                 {

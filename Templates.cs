@@ -24,11 +24,11 @@ namespace Apocapatrol
         // default item specs for the [Cargo] config entries ("prefab:count;prefab:min-max;...", prefab or in-game names)
         internal static readonly string[][] CargoDefaults =
         {
-            new[] { "Food", "dogfood_can:16" },
-            new[] { "Gasoline", "Gasoline_Can:8" },
-            new[] { "Water", "Water_Can_Plastic:8" },
-            new[] { "Medicine", "bandage_1:10;first_aid_1:4" },
-            new[] { "Drugs", "alcohol_canister:6;weed_bag:8;plant_weed:3" },
+            new[] { "Food", "dogfood_can:6" },
+            new[] { "Gasoline", "Gasoline_Can:4" },
+            new[] { "Water", "Water_Can_Plastic:4" },
+            new[] { "Medicine", "bandage_1:4;first_aid_1:2" },
+            new[] { "Drugs", "alcohol_canister:2;weed_bag:3;plant_weed:1" },
         };
 
         internal CarTemplate() { }
@@ -62,20 +62,20 @@ namespace Apocapatrol
                 "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Sprokka", "Lugnut", RamTargets.Pedestrians),
             new CarTemplate("Junker_Advanced", "Junker", "small_wheel_1", "2.3L I4 89HP 165Nm Gasoline", "Medium Radiator", "steeringwheel_7", "poloska_exhaust",
                 "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Sprokka", "Flexa", RamTargets.Pedestrians),
-            new CarTemplate("Rustcargo_Basic", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single_big",
+            new CarTemplate("Rustcargo_Basic", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
                 "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars),
-            new CarTemplate("Rustcargo_Advanced", "Rustcargo", "truck_wheel_2_armored", "7L I6 165HP 542Nm Diesel", "radiator_truck_big", "steeringwheel_3", "exhaust_duo_big",
+            new CarTemplate("Rustcargo_Advanced", "Rustcargo", "truck_wheel_2_armored", "7L I6 165HP 542Nm Diesel", "radiator_truck_big", "steeringwheel_3", "exhaust_single",
                 "rustallion_seat_front", "rustallion_seat_front", "Sprokka", "Flexa", RamTargets.Cars),
             // cargo trucks = Rustcargo_Basic with a loaded bed; the items and amounts are the [Cargo] config entries
-            new CarTemplate("Rustcargo_Food", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single_big",
+            new CarTemplate("Rustcargo_Food", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
                 "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Food" },
-            new CarTemplate("Rustcargo_Gasoline", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single_big",
+            new CarTemplate("Rustcargo_Gasoline", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
                 "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Gasoline" },
-            new CarTemplate("Rustcargo_Water", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single_big",
+            new CarTemplate("Rustcargo_Water", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
                 "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Water" },
-            new CarTemplate("Rustcargo_Medicine", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single_big",
+            new CarTemplate("Rustcargo_Medicine", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
                 "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Medicine" },
-            new CarTemplate("Rustcargo_Drugs", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single_big",
+            new CarTemplate("Rustcargo_Drugs", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
                 "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Drugs" },
         };
 
@@ -101,46 +101,11 @@ namespace Apocapatrol
             return null;
         }
 
-        // The car the spawn key builds: the selected template, or the config fields.
-        internal static CarTemplate Current()
-        {
-            string want = (Plugin.Template.Value ?? "").Trim();
-            if (want.Length == 0) return FromConfig();
-            var t = Find(want);
-            if (t != null) return t;
-            Plugin.Log.LogWarning("Template \"" + want + "\" is not in the park (" + string.Join(", ", Names()) + "); using the [Build] fields");
-            return FromConfig();
-        }
-
-        internal static CarTemplate FromConfig()
-        {
-            return new CarTemplate
-            {
-                Name = "(config)",
-                Body = Plugin.Body.Value, Wheel = Plugin.Wheel.Value, Engine = Plugin.Engine.Value, Radiator = Plugin.Radiator.Value,
-                SteeringWheel = Plugin.SteeringWheel.Value, Exhaust = Plugin.Exhaust.Value, Seat = Plugin.Seat.Value, PassengerSeat = Plugin.PassengerSeat.Value,
-                Driver = Plugin.Driver.Value, Passenger = Plugin.Passenger.Value, Rams = Plugin.ConfigRamTargets.Value,
-                FillFuel = Plugin.FillFuel.Value, ReleaseHandbrake = Plugin.ReleaseHandbrake.Value
-            };
-        }
-
         internal string Describe()
         {
             return Body + " / " + Wheel + " / " + Engine + " / " + Radiator + " / " + SteeringWheel + " / " + (Exhaust.Length > 0 ? Exhaust : "no exhaust") + " / seats " + Seat + " + " + PassengerSeat
                 + " / driver " + (Driver.Length > 0 ? Driver : "-") + " / passenger " + (Passenger.Length > 0 ? Passenger : "-") + " / rams " + Rams
                 + (Cargo.Length > 0 ? " / cargo " + Cargo + " (" + Plugin.CargoSpec(Cargo) + ")" : "");
-        }
-
-        // F9: print the current [Build]/[Driver]/[Passenger] fields as a park entry (paste it into Park above).
-        internal static void PrintCurrentAsParkEntry()
-        {
-            var t = FromConfig();
-            string name = (Plugin.TemplateName.Value ?? "").Trim();
-            if (name.Length == 0) name = Plugin.Body.Value + "_Custom";
-            string line = "new CarTemplate(" + Q(name) + ", " + Q(t.Body) + ", " + Q(t.Wheel) + ", " + Q(t.Engine) + ", " + Q(t.Radiator) + ", "
-                + Q(t.SteeringWheel) + ", " + Q(t.Exhaust) + ", " + Q(t.Seat) + ", " + Q(t.PassengerSeat) + ", " + Q(t.Driver) + ", " + Q(t.Passenger) + ", RamTargets." + t.Rams + "),";
-            Plugin.Log.LogInfo("Park entry for the current fields (Templates.cs, Park[]):\n            " + line);
-            Patrol.SurveyExhausts();
         }
 
         private static string Q(string s) { return "\"" + (s ?? "").Replace("\"", "\\\"") + "\""; }

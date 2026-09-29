@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -17,12 +18,11 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.16.2";
+        public const string VERSION = "0.17.0";
 
         internal static ManualLogSource Log;
 
-        internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel, Exhaust, Seat, PassengerSeat, Driver, Passenger, Template, TemplateName;
-        internal static ConfigEntry<Key> SaveTemplateKey, MenuKey;
+        internal static ConfigEntry<Key> MenuKey;
         internal static readonly Dictionary<string, ConfigEntry<string>> CargoSpecs = new Dictionary<string, ConfigEntry<string>>(StringComparer.OrdinalIgnoreCase);
 
         internal static string CargoSpec(string key)
@@ -30,27 +30,33 @@ namespace Apocapatrol
             ConfigEntry<string> e;
             return key != null && CargoSpecs.TryGetValue(key, out e) ? e.Value : "";
         }
-        internal static ConfigEntry<bool> ReleaseHandbrake, RegisterDriver;
-        internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
-        internal static ConfigEntry<bool> PassengerRangedCombat, DriverRangedCombat;
-        internal static ConfigEntry<float> DriverFireIntervalMin, DriverFireIntervalMax, DriverFireBurstSeconds;
-        internal static ConfigEntry<float> PassengerFireArc, PassengerMaxAimPitch, PassengerAimTurnSpeed;
-        internal static ConfigEntry<float> PassengerBailChance, PassengerTakeoverSeconds, StuckPedalTakeoverSeconds, EjectDistance, EjectSpeed, BailDistance, StuckBailChance;
-        internal static PoseBool PoseEnabled;
-        internal static PoseFloat PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLeftLegCloser, PoseRightLegCloser, PoseLeftArmCloser, PoseRightArmCloser;
-        internal static ConfigEntry<float> DriveDelaySeconds, DriveThrottle, StuckPedalChance;
-        internal static ConfigEntry<bool> AiEnabled, AiInvertSteering, AiOverlay;
-        internal static ConfigEntry<RamTargets> ConfigRamTargets;
+
+        // [Combat]
+        internal static ConfigEntry<bool> RangedCombat;
+        internal static ConfigEntry<float> FireArc, MaxAimPitch, AimTurnSpeed, FireBurstSeconds, FireIntervalMin, FireIntervalMax;
+        // [Driving]
+        internal static ConfigEntry<float> StuckPedalChance, StuckPedalTakeoverSeconds, BailChance, StuckBailChance;
+        // [AI]
+        internal static ConfigEntry<bool> AiInvertSteering, AiOverlay;
         internal static ConfigEntry<float> AiDriveByOffset;
         internal static ConfigEntry<float> AiThrottle, AiLeadTime, AiCommitSeconds, AiSteerRate, AiSteerAngle, AiMaxSteerAtSpeed, AiTurnSafeSpeed,
             AiRamDistance, AiPassWidth, AiRunOutMeters, AiRunOutMaxSeconds, AiReverseSeconds, AiReverseThrottle, AiStuckSeconds,
             AiRecoverWindow, AiMaxRecovers, AiWaitSeconds, AiFeelerRange, AiFeelerSpeedFactor, AiFrontOffset, AiMaxSlopeDeg, AiAvoidGain,
             AiIgnoreMassBelow, AiGiveUpDistance;
-        internal static ConfigEntry<float> SpawnDistance;
-        internal static ConfigEntry<bool> FillFuel, StartEngine, NwhStartFallback, RegisterWithGame;
-        internal static ConfigEntry<float> DriveTestSeconds, DriveTestThrottle;
-        internal static ConfigEntry<Key> SpawnKey;
+        // [Debug]
         internal static ConfigEntry<bool> VerboseLog;
+        // hidden pose settings (PoseConfiguration = true exposes them)
+        internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
+        internal static PoseBool PoseEnabled;
+        internal static PoseFloat PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLeftLegCloser, PoseRightLegCloser, PoseLeftArmCloser, PoseRightArmCloser;
+
+        // fixed values that used to be settings
+        internal const float SpawnDistance = 8f;          // m in front of the player (template spawner)
+        internal const float TakeoverSeconds = 2f;        // a promoted passenger drives off this long after climbing over
+        internal const float EjectDistance = 0.3f;        // the carcass must be this far from the seat before the passenger climbs over
+        internal const float EjectSpeed = 4f;             // m/s sideways (+ half of it up) given to the thrown carcass
+        internal const float BailDistance = 0.5f;         // an occupant getting out appears this far beside its seat
+
         internal static readonly Dictionary<string, ArmPoseProfile> HumanArmPoses = new Dictionary<string, ArmPoseProfile>(StringComparer.OrdinalIgnoreCase);
         internal static readonly string[] HumanTypes = { "Boltjaw", "Flexa", "Lugnut", "Scrud", "Sprokka", "Scraffa", "Spanna" };
 
@@ -66,81 +72,40 @@ namespace Apocapatrol
                 "To expose seat offsets, shared pose settings and all per-human controls, uncomment the next line and restart:\n" +
                 "PoseConfiguration = true");
 
-            Template = Config.Bind("Build", "Template", "",
-                "Car template from the built-in park to build with the spawn key: " + string.Join(", ", CarTemplate.Names()) +
-                ". Empty = the Body/Wheel/.../Driver/Passenger fields below");
-            TemplateName = Config.Bind("Build", "TemplateName", "",
-                "Name used when the TemplateKey prints the fields below as a park entry to the log (empty = <Body>_Custom)");
-            Config.Remove(new ConfigDefinition("Build", "SaveAs"));
-            Body = Config.Bind("Build", "Body", "PipeRat", "Vehicle frame prefab (e.g. PipeRat, Duke, TinyTyrant)");
-            Wheel = Config.Bind("Build", "Wheel", "small_wheel_1",
-                "Wheel item, prefab name or in-game name (e.g. small_wheel_1 or \"Small rubbish wheel\"); one per hinge_wheel_*");
-            Engine = Config.Bind("Build", "Engine", "1.2L I4 59HP 87Nm Gasoline", "Engine item, prefab name or in-game name");
-            Radiator = Config.Bind("Build", "Radiator", "radiator_small", "Radiator item, prefab name or in-game name (empty = none)");
-            SteeringWheel = Config.Bind("Build", "SteeringWheel", "steeringwheel_7", "Steering wheel item, prefab name or in-game name (empty = none)");
-            Exhaust = Config.Bind("Build", "Exhaust", "poloska_exhaust", "Exhaust item, prefab name or in-game name (empty = none). Tailpipes that sit right on hinge_exhaust: poloska_exhaust (the game's own choice " +
-                "on small cars), rustallion_exhaust_1..3, exhaust_single_big / exhaust_duo_big (truck stacks); exhaust_single/duo/quad, exhaust_the_four/six, " +
-                "exhaust_v6/v8 are upright header models and stand vertical on that hinge");
-            Seat = Config.Bind("Build", "Seat", "poloska_seat_front_homemade", "Driver seat item, prefab name or in-game name (empty = none)");
-            PassengerSeat = Config.Bind("Build", "PassengerSeat", "poloska_seat_front_homemade", "Front passenger seat item, prefab name or in-game name (empty = none)");
-            ReleaseHandbrake = Config.Bind("Build", "ReleaseHandbrake", true, "Release the handbrake (handbrake lever FSM -> HandbrakeOff)");
-            SpawnDistance = Config.Bind("Build", "SpawnDistance", 8f, new ConfigDescription(
-                "How far in front of the player the car appears (m)", new AcceptableValueRange<float>(3f, 100f)));
-            FillFuel = Config.Bind("Build", "FillFuel", true, "Fill the tank (Fuel/LiquidAmount Liquid = LiquidCapacity)");
-            StartEngine = Config.Bind("Build", "StartEngine", true, "Start the engine through the frame's own START key FSM (Ignition -> Start)");
-            NwhStartFallback = Config.Bind("Build", "NwhStartFallback", true,
-                "If the engine is not running 3 s after the FSM start, call NWH powertrain.engine.StartEngine() directly");
-            RegisterWithGame = Config.Bind("Build", "RegisterWithGame", true,
-                "Name and register the car (ArrayList_Cars) and every part (ArrayList_Items) like vanilla spawns so they are saved");
-            DriveTestSeconds = Config.Bind("Build", "DriveTestSeconds", 0f, new ConfigDescription(
-                "Only with no [Driver]: after starting, push the throttle for this long with nobody inside. 0 = off",
-                new AcceptableValueRange<float>(0f, 60f)));
-            DriveTestThrottle = Config.Bind("Build", "DriveTestThrottle", 0.5f, new ConfigDescription(
-                "Throttle used by the drive test (0..1)", new AcceptableValueRange<float>(0.05f, 1f)));
-
-            Driver = Config.Bind("Driver", "Driver", "Scraffa",
-                "Who sits at the wheel: an enemy prefab (Scraffa, Boltjaw, ...) = live driver without AI that drives the car; " +
-                "empty = nobody (then the [Build] drive test applies)");
-            DriveDelaySeconds = Config.Bind("Driver", "DriveDelaySeconds", 3f, new ConfigDescription(
-                "The driver sits still this long after spawning before driving off (0 = drives as soon as the engine runs, -1 = never drives, just sits)",
-                new AcceptableValueRange<float>(-1f, 600f)));
-            DriveThrottle = Config.Bind("Driver", "DriveThrottle", 0.5f, new ConfigDescription(
-                "Throttle with the driving AI off (straight ahead) and of a stuck pedal (0..1); the AI has its own [AI] Throttle", new AcceptableValueRange<float>(0.05f, 1f)));
-            StuckPedalChance = Config.Bind("Driver", "StuckPedalChance", 5f, new ConfigDescription(
-                "% chance that a killed driver's gas pedal stays stuck; otherwise the gas is released and the car slowly rolls to a stop",
-                new AcceptableValueRange<float>(0f, 100f)));
-            DriverRangedCombat = Config.Bind("Driver", "RangedCombat", true,
-                "A ranged human at the wheel (Boltjaw/Flexa/Lugnut/Scrud/Sprokka) shoots like a passenger, but only in bursts at random intervals; " +
-                "between bursts it sits in the driver pose with its hands on the wheel");
-            DriverFireIntervalMin = Config.Bind("Driver", "FireIntervalMin", 8f, new ConfigDescription(
+            RangedCombat = Config.Bind("Combat", "RangedCombat", true,
+                "Ranged humans (Boltjaw/Flexa/Lugnut/Scrud/Sprokka) in a car use their vanilla targeting and ranged attack: the passenger whenever a target " +
+                "is in the fire arc, the driver in bursts. Off = everybody just rides along");
+            FireArc = Config.Bind("Combat", "FireArcHalfAngle", 100f, new ConfigDescription(
+                "Occupants may fire this many degrees left or right of the car's forward direction", new AcceptableValueRange<float>(0f, 180f)));
+            MaxAimPitch = Config.Bind("Combat", "MaxAimPitch", 35f, new ConfigDescription(
+                "Maximum upper-body aim angle up or down (degrees)", new AcceptableValueRange<float>(0f, 80f)));
+            AimTurnSpeed = Config.Bind("Combat", "AimTurnSpeed", 180f, new ConfigDescription(
+                "How quickly an occupant turns its upper body toward or away from a target (degrees/second)", new AcceptableValueRange<float>(1f, 720f)));
+            FireBurstSeconds = Config.Bind("Combat", "FireBurstSeconds", 3f, new ConfigDescription(
+                "How long one of the driver's bursts lasts (shooting pose, vanilla Attack inside the fire arc), s", new AcceptableValueRange<float>(0.5f, 30f)));
+            FireIntervalMin = Config.Bind("Combat", "FireIntervalMin", 8f, new ConfigDescription(
                 "Shortest pause between two bursts of the driver, s", new AcceptableValueRange<float>(0f, 120f)));
-            DriverFireIntervalMax = Config.Bind("Driver", "FireIntervalMax", 20f, new ConfigDescription(
+            FireIntervalMax = Config.Bind("Combat", "FireIntervalMax", 20f, new ConfigDescription(
                 "Longest pause between two bursts of the driver, s", new AcceptableValueRange<float>(0f, 300f)));
-            DriverFireBurstSeconds = Config.Bind("Driver", "FireBurstSeconds", 3f, new ConfigDescription(
-                "How long a burst lasts (the driver is in its shooting pose and its vanilla Attack runs inside the fire arc), s",
-                new AcceptableValueRange<float>(0.5f, 30f)));
-            StuckBailChance = Config.Bind("Driver", "StuckBailChance", 50f, new ConfigDescription(
-                "% chance that, when the driving AI gives up on a stuck car (after [AI] MaxRecovers), the driver and the passenger get out and " +
-                "fight on foot instead of the car waiting [AI] WaitSeconds and trying again; the car is left standing",
-                new AcceptableValueRange<float>(0f, 100f)));
-            var offsetRange = new AcceptableValueRange<float>(-2f, 2f);
-            DriverOffsetX = PoseFloat.Create(Config, "Driver", "OffsetX", 0f, "Where each occupant's hips go: offset from its seat anchor, right (m)", offsetRange, exposePose);
-            DriverOffsetY = PoseFloat.Create(Config, "Driver", "OffsetY", -0.3f, "Where each occupant's hips go: offset from its seat anchor, up (m)", offsetRange, exposePose);
-            DriverOffsetZ = PoseFloat.Create(Config, "Driver", "OffsetZ", 0f, "Where each occupant's hips go: offset from its seat anchor, forward (m)", offsetRange, exposePose);
-            RegisterDriver = Config.Bind("Driver", "RegisterDriver", false,
-                "Deprecated: occupants are persisted by Apocapatrol sidecars; vanilla item registration is no longer used");
 
-            AiEnabled = Config.Bind("AI", "Enabled", true,
-                "Driving AI: chase and ram the player (on foot or in a car) hit-and-run style, reverse out of obstacles and steer around them. " +
-                "false = the driver just drives straight ahead like before");
+            StuckPedalChance = Config.Bind("Driving", "StuckPedalChance", 5f, new ConfigDescription(
+                "% chance that a killed driver's gas pedal stays stuck; otherwise the gas is released and the car rolls to a stop",
+                new AcceptableValueRange<float>(0f, 100f)));
+            StuckPedalTakeoverSeconds = Config.Bind("Driving", "StuckPedalTakeoverSeconds", 4f, new ConfigDescription(
+                "With a dead driver's foot stuck on the gas, a live passenger kicks it off after this long so the car can stop, s",
+                new AcceptableValueRange<float>(0f, 120f)));
+            BailChance = Config.Bind("Driving", "BailChance", 25f, new ConfigDescription(
+                "% chance that a passenger who outlives the driver gets out and fights on foot once the car stands still; otherwise it takes the wheel. " +
+                "If the player took the car first it always gets out", new AcceptableValueRange<float>(0f, 100f)));
+            StuckBailChance = Config.Bind("Driving", "StuckBailChance", 50f, new ConfigDescription(
+                "% chance that, when the driving AI gives up on a stuck car (after [AI] MaxRecovers), the whole crew gets out and fights on foot " +
+                "instead of the car waiting WaitSeconds and trying again", new AcceptableValueRange<float>(0f, 100f)));
+
             AiThrottle = Config.Bind("AI", "Throttle", 1f, new ConfigDescription(
-                "Maximum throttle the driving AI uses (0..1); [Driver] DriveThrottle is only for the AI-off drive and the stuck pedal",
-                new AcceptableValueRange<float>(0.05f, 1f)));
-            ConfigRamTargets = Config.Bind("AI", "RamTargets", RamTargets.Pedestrians,
-                "For a car built from the [Build] fields (templates carry their own): what the AI runs into on purpose. None = rams nothing, " +
-                "drive-bys only; Pedestrians = runs over the player on foot and creatures, avoids cars; Cars = rams the player's car and other vehicles too");
+                "Maximum throttle the driving AI uses (0..1); also the throttle of a stuck pedal", new AcceptableValueRange<float>(0.05f, 1f)));
             AiDriveByOffset = Config.Bind("AI", "DriveByOffset", 5f, new ConfigDescription(
-                "When the target may not be rammed, the car aims this far beside it and drives past instead, m", new AcceptableValueRange<float>(1f, 20f)));
+                "When the target may not be rammed (the template's ramsTargets), the car aims this far beside it and drives past instead, m",
+                new AcceptableValueRange<float>(1f, 20f)));
             AiLeadTime = Config.Bind("AI", "LeadTime", 1f, new ConfigDescription(
                 "Aim this many seconds ahead of the target's movement (intercept), s", new AcceptableValueRange<float>(0f, 4f)));
             AiCommitSeconds = Config.Bind("AI", "CommitSeconds", 0.5f, new ConfigDescription(
@@ -173,13 +138,14 @@ namespace Apocapatrol
                 "How long the car reverses after hitting an obstacle or getting stuck, s (grows with repeated attempts)",
                 new AcceptableValueRange<float>(0.5f, 10f)));
             AiReverseThrottle = Config.Bind("AI", "ReverseThrottle", 0.6f, new ConfigDescription(
-                "Throttle (or brake, depending on how NWH reverses) used while reversing", new AcceptableValueRange<float>(0.1f, 1f)));
+                "Throttle used while reversing", new AcceptableValueRange<float>(0.1f, 1f)));
             AiStuckSeconds = Config.Bind("AI", "StuckSeconds", 2f, new ConfigDescription(
                 "Not moving for this long while trying to drive forward = stuck, reverse out", new AcceptableValueRange<float>(0.5f, 10f)));
             AiRecoverWindow = Config.Bind("AI", "RecoverWindow", 12f, new ConfigDescription(
                 "Recoveries closer together than this count as repeated attempts, s", new AcceptableValueRange<float>(1f, 60f)));
             AiMaxRecovers = Config.Bind("AI", "MaxRecovers", 4f, new ConfigDescription(
-                "After this many repeated recoveries the car gives up for WaitSeconds", new AcceptableValueRange<float>(1f, 20f)));
+                "After this many repeated recoveries the car gives up: the crew bails ([Driving] StuckBailChance) or the car waits WaitSeconds",
+                new AcceptableValueRange<float>(1f, 20f)));
             AiWaitSeconds = Config.Bind("AI", "WaitSeconds", 4f, new ConfigDescription(
                 "How long a car that gave up sits still before trying again, s", new AcceptableValueRange<float>(1f, 60f)));
             AiFeelerRange = Config.Bind("AI", "FeelerRange", 10f, new ConfigDescription(
@@ -208,37 +174,10 @@ namespace Apocapatrol
                     "Items loaded into the bed of the Rustcargo_" + d[0] + " truck: prefab:count;prefab:min-max;... (prefab or in-game item names). " +
                     "They are locked in the covered bed like vanilla cargo until the player grabs them");
 
-            Passenger = Config.Bind("Passenger", "Passenger", "Flexa",
-                "Who sits in the front passenger seat; Boltjaw/Flexa/Lugnut/Scrud/Sprokka shoot, Scraffa/Spanna remain passive; empty = nobody");
-            PassengerBailChance = Config.Bind("Passenger", "BailChance", 25f, new ConfigDescription(
-                "% chance that a passenger who outlives the driver gets out of the car (and fights on foot with its remaining health) " +
-                "once the car stands still; otherwise it climbs over and takes the wheel. If the player took the car first it always gets out",
-                new AcceptableValueRange<float>(0f, 100f)));
-            PassengerTakeoverSeconds = Config.Bind("Passenger", "TakeoverSeconds", 2f, new ConfigDescription(
-                "A passenger that takes the wheel drives off this long after climbing over, s", new AcceptableValueRange<float>(0f, 60f)));
-            EjectDistance = Config.Bind("Passenger", "EjectDistance", 1.8f, new ConfigDescription(
-                "Before a passenger takes the wheel, the dead driver's carcass is thrown out to the left; the passenger climbs over once it is this far " +
-                "from the seat (if it is not after 3 s, it is put down there), m", new AcceptableValueRange<float>(0.1f, 15f)));
-            EjectSpeed = Config.Bind("Passenger", "EjectSpeed", 4f, new ConfigDescription(
-                "How hard the carcass is thrown out, m/s sideways (plus half of that upwards)", new AcceptableValueRange<float>(0.5f, 20f)));
-            BailDistance = Config.Bind("Passenger", "BailDistance", 1.8f, new ConfigDescription(
-                "An occupant that gets out of the car appears this far beside its seat (passenger on its side, driver on the left), m",
-                new AcceptableValueRange<float>(0.1f, 15f)));
-            Config.Remove(new ConfigDefinition("Passenger", "ExitDistance"));
-            StuckPedalTakeoverSeconds = Config.Bind("Passenger", "StuckPedalTakeoverSeconds", 6f, new ConfigDescription(
-                "With a dead driver's foot stuck on the gas, a live passenger kicks it off after this long so the car can stop, s",
-                new AcceptableValueRange<float>(0f, 120f)));
-            PassengerRangedCombat = Config.Bind("Passenger", "RangedCombat", true,
-                "Let ranged passengers use their vanilla targeting and attack logic while seated");
-            PassengerFireArc = Config.Bind("Passenger", "FireArcHalfAngle", 90f, new ConfigDescription(
-                "Passenger may fire this many degrees left or right of the car's forward direction",
-                new AcceptableValueRange<float>(0f, 180f)));
-            PassengerMaxAimPitch = Config.Bind("Passenger", "MaxAimPitch", 35f, new ConfigDescription(
-                "Maximum upper-body aim angle up or down (degrees)", new AcceptableValueRange<float>(0f, 80f)));
-            PassengerAimTurnSpeed = Config.Bind("Passenger", "AimTurnSpeed", 180f, new ConfigDescription(
-                "How quickly the passenger turns its upper body toward or away from a target (degrees/second)",
-                new AcceptableValueRange<float>(1f, 720f)));
-
+            var offsetRange = new AcceptableValueRange<float>(-2f, 2f);
+            DriverOffsetX = PoseFloat.Create(Config, "Pose", "OffsetX", 0f, "Where each occupant's hips go: offset from its seat anchor, right (m)", offsetRange, exposePose);
+            DriverOffsetY = PoseFloat.Create(Config, "Pose", "OffsetY", -0.3f, "Where each occupant's hips go: offset from its seat anchor, up (m)", offsetRange, exposePose);
+            DriverOffsetZ = PoseFloat.Create(Config, "Pose", "OffsetZ", 0f, "Where each occupant's hips go: offset from its seat anchor, forward (m)", offsetRange, exposePose);
             PoseEnabled = PoseBool.Create(Config, "Pose", "Enabled", true, "Seated pose for live occupants", exposePose);
             var bodyRange = new AcceptableValueRange<float>(0f, 130f);
             var closerRange = new AcceptableValueRange<float>(-60f, 60f);
@@ -257,16 +196,33 @@ namespace Apocapatrol
             ArmPoseProfile.RemoveHardcodedSettings(Config);
             if (!exposePose) ArmPoseProfile.RemoveStoredConfiguration(Config);
 
-            SpawnKey = Config.Bind("Debug", "SpawnKey", Key.F7, "Assemble one car in front of the player. None = off");
             MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.F8, "Open the template spawner: a list of the park, click a car to build it in front of you. None = off");
-            SaveTemplateKey = Config.Bind("Debug", "TemplateKey", Key.F9, "Print the [Build]/[Driver]/[Passenger] fields as a park entry (Templates.cs) to the log. None = off");
-            Config.Remove(new ConfigDefinition("Debug", "SaveTemplateKey"));
-            VerboseLog = Config.Bind("Debug", "VerboseLog", true, "Log every build step (prefab lookups, hinge states, engine state)");
+            VerboseLog = Config.Bind("Debug", "VerboseLog", true, "Log every build step (prefab lookups, hinge states, engine state) and the AI's state changes");
             AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances");
+
+            PurgeStaleEntries();
 
             SceneManager.sceneLoaded += (s, m) => { EnsureRunner(); Patrol.ResetForScene(); PlayerRef.Reset(); PatrolPersistence.ResetForScene(); };
             EnsureRunner();
             Log.LogInfo(NAME + " " + VERSION + " loaded");
+        }
+
+        // Settings from earlier versions ([Build], [Driver], [Passenger], old keys) stay in the file as orphaned lines and would
+        // clutter the Apocasetter menu: drop every orphan except the PoseConfiguration switch, then save.
+        private void PurgeStaleEntries()
+        {
+            try
+            {
+                var prop = typeof(ConfigFile).GetProperty("OrphanedEntries", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                var orphans = prop != null ? prop.GetValue(Config, null) as Dictionary<ConfigDefinition, string> : null;
+                if (orphans == null) return;
+                var stale = new List<ConfigDefinition>();
+                foreach (var def in orphans.Keys)
+                    if (!string.Equals(def.Key, "PoseConfiguration", StringComparison.OrdinalIgnoreCase)) stale.Add(def);
+                foreach (var def in stale) orphans.Remove(def);
+                if (stale.Count > 0) { Config.Save(); Log.LogInfo("Config: removed " + stale.Count + " stale setting(s) from earlier versions"); }
+            }
+            catch (Exception e) { Log.LogWarning("Config cleanup: " + e.Message); }
         }
 
         private static bool PoseConfigurationEnabled(string path)

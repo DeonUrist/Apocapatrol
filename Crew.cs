@@ -22,7 +22,7 @@ namespace Apocapatrol
 
         private float _seated;                // seconds since the driver sat down
         private bool _driving, _dead, _stuck, _done;
-        private float _rolling, _nextLog;
+        private float _rolling;
         private float _delayOverride = -1f;   // a promoted passenger drives off after TakeoverSeconds instead of DriveDelaySeconds
         private float _deadFor;               // seconds since the driver died
         private bool _paxDecided, _paxBails;  // the surviving passenger's decision (rolled once)
@@ -50,7 +50,7 @@ namespace Apocapatrol
             // nobody else drives while the driver lives: no enter trigger (no F prompt), no Drive FSM (Activate events are ignored).
             // The car's DistanceKinematic FSM is left alone: re-enabling it restarts it in KinematicOn, which freezes a moving car.
             SeatLocked(driver != null);
-            Plugin.Log.LogInfo("Crew: driver " + (driver != null ? driver.name : "absent") + " seated, " + (Plugin.DriveDelaySeconds.Value < 0f ? "never drives" : "drives in " + Plugin.DriveDelaySeconds.Value + " s")
+            Plugin.Log.LogInfo("Crew: driver " + (driver != null ? driver.name : "absent") + " seated, " + "drives off in " + (_delayOverride >= 0f ? _delayOverride : 0f) + " s"
                 + (_enterTrigger != null ? "" : " (no enter trigger found!)") + (_drive != null ? "" : " (no Drive FSM found!)"));
         }
 
@@ -147,8 +147,8 @@ namespace Apocapatrol
                 if (!DriverAlive()) { OnDriverDied(); return; }
                 MuteAi();
                 _seated += Time.deltaTime;
-                float delay = _delayOverride >= 0f && Plugin.DriveDelaySeconds.Value >= 0f ? _delayOverride : Plugin.DriveDelaySeconds.Value;
-                if (!_driving && delay >= 0f && _seated >= delay && Nwh.EngineRunning(_car)) StartDriving();   // -1 = never
+                float delay = _delayOverride >= 0f ? _delayOverride : 0f;
+                if (!_driving && _seated >= delay && Nwh.EngineRunning(_car)) StartDriving();
                 return;
             }
 
@@ -169,10 +169,10 @@ namespace Apocapatrol
             if (!_dead)
             {
                 if (!_driving) return;
-                if (_pilot != null) _pilot.Step(); else Drive();
+                if (_pilot != null) _pilot.Step();
                 return;
             }
-            Nwh.SetInput(_car, _stuck ? Plugin.DriveThrottle.Value : 0f, 0f, 0f);
+            Nwh.SetInput(_car, _stuck ? Plugin.AiThrottle.Value : 0f, 0f, 0f);
         }
 
         private bool DriverAlive() { return Alive(_driver, _health); }
@@ -191,9 +191,9 @@ namespace Apocapatrol
             if (!_paxDecided)
             {
                 _paxDecided = true;
-                _paxBails = UnityEngine.Random.Range(0f, 100f) < Plugin.PassengerBailChance.Value;
+                _paxBails = UnityEngine.Random.Range(0f, 100f) < Plugin.BailChance.Value;
                 Plugin.Log.LogInfo("Crew: passenger " + pax.name + " will " + (_paxBails ? "bail out" : "take the wheel") + " once the car stops ("
-                    + Plugin.PassengerBailChance.Value + " % bail roll)");
+                    + Plugin.BailChance.Value + " % bail roll)");
             }
             if (_promoting)
             {
@@ -248,7 +248,7 @@ namespace Apocapatrol
             if (_driver != null && DriverAlive())
             {
                 if (marker != null) marker.DriverLeft();
-                Patrol.BailOut(_car, _driver, marker != null ? marker.DriverPrefab : Plugin.Driver.Value, -1f);
+                Patrol.BailOut(_car, _driver, marker != null ? marker.DriverPrefab : _driver.name.Replace("(Driver)", ""), -1f);
             }
             _driver = null; _health = null;
             _dead = true; _done = true; _driving = false;    // Phase = Released: saved as an empty car
@@ -266,11 +266,11 @@ namespace Apocapatrol
             marker.Promote(drv);
             _dead = false; _stuck = false; _done = false; _driving = false;
             _rolling = 0f; _deadFor = 0f; _paxDecided = false; _paxBails = false;
-            _delayOverride = Plugin.PassengerTakeoverSeconds.Value;
+            _delayOverride = Plugin.TakeoverSeconds;
             Init(_car, drv);
             _seated = 0f;
             MuteAi();
-            Plugin.Log.LogInfo("Crew: " + drv.name + " took the wheel, " + (Plugin.DriveDelaySeconds.Value < 0f ? "never drives ([Driver] DriveDelaySeconds = -1)" : "drives off in " + _delayOverride + " s") + "; car " + Speed() + " km/h, " + Nwh.Diag(_car));
+            Plugin.Log.LogInfo("Crew: " + drv.name + " took the wheel, " + "drives off in " + _delayOverride + " s" + "; car " + Speed() + " km/h, " + Nwh.Diag(_car));
         }
 
         private bool PlayerInside()
@@ -282,19 +282,8 @@ namespace Apocapatrol
         {
             _driving = true;
             _ctl.Take();
-            if (Plugin.AiEnabled.Value) _pilot = Pilot.Attach(_car);
-            Plugin.Log.LogInfo("Crew: driver drives off (" + (_pilot != null ? "driving AI" : "straight ahead") + ") at " + Speed() + " km/h, " + Nwh.Diag(_car));
-        }
-
-        private void Drive()
-        {
-            if (Nwh.GearIndex(_car) <= 0) Nwh.ShiftInto(_car, 1);   // the automatic stays in N until told once
-            Nwh.SetInput(_car, Plugin.DriveThrottle.Value, 0f, 0f);
-            if (Time.time >= _nextLog)
-            {
-                _nextLog = Time.time + 5f;
-                Plugin.Verbose("Crew: driving, " + Speed() + " km/h gear " + Nwh.Gear(_car));
-            }
+            _pilot = Pilot.Attach(_car);
+            Plugin.Log.LogInfo("Crew: driver drives off at " + Speed() + " km/h, " + Nwh.Diag(_car));
         }
 
         private void OnDriverDied()
@@ -317,7 +306,7 @@ namespace Apocapatrol
             {
                 _stuck = true;
                 _ctl.Take();
-                Nwh.SetInput(_car, Plugin.DriveThrottle.Value, 0f, 0f);
+                Nwh.SetInput(_car, Plugin.AiThrottle.Value, 0f, 0f);
                 Plugin.Log.LogInfo("Crew: driver died at " + Speed() + " km/h - gas pedal stuck (" + Plugin.StuckPedalChance.Value + " % roll), seat free");
                 return;
             }
