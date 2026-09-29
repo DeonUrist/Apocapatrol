@@ -1,12 +1,12 @@
-# Apocapatrol (prototype 0.20.1)
+# Apocapatrol (prototype 0.21.0)
 
 BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
 car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
 driver goes hunting the player.
 
 Config (all live in the Apocasetter Mods menu): `[Combat]` RangedCombat (one switch for driver and passenger), ShootDistance, FireArcHalfAngle,
-MaxAimPitch, AimTurnSpeed, FireBurstSeconds, FireIntervalMin/Max, RamDamage, RamDamageMultiplier, RamDamageByBody, RamFullSpeedKmh, RamMinSpeedKmh,
-RamInCarFactor · `[Driving]` StuckPedalChance, StuckPedalTakeoverSeconds, BailChance, StuckBailChance ·
+MaxAimPitch, AimTurnSpeed, FireBurstSeconds, FireIntervalMin/Max, RamDamage, RamDamageMultiplier, RamDamageByBody, RamFullSpeedKmh, RamInCarFactor,
+RamPushStrength · `[Driving]` StuckPedalChance, StuckPedalTakeoverSeconds, BailChance, StuckBailChance ·
 `[AI]` the driving AI's tuning · `[Loot]` loot type chances, the loot multiplier and the part condition range · `[Debug]` TemplateSpawnerKey, VerboseLog, AiOverlay. What used to be settings and is
 now fixed: spawn distance 8 m, takeover delay 2 s, carcass eject 0.3 m at 4 m/s, bail-out distance 0.5 m; stale settings from earlier versions are
 removed from the .cfg on load (the hidden `PoseConfiguration` switch is kept).
@@ -125,10 +125,11 @@ to the wheel switches to this mode.
 ### Ram damage
 The game's own bumper damage (`CarAttack` FSM, a trigger that hurts what it touches) only works against creatures, and the player's car's
 `CrashDamage` FSM hurts the driver by the *player's own* speed - so an AI car ramming a standing player did nothing. With `[Combat] RamDamage`
-every AI car carries a collision sensor: a hit on you (on foot or on your car) faster than `RamMinSpeedKmh` (10, relative speed) deals
-`RamDamageByBody` (`Junker=50, Rust*=70, Scrapwagon=70, PigPen=50`, everything else 30) × `RamDamageMultiplier` (0-3, default 1), scaled down
-linearly below `RamFullSpeedKmh` (40) and by `RamInCarFactor` while you sit in your car (default 1 = no protection). At most one hit per car per
-second. The damage goes through the player's vanilla `Bodypart` FSM (`Damage` = -amount + event `Damage`), so armour applies, and the `Damage` event also goes to the enabled `DamageEffectSound` / `_InCar` FSM for the hurt sound, camera kick and red splash
+every AI car carries a collision sensor: a hit on you (on foot or on your car) at `RamFullSpeedKmh` (30, relative speed) or more deals
+`RamDamageByBody` (`Junker=50, Rust*=70, Scrapwagon=70, PigPen=50`, everything else 30) × `RamDamageMultiplier` (0-3, default 1); at half that
+speed it deals half, in between it scales linearly, below half it does nothing. `RamInCarFactor` scales it while you sit in your car (default 1 =
+no protection). A damaging hit on foot also shoves you along the car's direction (`RamPushStrength`, 1 = about half the impact speed plus a small
+hop; the Movement FSM is paused for 0.5 s so the shove is not overwritten). At most one hit per car per second. The damage goes through the player's vanilla `Bodypart` FSM (`Damage` = -amount + event `Damage`), so armour applies, and the `Damage` event also goes to the enabled `DamageEffectSound` / `_InCar` FSM for the hurt sound, camera kick and red splash
 (the game's attackers do that themselves - `Bodypart`'s own link to the effect FSM is disabled in the prefab);
 each hit is logged ("Ram: <car> (<body>) hit the player ... -> N damage, health H").
 

@@ -24,7 +24,8 @@ namespace Apocapatrol
                     int kind = p == null ? 0 : PlayerRef.Kind(col.collider.transform);
                     if (kind == 0) return;
                     var mk = GetComponent<PatrolMarker>();
-                    Hit(gameObject, mk != null ? mk.BodyPrefab : null, kind, col.relativeVelocity.magnitude, col.collider);
+                    var rb = GetComponent<Rigidbody>();
+                    Hit(gameObject, mk != null ? mk.BodyPrefab : null, kind, col.relativeVelocity.magnitude, col.collider, rb != null ? rb.velocity : Vector3.zero);
                 }
                 catch (Exception e) { Plugin.Log.LogError("Ram: " + e); }
             }
@@ -34,35 +35,40 @@ namespace Apocapatrol
         private static readonly Dictionary<int, float> _next = new Dictionary<int, float>();   // car instance id -> next allowed hit time
         private static float _pending, _pendingAt = -1f, _healthBefore;
         private static string _pendingCar;
+        private static PlayMakerFSM _pausedMovement;      // the player's Movement FSM, paused while a shove carries
+        private static float _resumeAt = -1f;
+        private const float PushSeconds = 0.5f;
 
-        // kind: 1 = the player on foot, 2 = the player's car. rel = relative impact speed (m/s).
-        internal static void Hit(GameObject car, string body, int kind, float rel, Collider hit)
+        // kind: 1 = the player on foot, 2 = the player's car. rel = relative impact speed (m/s), carVel = the car's velocity (push direction).
+        internal static void Hit(GameObject car, string body, int kind, float rel, Collider hit, Vector3 carVel)
         {
             if (!Plugin.RamDamage.Value || car == null || kind == 0) return;
             float kmh = rel * 3.6f;
-            if (kmh < Plugin.RamMinSpeedKmh.Value) return;
+            float full = Mathf.Max(1f, Plugin.RamFullSpeedKmh.Value);
+            if (kmh < full * 0.5f) return;                                          // below half the full-damage speed: nothing
             int id = car.GetInstanceID();
             float next;
             if (_next.TryGetValue(id, out next) && Time.time < next) return;       // one hit per second per car (many colliders touch at once)
             _next[id] = Time.time + 1f;
 
-            float full = Mathf.Max(0f, Plugin.RamFullSpeedKmh.Value);
-            float speedFactor = full <= 0f ? 1f : Mathf.Clamp01(kmh / full);
+            float speedFactor = Mathf.Clamp(kmh / full, 0.5f, 1f);                  // 50 % at half speed, 100 % at full speed
             float amount = BaseDamage(body) * Plugin.RamDamageMultiplier.Value * speedFactor;
             if (kind == 2) amount *= Plugin.RamInCarFactor.Value;
             amount = Mathf.Round(amount);
-            if (amount < 1f) { Plugin.Verbose("Ram: " + car.name + " hit the player at " + kmh.ToString("0") + " km/h - too slow/weak for damage"); return; }
 
             var player = PlayerRef.Player;
             if (player == null) return;
-            PlayMakerFSM bodypart = null, health = null;
+            PlayMakerFSM bodypart = null, health = null, movement = null;
             var effects = new List<PlayMakerFSM>();
             foreach (var f in player.GetComponents<PlayMakerFSM>())
             {
                 if (f.FsmName == "Bodypart") bodypart = f;
                 else if (f.FsmName == "Health") health = f;
+                else if (f.FsmName == "Movement") movement = f;
                 else if (f.FsmName == "DamageEffectSound" || f.FsmName == "DamageEffectSound_InCar") effects.Add(f);
             }
+            if (kind == 1) Push(player, movement, car, carVel, rel);
+            if (amount < 1f) { Plugin.Verbose("Ram: " + car.name + " hit the player at " + kmh.ToString("0") + " km/h - no damage (multiplier)"); return; }
             float before = -1f;
             if (health != null && health.Fsm.Initialized) { var h = health.FsmVariables.GetFsmFloat("Health"); if (h != null) before = h.Value; }
 
@@ -86,9 +92,39 @@ namespace Apocapatrol
             if (applied && before >= 0f) { _pending = amount; _pendingAt = Time.time + 0.5f; _healthBefore = before; _pendingCar = car.name; }
         }
 
-        // Called from the runner: checks half a second after a hit that the health really went down (sign / armor sanity, verbose only).
+        // Shove the player on foot along the car's direction of travel (plus a small hop). The Movement FSM rewrites the velocity every
+        // frame (SetVelocity from the input axes), so it is paused for PushSeconds - RestartOnEnable off, so it resumes in the same state.
+        private static void Push(Transform player, PlayMakerFSM movement, GameObject car, Vector3 carVel, float rel)
+        {
+            float strength = Plugin.RamPushStrength.Value;
+            if (strength <= 0f) return;
+            var rb = player.GetComponent<Rigidbody>();
+            if (rb == null || rb.isKinematic) return;
+            Vector3 dir = carVel; dir.y = 0f;
+            if (dir.sqrMagnitude < 0.25f) { dir = player.position - car.transform.position; dir.y = 0f; }
+            if (dir.sqrMagnitude < 1e-4f) dir = car.transform.forward;
+            dir.Normalize();
+            var v = dir * (0.5f * rel * strength) + Vector3.up * (2.5f * strength);
+            if (movement != null && movement.enabled)
+            {
+                if (_pausedMovement != null && _pausedMovement != movement && _pausedMovement.gameObject != null) _pausedMovement.enabled = true;
+                movement.Fsm.RestartOnEnable = false;
+                movement.enabled = false;
+                _pausedMovement = movement;
+                _resumeAt = Time.time + PushSeconds;
+            }
+            rb.velocity = v;
+            Plugin.Verbose("Ram: shoved the player " + v.magnitude.ToString("0.0") + " m/s along " + dir.ToString("0.00"));
+        }
+
+        // Called from the runner: resumes the paused Movement FSM, and checks half a second after a hit that the health really went down.
         internal static void Tick()
         {
+            if (_pausedMovement != null && Time.time >= _resumeAt)
+            {
+                if (_pausedMovement.gameObject != null) { _pausedMovement.enabled = true; _pausedMovement.Fsm.RestartOnEnable = true; }
+                _pausedMovement = null;
+            }
             if (_pendingAt < 0f || Time.time < _pendingAt) return;
             _pendingAt = -1f;
             var player = PlayerRef.Player;

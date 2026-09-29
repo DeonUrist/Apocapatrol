@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.20.1";
+        public const string VERSION = "0.21.0";
 
         internal static ManualLogSource Log;
 
@@ -46,7 +46,7 @@ namespace Apocapatrol
         internal static ConfigEntry<bool> RangedCombat;
         internal static ConfigEntry<float> FireArc, MaxAimPitch, AimTurnSpeed, FireBurstSeconds, FireIntervalMin, FireIntervalMax, ShootDistance;
         internal static ConfigEntry<bool> RamDamage;
-        internal static ConfigEntry<float> RamDamageMultiplier, RamMinSpeedKmh, RamFullSpeedKmh, RamInCarFactor;
+        internal static ConfigEntry<float> RamDamageMultiplier, RamFullSpeedKmh, RamInCarFactor, RamPushStrength;
         internal static ConfigEntry<string> RamDamageByBody;
         // [Driving]
         internal static ConfigEntry<float> StuckPedalChance, StuckPedalTakeoverSeconds, BailChance, StuckBailChance;
@@ -110,10 +110,12 @@ namespace Apocapatrol
                 new AcceptableValueRange<float>(0f, 3f)));
             RamDamageByBody = Config.Bind("Combat", "RamDamageByBody", "Junker=50, Rust*=70, Scrapwagon=70, PigPen=50",
                 "Full-speed damage per car body, 'Body=damage' pairs; * = prefix. Bodies not listed take " + Ram.DefaultDamage + ". Applied before the multiplier");
-            RamFullSpeedKmh = Config.Bind("Combat", "RamFullSpeedKmh", 40f, new ConfigDescription(
-                "Impact speed (km/h, relative) at which the full damage applies; slower hits scale down linearly", new AcceptableValueRange<float>(5f, 200f)));
-            RamMinSpeedKmh = Config.Bind("Combat", "RamMinSpeedKmh", 10f, new ConfigDescription(
-                "Hits slower than this (km/h, relative) do nothing", new AcceptableValueRange<float>(0f, 100f)));
+            RamFullSpeedKmh = Config.Bind("Combat", "RamFullSpeedKmh", 30f, new ConfigDescription(
+                "Impact speed (km/h, relative) for the full damage. At half that speed the hit does half damage; below half it does nothing",
+                new AcceptableValueRange<float>(5f, 200f)));
+            RamPushStrength = Config.Bind("Combat", "RamPushStrength", 1f, new ConfigDescription(
+                "A damaging hit also shoves you (on foot) in the car's direction: 1 = about half the impact speed plus a small hop; 0 = off",
+                new AcceptableValueRange<float>(0f, 3f)));
             RamInCarFactor = Config.Bind("Combat", "RamInCarFactor", 1f, new ConfigDescription(
                 "Damage factor while you sit in your own car (1 = same as on foot)", new AcceptableValueRange<float>(0f, 1f)));
 
