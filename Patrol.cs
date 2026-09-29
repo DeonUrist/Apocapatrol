@@ -73,7 +73,12 @@ namespace Apocapatrol
                 if (Plugin.ReleaseHandbrake.Value) Handbrake(car, false);
 
                 yield return null;
-                if (!string.IsNullOrEmpty(Plugin.Driver.Value)) SeatDriver(car);
+                bool hasDriver = false;
+                if (!string.IsNullOrEmpty(Plugin.Driver.Value))
+                {
+                    if (Plugin.Driver.Value.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase)) SeatDriver(car);
+                    else hasDriver = SeatLiveDriver(car);
+                }
 
                 yield return new WaitForSeconds(1.5f);
                 if (Plugin.VerboseLog.Value) LogHingeStates(car);
@@ -100,6 +105,8 @@ namespace Apocapatrol
                         }
                     }
                 }
+
+                if (hasDriver) { Plugin.Log.LogInfo("Driver in place; the Crew component takes it from here"); yield break; }
 
                 if (Plugin.DriveTestSeconds.Value > 0f)
                 {
@@ -191,7 +198,7 @@ namespace Apocapatrol
 
         // The handbrake lever FSM: HandbrakeOn -> (click) over -> Sound -> HandbrakeOff (SetProperty input.Handbrake + lever rotation).
         // Entering "Sound" plays the click and flows into HandbrakeOff by itself; "Sound 2" goes back to HandbrakeOn.
-        private static void Handbrake(GameObject car, bool on)
+        internal static void Handbrake(GameObject car, bool on)
         {
             var f = FindFsm(car, "handbrake", "Handbrake");
             if (f == null) { Plugin.Log.LogWarning("No handbrake/Handbrake FSM; setting NWH input.Handbrake only"); Nwh.SetHandbrake(car, on ? 1f : 0f); return; }
@@ -235,6 +242,38 @@ namespace Apocapatrol
             foreach (var rb in drv.GetComponentsInChildren<Rigidbody>(true))
                 if (rb != root) { bones++; rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
             Plugin.Log.LogInfo("Driver " + drv.name + " on " + sit.name + " at " + pos + " (" + bones + " ragdoll bones, " + drvCols.Length + " colliders)");
+        }
+
+        // A live enemy at the wheel with its AI off: instantiated at sitPos, the mover/AI FSMs disabled before they Start,
+        // root Rigidbody kinematic and parented to the seat, collisions with the car ignored. Health/Damage/Bodypart stay
+        // vanilla so it can be shot; the Crew component drives the car and reacts to its death.
+        private static bool SeatLiveDriver(GameObject car)
+        {
+            var prefab = Prefabs.FindAny(Plugin.Driver.Value);
+            if (prefab == null) { Plugin.Log.LogWarning("Driver prefab not found: " + Plugin.Driver.Value); return false; }
+            var sit = FindChild(car.transform, "sitPos") ?? FindChild(car.transform, "hinge_seat_driver");
+            if (sit == null) { Plugin.Log.LogWarning("No sitPos on " + car.name); return false; }
+
+            var off = new Vector3(Plugin.DriverOffsetX.Value, Plugin.DriverOffsetY.Value, Plugin.DriverOffsetZ.Value);
+            var pos = sit.position + car.transform.right * off.x + car.transform.up * off.y + car.transform.forward * off.z;
+            var rot = Quaternion.LookRotation(car.transform.forward, car.transform.up);
+            var drv = UnityEngine.Object.Instantiate(prefab, pos, rot);
+            drv.SetActive(true);
+            var crew = Crew.Attach(car, drv);
+            crew.MuteAi();                                   // before the FSMs' Start
+            if (Plugin.RegisterDriver.Value) { Register.Name(drv, prefab.name); Register.Add(drv, false); }
+            else drv.name = prefab.name + "(Driver)";
+
+            foreach (var a in drv.GetComponentsInChildren<Collider>(true))
+                foreach (var b in car.GetComponentsInChildren<Collider>(true))
+                    if (a != null && b != null) Physics.IgnoreCollision(a, b, true);
+
+            var root = drv.GetComponent<Rigidbody>() ?? drv.AddComponent<Rigidbody>();
+            root.isKinematic = true;
+            root.interpolation = RigidbodyInterpolation.None;
+            drv.transform.SetParent(sit, true);
+            Plugin.Log.LogInfo("Live driver " + drv.name + " on " + sit.name + " at " + pos);
+            return true;
         }
 
         private static void LogHingeStates(GameObject car)

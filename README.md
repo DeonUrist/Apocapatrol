@@ -1,10 +1,20 @@
-# Apocapatrol (prototype 0.2.2)
+# Apocapatrol (prototype 0.3.0)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
 
 Default build: **PipeRat** frame, 4 × `small_wheel_1`, `1.2L I4 59HP 87Nm Gasoline` engine, `radiator_small`, `steeringwheel_7`,
-`poloska_seat_front_homemade` on the driver seat, handbrake released, and a ragdolled `Scraffa_Dead` on the driver position (`[Driver]`).
+`poloska_seat_front_homemade` on the driver seat, handbrake released, and a live **Scraffa** at the wheel (`[Driver]`).
+
+## The driver (Crew.cs)
+A live enemy prefab is put on the car's `sitPos`: its AI and body-mover FSMs (`DisabledFsms`: Movement, Unstuck, Rotate, Detection, Attack,
+ranged attack, Codex, sounds) are switched off before they start and kept off every frame; `Health`, `Damage` and the `Bodypart` colliders stay
+vanilla, so it can be shot and killed like any enemy (its own death flow drops the carcass). Root Rigidbody kinematic, parented to the seat,
+collisions with the car ignored. While it lives the player cannot take the car: the `DriveTrigger` enter collider and the `Drive` FSM are off.
+After `DriveDelaySeconds` (and once the engine runs) it drives: shifts into 1st and holds `DriveThrottle`, steering straight for now.
+When it dies: with `StuckPedalChance` % its leg stays on the gas (throttle kept, car keeps going); otherwise the car brakes to a stop and the
+handbrake goes on. Either way the seat is free again and the player can drive the car. A `*_Dead` prefab as `Driver` gives the old ragdoll
+passenger instead; an empty `Driver` falls back to the `[Build]` drive test.
 Every part is configurable by prefab name or in-game item name (`[Build]`; edit live in the Apocasetter Mods menu).
 
 What happens on the key:
