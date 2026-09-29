@@ -140,6 +140,7 @@ namespace Apocapatrol
             string line = "new CarTemplate(" + Q(name) + ", " + Q(t.Body) + ", " + Q(t.Wheel) + ", " + Q(t.Engine) + ", " + Q(t.Radiator) + ", "
                 + Q(t.SteeringWheel) + ", " + Q(t.Exhaust) + ", " + Q(t.Seat) + ", " + Q(t.PassengerSeat) + ", " + Q(t.Driver) + ", " + Q(t.Passenger) + ", RamTargets." + t.Rams + "),";
             Plugin.Log.LogInfo("Park entry for the current fields (Templates.cs, Park[]):\n            " + line);
+            Patrol.SurveyExhausts();
         }
 
         private static string Q(string s) { return "\"" + (s ?? "").Replace("\"", "\\\"") + "\""; }

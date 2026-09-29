@@ -612,6 +612,37 @@ namespace Apocapatrol
 
     // =============================================================== helpers
 
+        // F9 survey: hinge_exhaust transforms of every car in the scene and of every frame prefab, to find out why exhausts
+        // on freshly instantiated frames sit 90 degrees off compared with the game's own cars.
+        internal static void SurveyExhausts()
+        {
+            Plugin.Log.LogInfo("=== Exhaust survey: scene cars ===");
+            foreach (var t in UnityEngine.Object.FindObjectsOfType<Transform>())
+            {
+                if (t.parent != null || !PlayerRef.HasVehicleController(t)) continue;
+                LogHinge(t.name, t);
+            }
+            Plugin.Log.LogInfo("=== Exhaust survey: frame prefabs (assets) ===");
+            foreach (var name in new[] { "PipeRat", "Poloska", "TinyTyrant", "Junker", "Rustcargo", "Duke", "Vulture", "Rustallion" })
+            {
+                var p = Prefabs.Find(name, "vehicle");
+                if (p != null) LogHinge(p.name + " [asset]", p.transform);
+            }
+        }
+
+        private static void LogHinge(string label, Transform car)
+        {
+            var h = FindChild(car, "hinge_exhaust");
+            if (h == null) { Plugin.Log.LogInfo(label + ": no hinge_exhaust"); return; }
+            string s = label + ": hinge_exhaust localPos " + h.localPosition.ToString("0.000") + " localEuler " + h.localEulerAngles.ToString("0.0")
+                + " parent=" + (h.parent != null ? h.parent.name : "-") + " worldEuler " + h.eulerAngles.ToString("0.0") + " carEuler " + car.eulerAngles.ToString("0.0");
+            foreach (Transform c in h)
+                s += "\n      child " + c.name + " tag=" + c.tag + " localPos " + c.localPosition.ToString("0.000") + " localEuler " + c.localEulerAngles.ToString("0.0") + " scale " + c.localScale.ToString("0.00");
+            var vis = FindChild(car, "exhaustHingeVisible");
+            if (vis != null) s += "\n      exhaustHingeVisible localPos " + vis.localPosition.ToString("0.000") + " localEuler " + vis.localEulerAngles.ToString("0.0") + " worldEuler " + vis.eulerAngles.ToString("0.0");
+            Plugin.Log.LogInfo(s);
+        }
+
         private static bool PlayerPose(out Vector3 p, out Vector3 fwd)
         {
             var pl = PlayerRef.Player;
