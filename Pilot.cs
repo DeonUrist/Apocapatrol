@@ -41,8 +41,11 @@ namespace Apocapatrol
         private bool _reverseChecked;
         private int _reverseTries;
 
-        private bool _hitPending, _hitIsTarget;
+        private bool _hitPending, _hitIsTarget, _rearHit;
         private float _hitSide;
+        private float _pushTime, _pushStamp = -1f;   // slow continuous push against an obstacle ahead
+        private string _pushName = "";
+        private float _rearClear = -1f;               // nearest obstacle behind while reversing, -1 = clear
 
         private float _nextLog, _nextEngine, _flipLogged;
         private bool _hasTarget;
@@ -111,6 +114,11 @@ namespace Apocapatrol
                 Plugin.Verbose("Pilot: engine off, StartEngine()");
             }
 
+            // pushing slowly against something for a while counts as stuck (a car being shoved, a fence...)
+            if (_pushStamp >= 0f && Time.fixedTime - _pushStamp > 0.25f) { _pushTime = 0f; _pushStamp = -1f; }
+            if (_pushTime > 1f && (_state == PilotState.Charge || _state == PilotState.Overshoot || _state == PilotState.Turnaround))
+            { _pushTime = 0f; _pushStamp = -1f; StartRecover("pushing against " + _pushName, _hitSide); }
+
             // collision that came in since the last step
             if (_hitPending)
             {
@@ -178,8 +186,9 @@ namespace Apocapatrol
 
             // obstacle feelers; the target itself is never an obstacle, and close to it we go straight for the ram
             float avoidSteer, avoidThrottle, avoidBrake;
-            bool ramming = _dist < Plugin.AiRamDistance.Value && Mathf.Abs(_angle) < 35f;
             Sense(speed, out avoidSteer, out avoidThrottle, out avoidBrake);
+            // ...unless something (a parked car, a rock) sits between us and the target: the centre feeler never sees the target itself
+            bool ramming = _dist < Plugin.AiRamDistance.Value && Mathf.Abs(_angle) < 35f && (_feelerHit[0] < 0f || _feelerHit[0] > _dist);
             if (!ramming) desired = Mathf.Clamp(desired + avoidSteer, -1f, 1f);
 
             float maxSteer = MaxSteerFor(speed);
@@ -230,6 +239,17 @@ namespace Apocapatrol
 
         private void StepRecover(float forwardSpeed, float dt)
         {
+            // something behind: stop backing up, go forward instead (the wheels are already turned toward the target)
+            _rearClear = SenseRear(forwardSpeed);
+            if (_rearHit || _rearClear >= 0f)
+            {
+                string why = _rearHit ? "hit something behind" : "obstacle " + _rearClear.ToString("0.0") + " m behind";
+                _rearHit = false;
+                if (Nwh.GearIndex(_car) < 0) Nwh.ShiftInto(_car, 1);
+                _steer = -_steer;                         // nose was swinging one way in reverse; keep swinging it that way going forward
+                Enter(PilotState.Charge, why);
+                return;
+            }
             // reverse: NWH either takes a reverse gear + throttle, or brake input at standstill; find out which works once
             if (!_reverseByBrake)
             {
@@ -383,6 +403,23 @@ namespace Apocapatrol
             steer = Mathf.Clamp(steer, -1f, 1f);
         }
 
+        // Three rays backwards from the tail while reversing; returns the nearest obstacle distance or -1.
+        private float SenseRear(float forwardSpeed)
+        {
+            float len = 2.5f + Mathf.Abs(Mathf.Min(forwardSpeed, 0f)) * 0.8f;
+            var origin = (_rb != null ? _rb.worldCenterOfMass : _tf.position) - _tf.forward * Plugin.AiFrontOffset.Value + _tf.up * 0.5f;
+            float minSlopeNormalY = Mathf.Cos(Plugin.AiMaxSlopeDeg.Value * Mathf.Deg2Rad);
+            float best = -1f;
+            float[] angles = { 180f, 150f, 210f };
+            for (int i = 0; i < angles.Length; i++)
+            {
+                var dir = Quaternion.AngleAxis(angles[i], _tf.up) * _tf.forward;
+                float d = Cast(origin, dir, i == 0 ? len : len * 0.7f, i == 0 ? 0.4f : 0.2f, minSlopeNormalY);
+                if (d >= 0f && (best < 0f || d < best)) best = d;
+            }
+            return best;
+        }
+
         // first hit along the ray that counts as an obstacle, or -1
         private float Cast(Vector3 origin, Vector3 dir, float len, float radius, float minSlopeNormalY)
         {
@@ -462,16 +499,42 @@ namespace Apocapatrol
             if (rel < 3f) return;
             var contact = col.GetContact(0);
             var local = _tf.InverseTransformPoint(contact.point);
-            if (local.z < 0.3f) return;                                  // not a frontal hit
-            if (contact.normal.y >= Mathf.Cos(Plugin.AiMaxSlopeDeg.Value * Mathf.Deg2Rad)) return;   // ground / bump under the nose, not a wall
-            if (Vector3.Dot(contact.normal, _tf.forward) > -0.3f) return;   // glancing / from below, not something in the way
+            if (contact.normal.y >= Mathf.Cos(Plugin.AiMaxSlopeDeg.Value * Mathf.Deg2Rad)) return;   // ground / bump under the car, not a wall
+            float along = Vector3.Dot(contact.normal, _tf.forward);
+            bool frontal = local.z > 0.3f && along < -0.3f;
+            bool rear = local.z < -0.3f && along > 0.3f;
+            if (!frontal && !rear) return;                                // glancing / side, not something in the way
             bool target = PlayerRef.IsPlayerOrPlayerCar(col.collider.transform);
             bool npc = !target && !IsObstacle(col.collider);
             if (npc) return;                                              // ran over a creature or a loose item: keep going
+            if (rear)
+            {
+                if (_state == PilotState.Recover && !target) { _rearHit = true; Plugin.Verbose("Pilot: backed into " + col.collider.name + " at " + rel.ToString("0.0") + " m/s"); }
+                return;
+            }
             _hitPending = true;
             _hitIsTarget = target;
             _hitSide = Mathf.Abs(local.x) > 0.6f ? Mathf.Sign(local.x) : 0f;
             Plugin.Verbose("Pilot: " + (target ? "rammed " : "hit ") + col.collider.name + " at " + rel.ToString("0.0") + " m/s, local " + local.ToString("0.0"));
+        }
+
+        // A slow, sustained frontal contact with an obstacle (shoving a parked car, leaning on a wall) is tracked here and
+        // turned into a recovery by Step() once it lasts a second; a single Enter at speed is handled above.
+        private void OnCollisionStay(Collision col)
+        {
+            if (col.collider == null || col.contactCount == 0) return;
+            if (_state != PilotState.Charge && _state != PilotState.Overshoot && _state != PilotState.Turnaround) return;
+            if (_throttle < 0.3f) return;
+            var contact = col.GetContact(0);
+            var local = _tf.InverseTransformPoint(contact.point);
+            if (local.z < 0.3f || Vector3.Dot(contact.normal, _tf.forward) > -0.3f) return;
+            if (contact.normal.y >= Mathf.Cos(Plugin.AiMaxSlopeDeg.Value * Mathf.Deg2Rad)) return;
+            if (_rb != null && Vector3.Dot(_rb.velocity, _tf.forward) > 2f) return;    // still making progress
+            if (PlayerRef.IsPlayerOrPlayerCar(col.collider.transform) || !IsObstacle(col.collider)) return;
+            _pushTime += Time.fixedDeltaTime;
+            _pushStamp = Time.fixedTime;
+            _pushName = col.collider.name;
+            _hitSide = Mathf.Abs(local.x) > 0.6f ? Mathf.Sign(local.x) : 0f;
         }
 
         // ------------------------------------------------------------ overlay
@@ -485,7 +548,9 @@ namespace Apocapatrol
             string s = _car.name + ": " + _state + " (" + _why + ")  " + (vel.magnitude * 3.6f).ToString("0") + " km/h  gear " + Nwh.Gear(_car)
                 + "  target " + _dist.ToString("0") + " m @ " + _angle.ToString("0") + "°  steer " + _steer.ToString("0.00")
                 + "  thr " + _throttle.ToString("0.00") + "  brk " + _brakes.ToString("0.00") + Feelers()
-                + "  recovers " + _recoverCount + (_reverseByBrake ? "  rev=brake" : "  rev=gear");
+                + "  recovers " + _recoverCount + (_reverseByBrake ? "  rev=brake" : "  rev=gear")
+                + (_state == PilotState.Recover ? "  rear " + (_rearClear < 0f ? "clear" : _rearClear.ToString("0.0") + " m") : "")
+                + (_pushTime > 0f ? "  push " + _pushTime.ToString("0.0") + " s " + _pushName : "");
             GUI.Label(new Rect(10, 10 + 18 * line, 1400, 22), s);
         }
     }

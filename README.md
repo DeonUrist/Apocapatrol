@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.10.2)
+# Apocapatrol (prototype 0.10.3)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -44,15 +44,17 @@ Hit and run. The target is the player - the player's car while they drive, the p
 - **Overshoot**: once the target is passed (behind the car, within `PassWidth` of its track) or rammed (collision with the player / their car),
   the car keeps going for `RunOutMeters` (at most `RunOutMaxSeconds`), then
 - **Turnaround**: full lock toward the target until it faces them again (back to Charge). Too slow and too far off for two seconds = a three-point turn.
-- **Recover**: a frontal hit (steep contact normal - ground bumps under the nose do not count) against anything that is not the target, or not moving for `StuckSeconds` in a forward state, reverses for
-  `ReverseSeconds` with the wheels turned so the nose swings away from the obstacle (or toward the target), then charges again. Recoveries
+- **Recover**: a frontal hit (steep contact normal - ground bumps under the nose do not count) against anything that is not the target, not moving for
+  `StuckSeconds` in a forward state, or shoving slowly against an obstacle (a parked car, a wall) for a second, reverses for
+  `ReverseSeconds` with the wheels turned so the nose swings away from the obstacle (or toward the target), then charges again. While reversing, three rear feelers and rear collisions end the reverse early and the car goes forward instead. Recoveries
   within `RecoverWindow` of each other reverse longer and, from the third on, in a random direction; after `MaxRecovers` the car gives up for
   `WaitSeconds`. How NWH reverses (gear -1 + throttle, or brake input at standstill) is detected on the first recovery and logged.
 - **Feelers**: five rays from just outside the bumper (`FrontOffset`), the centre one `FeelerRange` + `FeelerSpeedFactor` × speed long, the side
   ones at ±22° / ±48° and shorter, plus a probe for missing ground ahead (cliffs). A hit steers away (`AvoidGain`, the centre ray toward the freer
   side), throttles down and brakes when it is close. Surfaces flatter than `MaxSlopeDeg` are ground, steeper ones (rocks, walls, wrecks, other
   cars) are obstacles. NOT obstacles: the player and the player's car, creatures/NPCs (anything with a Health/Detection FSM), loose items lighter
-  than `IgnoreMassBelow` kg - those get rammed or run over. Within `RamDistance` of the target with it roughly ahead, avoidance is off entirely.
+  than `IgnoreMassBelow` kg - those get rammed or run over. Within `RamDistance` of the target with it roughly ahead and nothing closer in the way, avoidance is off entirely (a parked car between them is
+  still avoided).
 - Beyond `GiveUpDistance` from the player the car coasts (Idle) until they come closer. On its side or roof it just waits. `InvertSteering` flips
   the steering sign should the car turn away from the target.
 `[Debug] AiOverlay` draws one line per AI car on screen (state and why, speed, gear, target distance/angle, steering, pedals, feeler hit
@@ -80,9 +82,11 @@ re-enable an invisible close-range hit. Projectile damage continues through the 
 
 ### When the driver dies
 A passenger that outlives the driver acts as soon as the car stands still (a stuck pedal is kicked off after `StuckPedalTakeoverSeconds`, 6 s):
-with `BailChance` % (25) it **bails out** - it is replaced by a fresh instance of its prefab beside the car, fully vanilla AI, registered like a
-spawned enemy (so the game saves it), with the health it had left; otherwise it **takes the wheel**: the dead driver's carcass is put down on the ground `EjectDistance` m to the left and 2 m behind the car first, with no impulse (its
-colliders ignore the car and the new driver, joints to the car are cut, and it is moved out again if it is still inside a moment later), then it climbs onto the driver seat, the seat
+with `BailChance` % (25) it **bails out** - it is replaced by a fresh instance of its prefab `ExitDistance` m beside its seat, stood on the ground, fully vanilla AI, registered like a
+spawned enemy (so the game saves it), with the health it had left; otherwise it **takes the wheel**: the dead driver's carcass is laid down on the ground `ExitDistance` m to the left of the seat first, with no impulse (its
+colliders ignore the car and the new driver, joints to the car are cut, and it is moved out again if it is still inside a moment later).
+Occupant-vs-car collision ignores are re-applied at the takeover and once a second while seated: Unity drops an ignore pair whenever a
+collider is toggled (weapon props, hitboxes), and a kinematic occupant with one live pair shoves the car around unopposed, then it climbs onto the driver seat, the seat
 locks again, and after `TakeoverSeconds` (2) it drives off with the driving AI. If the player got into the car first, the passenger always bails.
 The save sidecar follows: a promoted passenger is saved as the driver with an empty passenger seat.
 

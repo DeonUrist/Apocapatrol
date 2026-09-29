@@ -307,6 +307,23 @@ namespace Apocapatrol
             return go;
         }
 
+        // Every collider of an occupant vs every collider of the car. Unity drops an ignore pair when either collider is
+        // disabled or its object deactivated (weapon props toggled by WeaponType/Attack, the FireDamage hitbox...), and an
+        // occupant's root is kinematic, so a single live pair shoves the car around unopposed. Cheap; re-applied periodically.
+        internal static int IgnoreCollisions(GameObject who, GameObject car)
+        {
+            if (who == null || car == null) return 0;
+            int n = 0;
+            var carCols = car.GetComponentsInChildren<Collider>(true);
+            foreach (var a in who.GetComponentsInChildren<Collider>(true))
+            {
+                if (a == null || !a.enabled || !a.gameObject.activeInHierarchy) continue;
+                foreach (var b in carCols)
+                    if (b != null && b.enabled && b.gameObject.activeInHierarchy && !b.transform.IsChildOf(who.transform)) { Physics.IgnoreCollision(a, b, true); n++; }
+            }
+            return n;
+        }
+
         // Before the passenger climbs over: the dead driver's carcass (the <X>_Dead ragdoll its Health FSM dropped on the seat) is
         // thrown out to the car's left. Its colliders are told to ignore the car and the passenger first, so whatever happens it
         // cannot blow the car up; CorpseWatch then makes sure it really ends up outside the car.
@@ -343,12 +360,12 @@ namespace Apocapatrol
                     foreach (var b in paxCols) if (b != null) Physics.IgnoreCollision(a, b, true);
                 }
                 // put it down on the ground well clear of the car (left and behind), no impulse at all
-                var target = sit.position + left * Plugin.EjectDistance.Value - car.transform.forward * 2f + Vector3.up * 2f;
+                var target = sit.position + left * Plugin.ExitDistance.Value + Vector3.up * 2f;
                 var ground = target + Vector3.down * 1.5f;
                 foreach (var h in Physics.RaycastAll(target, Vector3.down, 8f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                     if (h.collider != null && !h.collider.transform.IsChildOf(car.transform) && !h.collider.transform.IsChildOf(root) && h.point.y > ground.y) ground = h.point;
                 Throw(root, ground + Vector3.up * 0.4f, Vector3.zero);
-                Plugin.Log.LogInfo("Eject: " + root.name + " put down " + Plugin.EjectDistance.Value + " m left of " + car.name + " (" + joints + " joints, "
+                Plugin.Log.LogInfo("Eject: " + root.name + " laid down " + Plugin.ExitDistance.Value + " m left of " + car.name + " (" + joints + " joints, "
                     + jointsToCar + " were attached to the car); car v=" + (carRb != null ? carRb.velocity.magnitude.ToString("0.0") + " w=" + carRb.angularVelocity.magnitude.ToString("0.0") : "?"));
             }
             var watch = car.AddComponent<CorpseWatch>();
@@ -398,6 +415,8 @@ namespace Apocapatrol
             var pose = pax.GetComponent<Pose>();
             if (pose != null) pose.Reseat(sit);
             pax.name = pax.name.Replace("(Passenger)", "(Driver)");
+            int pairs = IgnoreCollisions(pax, car);
+            Plugin.Log.LogInfo("Takeover: " + pax.name + " on " + sit.name + ", " + pairs + " collider pairs vs the car ignored");
             if (oldAnchor != null && oldAnchor.name == "Apocapatrol.PassengerPos") UnityEngine.Object.Destroy(oldAnchor.gameObject);
             return pax;
         }
@@ -413,13 +432,14 @@ namespace Apocapatrol
             var sit = FindChild(car.transform, "sitPos");
             float side = 1f;
             if (anchor != null && sit != null) side = Vector3.Dot(anchor.position - sit.position, car.transform.right) >= 0f ? 1f : -1f;
-            var from = (anchor != null ? anchor.position : car.transform.position) + car.transform.right * side * 2.5f + Vector3.up * 1.5f;
+            var from = (anchor != null ? anchor.position : car.transform.position) + car.transform.right * side * Plugin.ExitDistance.Value + Vector3.up * 1.5f;
             var pos = from + Vector3.down * 1.2f;
             var hits = Physics.RaycastAll(from, Vector3.down, 6f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float best = float.MaxValue;
             foreach (var h in hits)
                 if (h.collider != null && !h.collider.transform.IsChildOf(car.transform) && !h.collider.transform.IsChildOf(pax.transform) && h.distance < best)
-                { best = h.distance; pos = h.point + Vector3.up * 0.1f; }
+                { best = h.distance; pos = h.point; }
+            float groundY = pos.y;
             var rot = Quaternion.LookRotation(Vector3.ProjectOnPlane(car.transform.right * side, Vector3.up).normalized, Vector3.up);
 
             marker.PassengerLeft();
@@ -430,8 +450,16 @@ namespace Apocapatrol
                 if (anchor != null && anchor.name == "Apocapatrol.PassengerPos") UnityEngine.Object.Destroy(anchor.gameObject);
                 return;
             }
-            var mob = UnityEngine.Object.Instantiate(prefab, pos, rot);
+            var mob = UnityEngine.Object.Instantiate(prefab, pos + Vector3.up * 0.5f, rot);
             mob.SetActive(true);
+            // stand it on the ground: the prefab pivot may sit mid-body, so lift it by its collider's lowest point
+            var rootCol = mob.GetComponent<Collider>();
+            if (rootCol != null)
+            {
+                float bottom = rootCol.bounds.min.y;
+                mob.transform.position += Vector3.up * (groundY + 0.15f - bottom);
+            }
+            pos = mob.transform.position;
             if (Plugin.RegisterWithGame.Value) { Register.Name(mob, prefab.name); Register.Add(mob, false); }
             if (health > 0f) { SetHealth(mob, health); mob.AddComponent<LateHealth>().Value = health; }
             UnityEngine.Object.Destroy(pax);
@@ -498,7 +526,7 @@ namespace Apocapatrol
                 if (d.magnitude >= 1.8f) continue;
                 anyInside = true;
                 _pushes++;
-                Patrol.Throw(root, _sit.position + _left * (Plugin.EjectDistance.Value + _pushes) + Vector3.up * 1f, Vector3.zero);
+                Patrol.Throw(root, _sit.position + _left * (Plugin.ExitDistance.Value + _pushes) + Vector3.up * 1f, Vector3.zero);
                 Plugin.Log.LogInfo("Eject: " + root.name + " was still in the car, moved out again (" + _pushes + ")");
             }
             if (!anyInside && _t > 1f || _t > 6f) { Plugin.Verbose("Eject: done, " + _pushes + " extra push(es)"); Destroy(this); }

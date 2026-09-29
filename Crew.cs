@@ -26,6 +26,7 @@ namespace Apocapatrol
         private float _delayOverride = -1f;   // a promoted passenger drives off after TakeoverSeconds instead of DriveDelaySeconds
         private float _deadFor;               // seconds since the driver died
         private bool _paxDecided, _paxBails;  // the surviving passenger's decision (rolled once)
+        private float _nextIgnore;            // periodic re-apply of occupant-vs-car collision ignores
 
         internal static Crew Attach(GameObject car, GameObject driver)
         {
@@ -125,6 +126,13 @@ namespace Apocapatrol
         {
             if (_car == null) { Destroy(this); return; }
             if (Time.timeScale <= 0f) return;
+            if (Time.time >= _nextIgnore)
+            {
+                _nextIgnore = Time.time + 1f;
+                if (!_dead && _driver != null) Patrol.IgnoreCollisions(_driver, _car);
+                var marker = _car.GetComponent<PatrolMarker>();
+                if (marker != null && marker.Passenger != null) Patrol.IgnoreCollisions(marker.Passenger, _car);
+            }
             if (_dead && PassengerReacts()) return;
             if (_done) return;
 

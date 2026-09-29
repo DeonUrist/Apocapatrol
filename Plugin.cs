@@ -17,7 +17,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.10.2";
+        public const string VERSION = "0.10.3";
 
         internal static ManualLogSource Log;
 
@@ -26,7 +26,7 @@ namespace Apocapatrol
         internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
         internal static ConfigEntry<bool> PassengerRangedCombat;
         internal static ConfigEntry<float> PassengerFireArc, PassengerMaxAimPitch, PassengerAimTurnSpeed;
-        internal static ConfigEntry<float> PassengerBailChance, PassengerTakeoverSeconds, StuckPedalTakeoverSeconds, EjectDistance;
+        internal static ConfigEntry<float> PassengerBailChance, PassengerTakeoverSeconds, StuckPedalTakeoverSeconds, ExitDistance;
         internal static PoseBool PoseEnabled;
         internal static PoseFloat PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLeftLegCloser, PoseRightLegCloser, PoseLeftArmCloser, PoseRightArmCloser;
         internal static ConfigEntry<float> DriveDelaySeconds, DriveThrottle, StuckPedalChance;
@@ -172,9 +172,10 @@ namespace Apocapatrol
                 new AcceptableValueRange<float>(0f, 100f)));
             PassengerTakeoverSeconds = Config.Bind("Passenger", "TakeoverSeconds", 2f, new ConfigDescription(
                 "A passenger that takes the wheel drives off this long after climbing over, s", new AcceptableValueRange<float>(0f, 60f)));
-            EjectDistance = Config.Bind("Passenger", "EjectDistance", 4f, new ConfigDescription(
-                "Before taking the wheel, the dead driver's carcass is put down this far to the car's left (and 2 m behind), m",
-                new AcceptableValueRange<float>(2f, 15f)));
+            ExitDistance = Config.Bind("Passenger", "ExitDistance", 1.8f, new ConfigDescription(
+                "How far from its seat an occupant lands when leaving the car: a bailing passenger on its side, the dead driver's carcass on the left, m",
+                new AcceptableValueRange<float>(1f, 15f)));
+            Config.Remove(new ConfigDefinition("Passenger", "EjectDistance"));
             StuckPedalTakeoverSeconds = Config.Bind("Passenger", "StuckPedalTakeoverSeconds", 6f, new ConfigDescription(
                 "With a dead driver's foot stuck on the gas, a live passenger kicks it off after this long so the car can stop, s",
                 new AcceptableValueRange<float>(0f, 120f)));
