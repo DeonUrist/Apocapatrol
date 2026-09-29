@@ -43,6 +43,7 @@ namespace Apocapatrol
         internal static void Hit(GameObject car, string body, int kind, float rel, Collider hit, Vector3 carVel)
         {
             if (!Plugin.RamDamage.Value || car == null || kind == 0) return;
+            if (kind == 2 && !Plugin.RamDamageInCar.Value) return;                  // in the player's car: only with the toggle
             float kmh = rel * 3.6f;
             float full = Mathf.Max(1f, Plugin.RamFullSpeedKmh.Value);
             if (kmh < full * 0.5f) return;                                          // below half the full-damage speed: nothing
@@ -104,7 +105,7 @@ namespace Apocapatrol
             if (dir.sqrMagnitude < 0.25f) { dir = player.position - car.transform.position; dir.y = 0f; }
             if (dir.sqrMagnitude < 1e-4f) dir = car.transform.forward;
             dir.Normalize();
-            var v = dir * (0.5f * rel * strength) + Vector3.up * (2.5f * strength);
+            var v = dir * (rel * strength) + Vector3.up * (5f * strength);         // 1 = the impact speed itself plus a 5 m/s hop
             if (movement != null && movement.enabled)
             {
                 if (_pausedMovement != null && _pausedMovement != movement && _pausedMovement.gameObject != null) _pausedMovement.enabled = true;
