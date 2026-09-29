@@ -22,11 +22,21 @@ namespace Apocapatrol
             PatrolPersistence.Tick(this);
             if (!InGame()) return;
             if (Plugin.Pressed(Plugin.SaveTemplateKey.Value)) { CarTemplate.PrintCurrentAsParkEntry(); return; }
+            var menu = GetComponent<TemplateMenu>();
+            if (menu != null && menu.IsOpen) return;
             if (_busy || !Plugin.Pressed(Plugin.SpawnKey.Value)) return;
             StartCoroutine(Build(CarTemplate.Current()));
         }
 
-        private bool InGame()
+        // builds a template (from the F8 menu); one at a time
+        internal void Spawn(CarTemplate t)
+        {
+            if (_busy) { Plugin.Log.LogInfo("Spawn: a build is still running"); return; }
+            if (!InGame()) return;
+            StartCoroutine(Build(t));
+        }
+
+        internal bool InGame()
         {
             if (Time.unscaledTime >= _nextRefScan && (!Alive(_menu) || !Alive(_saveLoad)))
             {

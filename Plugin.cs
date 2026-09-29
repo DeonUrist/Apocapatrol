@@ -17,12 +17,12 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.14.2";
+        public const string VERSION = "0.15.0";
 
         internal static ManualLogSource Log;
 
         internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel, Seat, PassengerSeat, Driver, Passenger, Template, TemplateName;
-        internal static ConfigEntry<Key> SaveTemplateKey;
+        internal static ConfigEntry<Key> SaveTemplateKey, MenuKey;
         internal static ConfigEntry<bool> ReleaseHandbrake, RegisterDriver;
         internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
         internal static ConfigEntry<bool> PassengerRangedCombat, DriverRangedCombat;
@@ -243,6 +243,7 @@ namespace Apocapatrol
             if (!exposePose) ArmPoseProfile.RemoveStoredConfiguration(Config);
 
             SpawnKey = Config.Bind("Debug", "SpawnKey", Key.F7, "Assemble one car in front of the player. None = off");
+            MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.F8, "Open the template spawner: a list of the park, click a car to build it in front of you. None = off");
             SaveTemplateKey = Config.Bind("Debug", "TemplateKey", Key.F9, "Print the [Build]/[Driver]/[Passenger] fields as a park entry (Templates.cs) to the log. None = off");
             Config.Remove(new ConfigDefinition("Debug", "SaveTemplateKey"));
             VerboseLog = Config.Bind("Debug", "VerboseLog", true, "Log every build step (prefab lookups, hinge states, engine state)");
@@ -278,6 +279,7 @@ namespace Apocapatrol
             _runner = new GameObject("Apocapatrol.Runner") { hideFlags = HideFlags.HideAndDontSave };
             UnityEngine.Object.DontDestroyOnLoad(_runner);
             _runner.AddComponent<Patrol>();
+            _runner.AddComponent<TemplateMenu>();
         }
 
         internal static void Verbose(string msg)
