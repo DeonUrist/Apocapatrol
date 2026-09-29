@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.13.2)
+# Apocapatrol (prototype 0.13.3)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -14,8 +14,9 @@ driver, passenger (prefab names or in-game item names, empty = no part). `[Build
 `[Build]`/`[Driver]`/`[Passenger]` fields as before). To add a car: set it up in the fields, press `F9` (`TemplateKey`) - the log prints the
 matching `new CarTemplate(...)` line named `[Build] TemplateName` - and paste it into `Park`. Currently: **PipeRat_Basic** (PipeRat, 4× small_wheel_1,
 1.2L I4 engine, radiator_small, steeringwheel_7, poloska homemade seats, Scraffa driving, Sprokka passenger), **PipeRat_Advanced** (PipeRat,
-4× small_wheel_2, 2.8L V6 engine, Medium Radiator, steeringwheel_7, poloska homemade seats, Spanna driving, Lugnut passenger). A convoy spawner
-will draw from the park.
+4× small_wheel_2, 2.8L V6 engine, Medium Radiator, steeringwheel_7, poloska homemade seats, Spanna driving, Lugnut passenger), **Poloska_Basic**
+(PipeRat_Basic on a Poloska frame, Boltjaw passenger), **Poloska_Advanced** (Poloska frame, the 2.8L V6, otherwise PipeRat_Basic: Scraffa driving,
+Sprokka passenger). A convoy spawner will draw from the park.
 
 ## Seated pose (Pose.cs)
 The game has no sit animation, so after the Animator has posed an occupant each frame the mod overrides the Mixamo bones into a seated pose and
