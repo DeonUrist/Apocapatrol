@@ -326,13 +326,15 @@ namespace Apocapatrol
             return n;
         }
 
-        // Before the passenger climbs over: the dead driver's carcass (the <X>_Dead ragdoll its Health FSM dropped on the seat) is
-        // thrown out to the car's left. Its colliders are told to ignore the car and the passenger first, so whatever happens it
-        // cannot blow the car up; CorpseWatch then makes sure it really ends up outside the car.
-        internal static void EjectCorpses(GameObject car, GameObject pax)
+        // Before the passenger climbs over, the dead driver's carcass (the <X>_Dead ragdoll its Health FSM dropped on the seat)
+        // is thrown out of the car by physics: its colliders are told to ignore the car and the passenger first (so it cannot
+        // shove the car), joints to the car are cut, and every bone gets a sideways+up velocity. The returned CorpseEject is
+        // Done once the carcass is EjectDistance from the seat; if it has not got there after 3 s it is put down there once.
+        // Returns null when there is nothing to eject.
+        internal static CorpseEject EjectCorpses(GameObject car, GameObject pax)
         {
             var sit = FindChild(car.transform, "sitPos") ?? FindChild(car.transform, "hinge_seat_driver");
-            if (sit == null) return;
+            if (sit == null) return null;
             var roots = new List<Transform>();
             foreach (var c in Physics.OverlapSphere(sit.position, 3f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide))
             {
@@ -342,11 +344,10 @@ namespace Apocapatrol
                 if (root.name.IndexOf("_Dead", StringComparison.OrdinalIgnoreCase) < 0) continue;
                 if (!roots.Contains(root)) roots.Add(root);
             }
-            if (roots.Count == 0) { Plugin.Verbose("Eject: no carcass near the driver seat"); return; }
+            if (roots.Count == 0) { Plugin.Verbose("Eject: no carcass near the driver seat"); return null; }
             var carCols = car.GetComponentsInChildren<Collider>(true);
             var paxCols = pax != null ? pax.GetComponentsInChildren<Collider>(true) : new Collider[0];
             var left = -car.transform.right;
-            var carRb = car.GetComponent<Rigidbody>();
             foreach (var root in roots)
             {
                 int joints = 0, jointsToCar = 0;
@@ -361,17 +362,26 @@ namespace Apocapatrol
                     foreach (var b in carCols) if (b != null) Physics.IgnoreCollision(a, b, true);
                     foreach (var b in paxCols) if (b != null) Physics.IgnoreCollision(a, b, true);
                 }
-                // put it down on the ground well clear of the car (left and behind), no impulse at all
-                var target = sit.position + left * Plugin.EjectDistance.Value + Vector3.up * 2f;
-                var ground = target + Vector3.down * 1.5f;
-                foreach (var h in Physics.RaycastAll(target, Vector3.down, 8f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-                    if (h.collider != null && !h.collider.transform.IsChildOf(car.transform) && !h.collider.transform.IsChildOf(root) && h.point.y > ground.y) ground = h.point;
-                Throw(root, ground + Vector3.up * 0.4f, Vector3.zero);
-                Plugin.Log.LogInfo("Eject: " + root.name + " laid down " + Plugin.EjectDistance.Value + " m left of " + car.name + " (" + joints + " joints, "
-                    + jointsToCar + " were attached to the car); car v=" + (carRb != null ? carRb.velocity.magnitude.ToString("0.0") + " w=" + carRb.angularVelocity.magnitude.ToString("0.0") : "?"));
+                var velocity = left * Plugin.EjectSpeed.Value + Vector3.up * (Plugin.EjectSpeed.Value * 0.5f) - car.transform.forward * 0.5f;
+                Launch(root, velocity);
+                Plugin.Log.LogInfo("Eject: " + root.name + " thrown out of " + car.name + " at " + velocity.magnitude.ToString("0.0") + " m/s ("
+                    + joints + " joints, " + jointsToCar + " were attached to the car)");
             }
-            var watch = car.AddComponent<CorpseWatch>();
-            watch.Init(sit, roots, left);
+            var eject = car.AddComponent<CorpseEject>();
+            eject.Init(sit, roots, left);
+            return eject;
+        }
+
+        // Gives every bone of a ragdoll the same velocity (a shove), waking it up.
+        internal static void Launch(Transform root, Vector3 velocity)
+        {
+            foreach (var rb in root.GetComponentsInChildren<Rigidbody>(true))
+            {
+                if (rb.isKinematic) continue;
+                rb.WakeUp();
+                rb.velocity = velocity;
+                rb.angularVelocity = Vector3.zero;
+            }
         }
 
         // Moves a ragdoll as a whole (every rigidbody by the same offset) and gives all of it one velocity (zero = put down asleep).
@@ -405,7 +415,6 @@ namespace Apocapatrol
         {
             var sit = FindChild(car.transform, "sitPos") ?? FindChild(car.transform, "hinge_seat_driver");
             if (sit == null || pax == null) return null;
-            EjectCorpses(car, pax);
             var guard = pax.GetComponent<PassengerGuard>();
             var oldAnchor = pax.transform.parent;
             if (guard != null && Plugin.DriverRangedCombat.Value) Crew.MuteAi(pax, PassengerGuard.CombatFsms);
@@ -507,42 +516,49 @@ namespace Apocapatrol
             }
         }
 
-        // Guarantees an ejected carcass stays out of the car: for a few seconds after the throw, anything still within the seat
-    // area is moved out again (further each time). Removes itself when done.
-    internal class CorpseWatch : MonoBehaviour
+    // Follows a thrown carcass: Done once it is EjectDistance from the driver seat (the passenger only climbs over then);
+    // if it has not got there after 3 s (caught on something) it is put down at that distance once. Removes itself when done.
+    internal class CorpseEject : MonoBehaviour
     {
         private Transform _sit;
         private List<Transform> _roots;
         private Vector3 _left;
         private float _t, _nextCheck;
-        private int _pushes;
+        internal bool Done { get; private set; }
 
-        internal void Init(Transform sit, List<Transform> roots, Vector3 left) { _sit = sit; _roots = roots; _left = left; _nextCheck = 0.3f; }
+        internal void Init(Transform sit, List<Transform> roots, Vector3 left) { _sit = sit; _roots = roots; _left = left; }
+
+        private float Distance(Transform root)
+        {
+            var rb = root.GetComponentInChildren<Rigidbody>();
+            var p = rb != null ? rb.position : root.position;
+            var d = p - _sit.position; d.y = 0f;
+            return d.magnitude;
+        }
 
         private void FixedUpdate()
         {
-            if (_sit == null || _roots == null) { Destroy(this); return; }
+            if (Done) { Destroy(this); return; }
+            if (_sit == null || _roots == null) { Done = true; return; }
             _t += Time.fixedDeltaTime;
             if (_t < _nextCheck) return;
-            _nextCheck = _t + 0.3f;
-            var carRb = GetComponent<Rigidbody>();
-            if (carRb != null && _t < 4f)
-                Plugin.Verbose("Eject: t=" + _t.ToString("0.0") + " car v=" + carRb.velocity.magnitude.ToString("0.0") + " w=" + carRb.angularVelocity.magnitude.ToString("0.0")
-                    + " up.y=" + transform.up.y.ToString("0.00") + " " + Nwh.Diag(gameObject));
-            bool anyInside = false;
+            _nextCheck = _t + 0.1f;
+            bool clear = true;
+            foreach (var root in _roots)
+                if (root != null && Distance(root) < Plugin.EjectDistance.Value) clear = false;
+            if (clear) { Done = true; Plugin.Verbose("Eject: carcass clear of the seat after " + _t.ToString("0.0") + " s"); return; }
+            if (_t < 3f) return;
             foreach (var root in _roots)
             {
-                if (root == null) continue;
-                var rb = root.GetComponentInChildren<Rigidbody>();
-                var p = rb != null ? rb.position : root.position;
-                var d = p - _sit.position; d.y = 0f;
-                if (d.magnitude >= 1.8f) continue;
-                anyInside = true;
-                _pushes++;
-                Patrol.Throw(root, _sit.position + _left * (Plugin.EjectDistance.Value + _pushes) + Vector3.up * 1f, Vector3.zero);
-                Plugin.Log.LogInfo("Eject: " + root.name + " was still in the car, moved out again (" + _pushes + ")");
+                if (root == null || Distance(root) >= Plugin.EjectDistance.Value) continue;
+                var target = _sit.position + _left * Plugin.EjectDistance.Value + Vector3.up * 2f;
+                var ground = target + Vector3.down * 1.5f;
+                foreach (var h in Physics.RaycastAll(target, Vector3.down, 8f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                    if (h.collider != null && !h.collider.transform.IsChildOf(transform) && !h.collider.transform.IsChildOf(root) && h.point.y > ground.y) ground = h.point;
+                Patrol.Throw(root, ground + Vector3.up * 0.4f, Vector3.zero);
+                Plugin.Log.LogInfo("Eject: " + root.name + " did not get clear in 3 s, put down " + Plugin.EjectDistance.Value + " m left of the seat");
             }
-            if (!anyInside && _t > 1f || _t > 6f) { Plugin.Verbose("Eject: done, " + _pushes + " extra push(es)"); Destroy(this); }
+            Done = true;
         }
     }
 

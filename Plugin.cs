@@ -17,7 +17,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.12.0";
+        public const string VERSION = "0.12.1";
 
         internal static ManualLogSource Log;
 
@@ -27,7 +27,7 @@ namespace Apocapatrol
         internal static ConfigEntry<bool> PassengerRangedCombat, DriverRangedCombat;
         internal static ConfigEntry<float> DriverFireIntervalMin, DriverFireIntervalMax, DriverFireBurstSeconds;
         internal static ConfigEntry<float> PassengerFireArc, PassengerMaxAimPitch, PassengerAimTurnSpeed;
-        internal static ConfigEntry<float> PassengerBailChance, PassengerTakeoverSeconds, StuckPedalTakeoverSeconds, EjectDistance, BailDistance, StuckBailChance;
+        internal static ConfigEntry<float> PassengerBailChance, PassengerTakeoverSeconds, StuckPedalTakeoverSeconds, EjectDistance, EjectSpeed, BailDistance, StuckBailChance;
         internal static PoseBool PoseEnabled;
         internal static PoseFloat PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLeftLegCloser, PoseRightLegCloser, PoseLeftArmCloser, PoseRightArmCloser;
         internal static ConfigEntry<float> DriveDelaySeconds, DriveThrottle, StuckPedalChance;
@@ -188,8 +188,10 @@ namespace Apocapatrol
             PassengerTakeoverSeconds = Config.Bind("Passenger", "TakeoverSeconds", 2f, new ConfigDescription(
                 "A passenger that takes the wheel drives off this long after climbing over, s", new AcceptableValueRange<float>(0f, 60f)));
             EjectDistance = Config.Bind("Passenger", "EjectDistance", 1.8f, new ConfigDescription(
-                "Before a passenger takes the wheel, the dead driver's carcass is laid down this far to the left of the driver seat, m",
-                new AcceptableValueRange<float>(0.1f, 15f)));
+                "Before a passenger takes the wheel, the dead driver's carcass is thrown out to the left; the passenger climbs over once it is this far " +
+                "from the seat (if it is not after 3 s, it is put down there), m", new AcceptableValueRange<float>(0.1f, 15f)));
+            EjectSpeed = Config.Bind("Passenger", "EjectSpeed", 4f, new ConfigDescription(
+                "How hard the carcass is thrown out, m/s sideways (plus half of that upwards)", new AcceptableValueRange<float>(0.5f, 20f)));
             BailDistance = Config.Bind("Passenger", "BailDistance", 1.8f, new ConfigDescription(
                 "An occupant that gets out of the car appears this far beside its seat (passenger on its side, driver on the left), m",
                 new AcceptableValueRange<float>(0.1f, 15f)));

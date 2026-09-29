@@ -27,6 +27,8 @@ namespace Apocapatrol
         private float _deadFor;               // seconds since the driver died
         private bool _paxDecided, _paxBails;  // the surviving passenger's decision (rolled once)
         private float _nextIgnore;            // periodic re-apply of occupant-vs-car collision ignores
+        private Patrol.CorpseEject _eject;           // the dead driver being thrown out; the passenger climbs over once it is Done
+        private bool _promoting;
 
         internal static Crew Attach(GameObject car, GameObject driver)
         {
@@ -193,6 +195,13 @@ namespace Apocapatrol
                 Plugin.Log.LogInfo("Crew: passenger " + pax.name + " will " + (_paxBails ? "bail out" : "take the wheel") + " once the car stops ("
                     + Plugin.PassengerBailChance.Value + " % bail roll)");
             }
+            if (_promoting)
+            {
+                if (_eject != null && !_eject.Done) return true;      // carcass still on its way out
+                _promoting = false; _eject = null;
+                FinishPromote(pax, marker);
+                return true;
+            }
             bool playerIn = PlayerInside();
             if (playerIn) _paxBails = true;
             if (_stuck && _deadFor >= Plugin.StuckPedalTakeoverSeconds.Value)
@@ -211,6 +220,15 @@ namespace Apocapatrol
             }
             Promote(pax, marker);
             return true;
+        }
+
+        // Step 1: throw the dead driver out; the climb-over follows once the carcass is clear (or right away if there is none).
+        private void Promote(GameObject pax, PatrolMarker marker)
+        {
+            _eject = Patrol.EjectCorpses(_car, pax);
+            if (_eject == null) { FinishPromote(pax, marker); return; }
+            _promoting = true;
+            Plugin.Log.LogInfo("Crew: " + pax.name + " waits for the dead driver to clear the seat");
         }
 
         // Called by the Pilot when it gives up (MaxRecovers reached). With [Driver] StuckBailChance the whole crew gets out
@@ -237,8 +255,8 @@ namespace Apocapatrol
             return true;
         }
 
-        // The passenger climbs onto the driver seat and Crew starts over with it as the driver.
-        private void Promote(GameObject pax, PatrolMarker marker)
+        // Step 2: the passenger climbs onto the driver seat and Crew starts over with it as the driver.
+        private void FinishPromote(GameObject pax, PatrolMarker marker)
         {
             if (_ctl != null && _ctl.Taken) _ctl.Release();
             if (_pilot != null) { _pilot.Detach(); _pilot = null; }

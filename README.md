@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.12.0)
+# Apocapatrol (prototype 0.12.1)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -95,8 +95,9 @@ car is left standing, seat free; otherwise the car waits `WaitSeconds` and tries
 ### When the driver dies
 A passenger that outlives the driver acts as soon as the car stands still (a stuck pedal is kicked off after `StuckPedalTakeoverSeconds`, 6 s):
 with `BailChance` % (25) it **bails out** - it is replaced by a fresh instance of its prefab `BailDistance` m beside its seat, stood on the ground, fully vanilla AI, registered like a
-spawned enemy (so the game saves it), with the health it had left; otherwise it **takes the wheel**: the dead driver's carcass is laid down on the ground `EjectDistance` m to the left of the seat first, with no impulse (its
-colliders ignore the car and the new driver, joints to the car are cut, and it is moved out again if it is still inside a moment later).
+spawned enemy (so the game saves it), with the health it had left; otherwise it **takes the wheel**: the dead driver's carcass is first thrown out to the left by physics (`EjectSpeed`; its colliders ignore the car and the new
+driver, joints to the car are cut) and the passenger climbs over only once it is `EjectDistance` from the seat - if it has not got there after 3 s
+(caught on something) it is put down at that distance once.
 Occupant-vs-car collision ignores are re-applied at the takeover and once a second while seated: Unity drops an ignore pair whenever a
 collider is toggled (weapon props, hitboxes), and a kinematic occupant with one live pair shoves the car around unopposed, then it climbs onto the driver seat, the seat
 locks again, and after `TakeoverSeconds` (2) it drives off with the driving AI. If the player got into the car first, the passenger always bails.
