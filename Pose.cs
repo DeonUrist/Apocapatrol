@@ -3,21 +3,28 @@ using UnityEngine;
 
 namespace Apocapatrol
 {
-    // Seated pose for a Mixamo-rigged human: after the Animator has posed the body (LateUpdate), the thighs are swung
-    // forward, the shins back down, the upper arms forward and the forearms up a little; the root is moved so the hips
-    // sit on the target point (sitPos + offsets). All angles/offsets are read live from the config so they can be tuned
-    // in the Apocasetter menu while looking at the driver.
+    // One fixed seated limb pose for every live occupant. A ranged passenger may rotate that fixed pose through the
+    // spine, but combat never receives control of the arms or legs.
     internal class Pose : MonoBehaviour
     {
         private Transform _root, _anchor;
-        private Transform _hips, _lUpLeg, _lLeg, _rUpLeg, _rLeg, _lArm, _lForeArm, _rArm, _rForeArm;
+        private Transform _hips, _spine, _spine1, _spine2;
+        private Transform _lUpLeg, _lLeg, _rUpLeg, _rLeg, _lArm, _lForeArm, _lHand, _rArm, _rForeArm, _rHand;
+        private ArmPoseProfile _armPose;
+        private readonly List<WeaponRoot> _weapons = new List<WeaponRoot>();
+        private bool _aimActive;
+        private Vector3 _aimPoint;
+        private float _aimYaw, _aimPitch;
+        private bool _lockSeatRotation;
+        private Quaternion _seatRotation;
         private bool _logged;
 
-        internal static Pose Apply(GameObject driver, Transform anchor)
+        internal static Pose Apply(GameObject occupant, Transform anchor, string humanType)
         {
-            var p = driver.GetComponent<Pose>() ?? driver.AddComponent<Pose>();
-            p._root = driver.transform;
+            var p = occupant.GetComponent<Pose>() ?? occupant.AddComponent<Pose>();
+            p._root = occupant.transform;
             p._anchor = anchor;
+            Plugin.HumanArmPoses.TryGetValue(humanType ?? "", out p._armPose);
             p.FindBones();
             return p;
         }
@@ -26,18 +33,46 @@ namespace Apocapatrol
         {
             var all = _root.GetComponentsInChildren<Transform>(true);
             _hips = Find(all, "Hips");
+            _spine = Find(all, "Spine"); _spine1 = Find(all, "Spine1"); _spine2 = Find(all, "Spine2");
             _lUpLeg = Find(all, "LeftUpLeg"); _lLeg = Find(all, "LeftLeg");
             _rUpLeg = Find(all, "RightUpLeg"); _rLeg = Find(all, "RightLeg");
-            _lArm = Find(all, "LeftArm"); _lForeArm = Find(all, "LeftForeArm");
-            _rArm = Find(all, "RightArm"); _rForeArm = Find(all, "RightForeArm");
+            _lArm = Find(all, "LeftArm"); _lForeArm = Find(all, "LeftForeArm"); _lHand = Find(all, "LeftHand");
+            _rArm = Find(all, "RightArm"); _rForeArm = Find(all, "RightForeArm"); _rHand = Find(all, "RightHand");
+            FindWeapons();
             var missing = new List<string>();
             if (_hips == null) missing.Add("Hips");
+            if (_spine == null || _spine1 == null || _spine2 == null) missing.Add("spine");
             if (_lUpLeg == null || _lLeg == null || _rUpLeg == null || _rLeg == null) missing.Add("legs");
-            if (_lArm == null || _lForeArm == null || _rArm == null || _rForeArm == null) missing.Add("arms");
+            if (_lArm == null || _lForeArm == null || _lHand == null || _rArm == null || _rForeArm == null || _rHand == null) missing.Add("arms/hands");
             Plugin.Log.LogInfo("Pose: bones " + (missing.Count == 0 ? "all found" : "missing " + string.Join(", ", missing.ToArray())));
         }
 
-        // Mixamo names are "mixamorig:LeftUpLeg" (sometimes "mixamorig_LeftUpLeg" or plain); match the tail, exact word
+        private void FindWeapons()
+        {
+            _weapons.Clear();
+            if (_lHand == null || _armPose == null || _armPose.Weapon == null) return;
+            foreach (Transform child in _lHand)
+            {
+                // Mixamo finger bones have no renderers. Each ranged weapon variant is a rendered direct child
+                // of LeftHand, so storing every rendered child also covers variants enabled later by WeaponType.
+                if (child.GetComponentInChildren<Renderer>(true) == null) continue;
+                _weapons.Add(new WeaponRoot(child, child.localPosition, child.localRotation));
+                Plugin.Verbose("Pose: weapon root " + child.name + " found under LeftHand");
+            }
+        }
+
+        internal void SetAim(Vector3 point, bool active)
+        {
+            _aimPoint = point;
+            _aimActive = active;
+        }
+
+        internal void ConfigurePassengerAim()
+        {
+            _lockSeatRotation = true;
+            _seatRotation = _root.localRotation;
+        }
+
         private static Transform Find(Transform[] all, string bone)
         {
             foreach (var t in all)
@@ -53,21 +88,52 @@ namespace Apocapatrol
         private void LateUpdate()
         {
             if (_root == null || _anchor == null) return;
-            var right = _anchor.right;   // the car's right axis: rotating about it swings limbs forward/back
+            if (_lockSeatRotation) _root.localRotation = _seatRotation;
+            var right = _anchor.right;
+            var up = _anchor.up;
 
-            var up = _anchor.up;         // yaw about it brings a forward-pointing limb toward the body's centre line
-
-            // legs: thighs forward (then closer together), shins back down (relative to the thigh)
             float thigh = Plugin.PoseThigh.Value, knee = Plugin.PoseKnee.Value;
             Swing(_lUpLeg, -thigh, right); Swing(_lUpLeg, Plugin.PoseLeftLegCloser.Value, up); Swing(_lLeg, knee, right);
             Swing(_rUpLeg, -thigh, right); Swing(_rUpLeg, -Plugin.PoseRightLegCloser.Value, up); Swing(_rLeg, knee, right);
 
-            // arms: upper arms forward (then closer together), forearms bent up a little more
-            float arm = Plugin.PoseArm.Value, elbow = Plugin.PoseElbow.Value;
-            Swing(_lArm, -arm, right); Swing(_lArm, Plugin.PoseLeftArmCloser.Value, up); Swing(_lForeArm, -elbow, right);
-            Swing(_rArm, -arm, right); Swing(_rArm, -Plugin.PoseRightArmCloser.Value, up); Swing(_rForeArm, -elbow, right);
+            if (_armPose != null)
+            {
+                ApplyBone(_lArm, _lForeArm, _armPose.LeftArm, right, up);
+                ApplyBone(_lForeArm, _lHand, _armPose.LeftElbow, right, up);
+                ApplyBone(_lHand, _lForeArm, _armPose.LeftHand, right, up);
+                ApplyBone(_rArm, _rForeArm, _armPose.RightArm, right, up);
+                ApplyBone(_rForeArm, _rHand, _armPose.RightElbow, right, up);
+                ApplyBone(_rHand, _rForeArm, _armPose.RightHand, right, up);
+                ApplyWeapons();
+            }
+            else
+            {
+                float arm = Plugin.PoseArm.Value, elbow = Plugin.PoseElbow.Value;
+                Swing(_lArm, -arm, right); Swing(_lArm, Plugin.PoseLeftArmCloser.Value, up); Swing(_lForeArm, -elbow, right);
+                Swing(_rArm, -arm, right); Swing(_rArm, -Plugin.PoseRightArmCloser.Value, up); Swing(_rForeArm, -elbow, right);
+            }
 
-            // hips onto the seat point: move the whole body so the hips bone lands on anchor + offsets
+            // Arms remain permanently in the driver pose. Rotate that fixed upper-body pose through the spine only.
+            float wantedYaw = 0f, wantedPitch = 0f;
+            if (_aimActive && _spine2 != null)
+            {
+                var local = _anchor.InverseTransformDirection(_aimPoint - _spine2.position);
+                float flat = Mathf.Sqrt(local.x * local.x + local.z * local.z);
+                if (flat > 0.001f)
+                {
+                    wantedYaw = Mathf.Clamp(Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg,
+                        -Plugin.PassengerFireArc.Value, Plugin.PassengerFireArc.Value);
+                    wantedPitch = Mathf.Clamp(Mathf.Atan2(local.y, flat) * Mathf.Rad2Deg,
+                        -Plugin.PassengerMaxAimPitch.Value, Plugin.PassengerMaxAimPitch.Value);
+                }
+            }
+            float step = Plugin.PassengerAimTurnSpeed.Value * Time.deltaTime;
+            _aimYaw = Mathf.MoveTowardsAngle(_aimYaw, wantedYaw, step);
+            _aimPitch = Mathf.MoveTowardsAngle(_aimPitch, wantedPitch, step);
+            AimSpine(_spine, 0.25f, up, right);
+            AimSpine(_spine1, 0.35f, up, right);
+            AimSpine(_spine2, 0.40f, up, right);
+
             var target = _anchor.position + _anchor.right * Plugin.DriverOffsetX.Value + _anchor.up * Plugin.DriverOffsetY.Value
                        + _anchor.forward * Plugin.DriverOffsetZ.Value;
             var pivot = _hips != null ? _hips.position : _root.position;
@@ -80,6 +146,52 @@ namespace Apocapatrol
         {
             if (bone == null || degrees == 0f) return;
             bone.rotation = Quaternion.AngleAxis(degrees, axis) * bone.rotation;
+        }
+
+        private void AimSpine(Transform bone, float weight, Vector3 up, Vector3 right)
+        {
+            Swing(bone, _aimYaw * weight, up);
+            var yawedRight = Quaternion.AngleAxis(_aimYaw, up) * right;
+            Swing(bone, -_aimPitch * weight, yawedRight);
+        }
+
+        private static void ApplyBone(Transform bone, Transform joint, BonePoseConfig config, Vector3 right, Vector3 up)
+        {
+            if (bone == null || config == null) return;
+            Swing(bone, -config.Vertical.Value, right);
+            Swing(bone, config.Horizontal.Value, up);
+            Vector3 axis = joint != null ? joint.position - bone.position : bone.forward;
+            // Hands pass their forearm as the joint, so reverse that vector to keep the twist axis shoulder-to-fingertips.
+            if (bone.name.EndsWith("Hand") && joint != null) axis = bone.position - joint.position;
+            if (axis.sqrMagnitude > 0.000001f) Swing(bone, config.Rotation.Value, axis.normalized);
+        }
+
+        private void ApplyWeapons()
+        {
+            if (_armPose == null || _armPose.Weapon == null) return;
+            var config = _armPose.Weapon;
+            var offset = new Vector3(config.PositionX.Value, config.PositionY.Value, config.PositionZ.Value);
+            var rotation = Quaternion.Euler(config.RotationX.Value, config.RotationY.Value, config.RotationZ.Value);
+            foreach (var weapon in _weapons)
+            {
+                if (weapon.Transform == null) continue;
+                weapon.Transform.localPosition = weapon.LocalPosition + offset;
+                weapon.Transform.localRotation = weapon.LocalRotation * rotation;
+            }
+        }
+
+        private sealed class WeaponRoot
+        {
+            internal readonly Transform Transform;
+            internal readonly Vector3 LocalPosition;
+            internal readonly Quaternion LocalRotation;
+
+            internal WeaponRoot(Transform transform, Vector3 localPosition, Quaternion localRotation)
+            {
+                Transform = transform;
+                LocalPosition = localPosition;
+                LocalRotation = localRotation;
+            }
         }
     }
 }

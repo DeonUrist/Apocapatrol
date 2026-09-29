@@ -4,6 +4,8 @@ using UnityEngine;
 
 namespace Apocapatrol
 {
+    internal enum CrewPhase { Waiting, Driving, DeadStuck, DeadRolling, Released }
+
     // Lives on the car. Owns the driver: keeps its AI off, drives while it is alive, and keeps the player out of the
     // driver seat until it dies. On death the gas is either released (car rolls out by itself) or stays stuck.
     internal class Crew : MonoBehaviour
@@ -14,10 +16,11 @@ namespace Apocapatrol
         private Collider _enterTrigger;       // DriveTrigger SphereCollider = the "press F to drive" trigger
         private Rigidbody _rb;
         private InputControl _ctl;
-        private string[] _mutedNames;
+        private static readonly string[] MutedFsms =
+            { "Movement", "Unstuck", "Rotate", "Detection", "Attack", "RangedAttackWait", "Damage Ranged", "Codex", "Sound", "Sound2", "Sound3" };
 
         private float _seated;                // seconds since the driver sat down
-        private bool _driving, _dead, _done;
+        private bool _driving, _dead, _stuck, _done;
         private float _rolling, _nextLog;
 
         internal static Crew Attach(GameObject car, GameObject driver)
@@ -31,18 +34,57 @@ namespace Apocapatrol
         {
             _car = car; _driver = driver;
             _rb = car.GetComponent<Rigidbody>();
-            _health = driver.GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == "Health");
+            _health = driver != null ? driver.GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == "Health") : null;
             _drive = Patrol.FindFsm(car, "DriveTrigger", "Drive");
             var dt = Patrol.FindChild(car.transform, "DriveTrigger");
             if (dt != null) _enterTrigger = dt.GetComponents<Collider>().FirstOrDefault(c => c is SphereCollider);
-            _mutedNames = (Plugin.DriverDisabledFsms.Value ?? "").Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToArray();
             _ctl = new InputControl(car);
 
             // nobody else drives while the driver lives: no enter trigger (no F prompt), no Drive FSM (Activate events are ignored).
             // The car's DistanceKinematic FSM is left alone: re-enabling it restarts it in KinematicOn, which freezes a moving car.
-            SeatLocked(true);
-            Plugin.Log.LogInfo("Crew: driver " + driver.name + " seated, " + (Plugin.DriveDelaySeconds.Value < 0f ? "never drives" : "drives in " + Plugin.DriveDelaySeconds.Value + " s")
+            SeatLocked(driver != null);
+            Plugin.Log.LogInfo("Crew: driver " + (driver != null ? driver.name : "absent") + " seated, " + (Plugin.DriveDelaySeconds.Value < 0f ? "never drives" : "drives in " + Plugin.DriveDelaySeconds.Value + " s")
                 + (_enterTrigger != null ? "" : " (no enter trigger found!)") + (_drive != null ? "" : " (no Drive FSM found!)"));
+        }
+
+        internal static Crew Restore(GameObject car, GameObject driver, CrewPhase phase, float seated)
+        {
+            var c = car.GetComponent<Crew>() ?? car.AddComponent<Crew>();
+            c.Init(car, driver);
+            c._seated = Mathf.Max(0f, seated);
+            if (phase == CrewPhase.Driving)
+            {
+                if (!Nwh.EngineRunning(car)) Nwh.StartEngine(car);
+                c.StartDriving();
+            }
+            else if (phase == CrewPhase.DeadStuck)
+            {
+                c._dead = true; c._stuck = true; c._driving = true;
+                c.SeatLocked(false); c._ctl.Take();
+            }
+            else if (phase == CrewPhase.DeadRolling)
+            {
+                c._dead = true; c._driving = true;
+                c.SeatLocked(false); c._ctl.Take();
+            }
+            else if (phase == CrewPhase.Released)
+            {
+                c._dead = true; c._done = true;
+                c.SeatLocked(false);
+            }
+            return c;
+        }
+
+        internal GameObject Driver { get { return _driver; } }
+        internal float SeatedSeconds { get { return _seated; } }
+        internal CrewPhase Phase
+        {
+            get
+            {
+                if (_done) return CrewPhase.Released;
+                if (_dead) return _stuck ? CrewPhase.DeadStuck : CrewPhase.DeadRolling;
+                return _driving ? CrewPhase.Driving : CrewPhase.Waiting;
+            }
         }
 
         private void SeatLocked(bool locked)
@@ -53,18 +95,33 @@ namespace Apocapatrol
 
         // Switch off the AI / body-mover FSMs; called right after Instantiate (before their Start) and every frame as a guard,
         // because Detection/Damage carry EnableFSM actions that could switch them back on.
-        internal void MuteAi()
+        internal static void MuteAi(GameObject who, string[] allowedFsms = null)
         {
-            if (_driver == null) return;
-            foreach (var f in _driver.GetComponents<PlayMakerFSM>())
-                if (f.enabled && Array.IndexOf(_mutedNames, f.FsmName) >= 0) f.enabled = false;
+            if (who == null) return;
+            foreach (var f in who.GetComponents<PlayMakerFSM>())
+                if (f.enabled && Array.IndexOf(MutedFsms, f.FsmName) >= 0
+                    && (allowedFsms == null || Array.IndexOf(allowedFsms, f.FsmName) < 0)) f.enabled = false;
+        }
+
+        internal void MuteAi() { MuteAi(_driver); }
+
+        private static bool Alive(GameObject who, PlayMakerFSM health)
+        {
+            if (who == null) return false;                           // Health FSM destroyed it (carcass spawned)
+            if (who.transform.parent == null) return false;          // out of the seat somehow
+            if (health != null && health.Fsm.Initialized)
+            {
+                var h = health.FsmVariables.GetFsmFloat("Health");
+                if (h != null && h.Value <= 0f) return false;
+            }
+            return true;
         }
 
         private void Update()
         {
-            if (_done) return;
             if (_car == null) { Destroy(this); return; }
             if (Time.timeScale <= 0f) return;
+            if (_done) return;
 
             if (!_dead)
             {
@@ -77,26 +134,18 @@ namespace Apocapatrol
                 return;
             }
 
-            // dead, gas released: hold throttle 0 / no brakes until the car has rolled to a stop, or the player takes it over
-            if (PlayerInside()) { Plugin.Log.LogInfo("Crew: player took the car while it was rolling"); _done = true; return; }
-            Nwh.SetInput(_car, 0f, 0f, 0f);
+            // Dead driver: preserve a stuck pedal until takeover, or hold zero while the car rolls out.
+            if (PlayerInside()) { Plugin.Log.LogInfo("Crew: player took the car after its driver died"); _ctl.Release(); _done = true; return; }
+            Nwh.SetInput(_car, _stuck ? Plugin.DriveThrottle.Value : 0f, 0f, 0f);
+            if (_stuck) return;
             _rolling += Time.deltaTime;
             if (_rb != null && _rb.velocity.magnitude > 0.3f && _rolling < 120f) return;
             Plugin.Log.LogInfo("Crew: car rolled to a stop after " + _rolling.ToString("0.0") + " s");
+            _ctl.Release();
             _done = true;
         }
 
-        private bool DriverAlive()
-        {
-            if (_driver == null) return false;                       // Health FSM destroyed it (carcass spawned)
-            if (_driver.transform.parent == null) return false;      // out of the seat somehow
-            if (_health != null && _health.Fsm.Initialized)
-            {
-                var h = _health.FsmVariables.GetFsmFloat("Health");
-                if (h != null && h.Value <= 0f) return false;
-            }
-            return true;
-        }
+        private bool DriverAlive() { return Alive(_driver, _health); }
 
         private bool PlayerInside()
         {
@@ -137,11 +186,13 @@ namespace Apocapatrol
             bool stuck = UnityEngine.Random.Range(0f, 100f) < Plugin.StuckPedalChance.Value;
             if (stuck)
             {
+                _stuck = true;
+                _ctl.Take();
                 Nwh.SetInput(_car, Plugin.DriveThrottle.Value, 0f, 0f);
                 Plugin.Log.LogInfo("Crew: driver died at " + Speed() + " km/h - gas pedal stuck (" + Plugin.StuckPedalChance.Value + " % roll), seat free");
-                _done = true;
                 return;
             }
+            _ctl.Take();
             Nwh.SetInput(_car, 0f, 0f, 0f);
             Plugin.Log.LogInfo("Crew: driver died at " + Speed() + " km/h - gas released, rolling out, seat free");
         }

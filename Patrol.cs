@@ -19,6 +19,7 @@ namespace Apocapatrol
 
         private void Update()
         {
+            PatrolPersistence.Tick(this);
             if (!InGame()) return;
             if (_busy || !Plugin.Pressed(Plugin.SpawnKey.Value)) return;
             StartCoroutine(Build());
@@ -67,18 +68,21 @@ namespace Apocapatrol
                 parts += AttachAll(car, new[] { "hinge_radiator" }, Plugin.Radiator.Value, "radiator");
                 parts += AttachAll(car, new[] { "hinge_steeringwheel" }, Plugin.SteeringWheel.Value, "steeringwheel");
                 parts += AttachAll(car, new[] { "hinge_seat_driver" }, Plugin.Seat.Value, "seat");
+                parts += AttachAll(car, new[] { "hinge_seat_passenger" }, Plugin.PassengerSeat.Value, "seat");
                 Plugin.Log.LogInfo(parts + " parts attached");
 
                 if (Plugin.FillFuel.Value) Fuel(car);
                 if (Plugin.ReleaseHandbrake.Value) Handbrake(car, false);
 
                 yield return null;
-                bool hasDriver = false;
+                GameObject driver = null, passenger = null;
                 if (!string.IsNullOrEmpty(Plugin.Driver.Value))
                 {
-                    if (Plugin.Driver.Value.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase)) SeatDriver(car);
-                    else hasDriver = SeatLiveDriver(car);
+                    if (Plugin.Driver.Value.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase)) driver = SeatDriver(car, Plugin.Driver.Value);
+                    else driver = SeatLiveDriver(car, Plugin.Driver.Value);
                 }
+                if (!string.IsNullOrEmpty(Plugin.Passenger.Value)) passenger = SeatPassenger(car, Plugin.Passenger.Value);
+                PatrolMarker.Attach(car, body.name, Plugin.Driver.Value, driver, Plugin.Passenger.Value, passenger);
 
                 yield return new WaitForSeconds(1.5f);
                 if (Plugin.VerboseLog.Value) LogHingeStates(car);
@@ -106,7 +110,8 @@ namespace Apocapatrol
                     }
                 }
 
-                if (hasDriver) { Plugin.Log.LogInfo("Driver in place; the Crew component takes it from here"); yield break; }
+                if (driver != null && !Plugin.Driver.Value.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase))
+                { Plugin.Log.LogInfo("Driver in place; the Crew component takes it from here"); yield break; }
 
                 if (Plugin.DriveTestSeconds.Value > 0f)
                 {
@@ -207,20 +212,19 @@ namespace Apocapatrol
         // A ragdoll on the driver seat: the *_Dead prefab's root Rigidbody is made kinematic and parented to the car's sitPos
         // (where the player sits), so it rides along exactly; the bones hang off it through their CharacterJoints and keep
         // flopping. Collisions between the ragdoll and the car are ignored so it never gets thrown out by the car's colliders.
-        private static void SeatDriver(GameObject car)
+        internal static GameObject SeatDriver(GameObject car, string prefabName)
         {
-            var prefab = Prefabs.FindAny(Plugin.Driver.Value);
-            if (prefab == null) { Plugin.Log.LogWarning("Driver prefab not found: " + Plugin.Driver.Value); return; }
+            var prefab = Prefabs.FindAny(prefabName);
+            if (prefab == null) { Plugin.Log.LogWarning("Driver prefab not found: " + prefabName); return null; }
             var sit = FindChild(car.transform, "sitPos") ?? FindChild(car.transform, "hinge_seat_driver");
-            if (sit == null) { Plugin.Log.LogWarning("No sitPos on " + car.name); return; }
+            if (sit == null) { Plugin.Log.LogWarning("No sitPos on " + car.name); return null; }
 
             var off = new Vector3(Plugin.DriverOffsetX.Value, Plugin.DriverOffsetY.Value, Plugin.DriverOffsetZ.Value);
             var pos = sit.position + car.transform.right * off.x + car.transform.up * off.y + car.transform.forward * off.z;
             var rot = Quaternion.LookRotation(car.transform.forward, car.transform.up);
             var drv = UnityEngine.Object.Instantiate(prefab, pos, rot);
             drv.SetActive(true);
-            if (Plugin.RegisterDriver.Value) { Register.Name(drv, prefab.name); Register.Add(drv, false); }
-            else drv.name = prefab.name + "(Driver)";
+            drv.name = prefab.name + "(Driver)";
 
             var carCols = car.GetComponentsInChildren<Collider>(true);
             var drvCols = drv.GetComponentsInChildren<Collider>(true);
@@ -237,39 +241,85 @@ namespace Apocapatrol
             foreach (var rb in drv.GetComponentsInChildren<Rigidbody>(true))
                 if (rb != root) { bones++; rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
             Plugin.Log.LogInfo("Driver " + drv.name + " on " + sit.name + " at " + pos + " (" + bones + " ragdoll bones, " + drvCols.Length + " colliders)");
+            return drv;
         }
 
         // A live enemy at the wheel with its AI off: instantiated at sitPos, the mover/AI FSMs disabled before they Start,
         // root Rigidbody kinematic and parented to the seat, collisions with the car ignored. Health/Damage/Bodypart stay
         // vanilla so it can be shot; the Crew component drives the car and reacts to its death.
-        private static bool SeatLiveDriver(GameObject car)
+        internal static GameObject SeatLiveDriver(GameObject car, string prefabName, float health = -1f, CrewPhase phase = CrewPhase.Waiting, float seated = 0f)
         {
-            var prefab = Prefabs.FindAny(Plugin.Driver.Value);
-            if (prefab == null) { Plugin.Log.LogWarning("Driver prefab not found: " + Plugin.Driver.Value); return false; }
             var sit = FindChild(car.transform, "sitPos") ?? FindChild(car.transform, "hinge_seat_driver");
-            if (sit == null) { Plugin.Log.LogWarning("No sitPos on " + car.name); return false; }
+            if (sit == null) { Plugin.Log.LogWarning("No sitPos on " + car.name); return null; }
+            var drv = SeatOccupant(car, prefabName, sit, "Driver", false, health);
+            if (drv == null) return null;
+            var crew = phase == CrewPhase.Waiting && seated <= 0f ? Crew.Attach(car, drv) : Crew.Restore(car, drv, phase, seated);
+            crew.MuteAi();
+            return drv;
+        }
+
+        // The passenger sits where the driver would if the driver seat hinge were the passenger seat hinge: sitPos shifted
+        // by the offset between the two seat hinges (the game has no passenger sit point of its own).
+        internal static GameObject SeatPassenger(GameObject car, string prefabName, float health = -1f)
+        {
+            var sit = FindChild(car.transform, "sitPos");
+            var hd = FindChild(car.transform, "hinge_seat_driver");
+            var hp = FindChild(car.transform, "hinge_seat_passenger");
+            if (sit == null || hd == null || hp == null) { Plugin.Log.LogWarning("No sitPos / seat hinges for a passenger on " + car.name); return null; }
+            var anchor = new GameObject("Apocapatrol.PassengerPos").transform;
+            anchor.SetParent(car.transform, false);
+            anchor.position = sit.position + (hp.position - hd.position);
+            anchor.rotation = sit.rotation;
+            var pax = SeatOccupant(car, prefabName, anchor, "Passenger", true, health);
+            if (pax == null) { UnityEngine.Object.Destroy(anchor.gameObject); return null; }
+            PassengerGuard.Attach(pax, car, anchor);
+            return pax;
+        }
+
+        // A live enemy in a seat with its AI off: instantiated at the anchor, the mover/AI FSMs disabled by the Crew before
+        // they Start, root Rigidbody kinematic and parented to the anchor, collisions with the car ignored, seated pose.
+        // Health/Damage/Bodypart stay vanilla so it can be shot.
+        private static GameObject SeatOccupant(GameObject car, string prefabName, Transform anchor, string role, bool passenger, float health = -1f)
+        {
+            var prefab = Prefabs.FindAny(prefabName);
+            if (prefab == null) { Plugin.Log.LogWarning(role + " prefab not found: " + prefabName); return null; }
 
             var off = new Vector3(Plugin.DriverOffsetX.Value, Plugin.DriverOffsetY.Value, Plugin.DriverOffsetZ.Value);
-            var pos = sit.position + car.transform.right * off.x + car.transform.up * off.y + car.transform.forward * off.z;
+            var pos = anchor.position + car.transform.right * off.x + car.transform.up * off.y + car.transform.forward * off.z;
             var rot = Quaternion.LookRotation(car.transform.forward, car.transform.up);
-            var drv = UnityEngine.Object.Instantiate(prefab, pos, rot);
-            drv.SetActive(true);
-            var crew = Crew.Attach(car, drv);
-            crew.MuteAi();                                   // before the FSMs' Start
-            if (Plugin.RegisterDriver.Value) { Register.Name(drv, prefab.name); Register.Add(drv, false); }
-            else drv.name = prefab.name + "(Driver)";
+            var go = UnityEngine.Object.Instantiate(prefab, pos, rot);
+            go.SetActive(true);
+            if (passenger) PassengerGuard.Prepare(go);
+            else Crew.MuteAi(go);                            // before the FSMs' Start
+            go.name = prefab.name + "(" + role + ")";
 
-            foreach (var a in drv.GetComponentsInChildren<Collider>(true))
+            foreach (var a in go.GetComponentsInChildren<Collider>(true))
                 foreach (var b in car.GetComponentsInChildren<Collider>(true))
                     if (a != null && b != null) Physics.IgnoreCollision(a, b, true);
 
-            var root = drv.GetComponent<Rigidbody>() ?? drv.AddComponent<Rigidbody>();
+            var root = go.GetComponent<Rigidbody>() ?? go.AddComponent<Rigidbody>();
             root.isKinematic = true;
             root.interpolation = RigidbodyInterpolation.None;
-            drv.transform.SetParent(sit, true);
-            if (Plugin.PoseEnabled.Value) Pose.Apply(drv, sit);
-            Plugin.Log.LogInfo("Live driver " + drv.name + " on " + sit.name + " at " + pos);
-            return true;
+            go.transform.SetParent(anchor, true);
+            if (Plugin.PoseEnabled.Value) Pose.Apply(go, anchor, prefab.name);
+            if (health >= 0f) SetHealth(go, health);
+            Plugin.Log.LogInfo(role + " " + go.name + " on " + anchor.name + " at " + pos);
+            return go;
+        }
+
+        internal static float GetHealth(GameObject who)
+        {
+            if (who == null) return -1f;
+            var f = who.GetComponents<PlayMakerFSM>().FirstOrDefault(x => x.FsmName == "Health");
+            var h = f != null ? f.FsmVariables.GetFsmFloat("Health") : null;
+            return h != null ? h.Value : -1f;
+        }
+
+        private static void SetHealth(GameObject who, float value)
+        {
+            var f = who.GetComponents<PlayMakerFSM>().FirstOrDefault(x => x.FsmName == "Health");
+            var h = f != null ? f.FsmVariables.GetFsmFloat("Health") : null;
+            if (h != null) h.Value = value;
         }
 
         private static void LogHingeStates(GameObject car)
