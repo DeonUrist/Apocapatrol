@@ -78,7 +78,9 @@ namespace Apocapatrol
                 Time.timeScale = 0f;
             }
             Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
-            float w = 420f, h = Mathf.Min(Screen.height - 80f, 110f + CarTemplate.Park.Length * 34f);
+            int cars = 0, trucks = 0;
+            foreach (var t in CarTemplate.Park) { if (IsTruck(t)) trucks++; else cars++; }
+            float w = 640f, h = Mathf.Min(Screen.height - 80f, 130f + Mathf.Max(cars, trucks) * 32f);
             _rect = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
         }
 
@@ -110,11 +112,21 @@ namespace Apocapatrol
             GUILayout.Space(6f);
             _scroll = GUILayout.BeginScrollView(_scroll);
             CarTemplate chosen = null;
-            foreach (var t in CarTemplate.Park)
+            GUILayout.BeginHorizontal();
+            for (int col = 0; col < 2; col++)
             {
-                if (GUILayout.Button(t.Name, GUILayout.Height(28f))) chosen = t;
-                GUILayout.Space(2f);
+                GUILayout.BeginVertical(GUILayout.Width(300f));
+                GUILayout.Label(col == 0 ? "Cars" : "Trucks", header ?? GUI.skin.label);
+                foreach (var t in CarTemplate.Park)
+                {
+                    if (IsTruck(t) != (col == 1)) continue;
+                    if (GUILayout.Button(t.Name, GUILayout.Height(28f))) chosen = t;
+                    GUILayout.Space(2f);
+                }
+                GUILayout.EndVertical();
+                if (col == 0) GUILayout.Space(12f);
             }
+            GUILayout.EndHorizontal();
             GUILayout.EndScrollView();
             GUILayout.Space(6f);
             if (GUILayout.Button("Close")) Close();
@@ -126,6 +138,12 @@ namespace Apocapatrol
                 var patrol = GetComponent<Patrol>();
                 if (patrol != null) patrol.Spawn(chosen);
             }
+        }
+
+        private static bool IsTruck(CarTemplate t)
+        {
+            string b = t.Body ?? "";
+            return b.StartsWith("Rust", StringComparison.OrdinalIgnoreCase) || t.Cargo.Length > 0;
         }
 
         private static string Summary(CarTemplate t)

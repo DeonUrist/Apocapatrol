@@ -18,20 +18,13 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.18.1";
+        public const string VERSION = "0.19.0";
 
         internal static ManualLogSource Log;
 
         internal static ConfigEntry<Key> MenuKey;
-        internal static readonly Dictionary<string, ConfigEntry<string>> CargoSpecs = new Dictionary<string, ConfigEntry<string>>(StringComparer.OrdinalIgnoreCase);
         internal static readonly Dictionary<string, ConfigEntry<float>> LootChances = new Dictionary<string, ConfigEntry<float>>(StringComparer.OrdinalIgnoreCase);
-        internal static ConfigEntry<float> MinPartHealth, MaxPartHealth;
-
-        internal static string CargoSpec(string key)
-        {
-            ConfigEntry<string> e;
-            return key != null && CargoSpecs.TryGetValue(key, out e) ? e.Value : "";
-        }
+        internal static ConfigEntry<float> MinPartHealth, MaxPartHealth, LootMultiplier;
 
         internal static float LootChance(string key)
         {
@@ -189,14 +182,13 @@ namespace Apocapatrol
             AiInvertSteering = Config.Bind("AI", "InvertSteering", false,
                 "Flip the steering sign if the car turns away from the target instead of toward it");
 
+            LootMultiplier = Config.Bind("Loot", "Multiplier", 1f, new ConfigDescription(
+                "Scales the amount of loot in a truck: 0 = nothing, 1 = the built-in amounts (Food dogfood x6, Gasoline cans x4, Water cans x4, " +
+                "Medicine bandages x4 + first aid x2, Drugs alcohol x2 + weed x3 + weed plant x1, Weapons 0-3 guns + 3-8 ammo boxes), 3 = 300 %",
+                new AcceptableValueRange<float>(0f, 3f)));
             foreach (var d in CarTemplate.LootDefaults)
-            {
-                CargoSpecs[d[0]] = Config.Bind("Loot", d[0], d[1],
-                    d[0] + " load of a loot truck: prefab:count;prefab:min-max;... (prefab or in-game item names). " +
-                    "The items are locked in the covered bed like vanilla cargo until the player grabs them");
                 LootChances[d[0]] = Config.Bind("Loot", d[0] + "Chance", float.Parse(d[2]), new ConfigDescription(
                     "% chance that a loot truck carries " + d[0] + " (all XChance values should add up to 100)", new AcceptableValueRange<float>(0f, 100f)));
-            }
             MinPartHealth = Config.Bind("Loot", "MinPartHealth", 2f, new ConfigDescription(
                 "Lowest condition (%) of a spawned car's parts that have one (engine, radiator, wheels)", new AcceptableValueRange<float>(0f, 100f)));
             MaxPartHealth = Config.Bind("Loot", "MaxPartHealth", 35f, new ConfigDescription(

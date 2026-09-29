@@ -86,8 +86,10 @@ namespace Apocapatrol
                 if (!string.IsNullOrEmpty(tpl.Cargo))
                 {
                     string lootKey = tpl.Cargo.Equals("Random", StringComparison.OrdinalIgnoreCase) ? Cargo.RollLootType() : tpl.Cargo;
-                    Plugin.Log.LogInfo("Loot: " + lootKey + " (" + Plugin.CargoSpec(lootKey) + ")");
-                    cargo = Cargo.Load(car, Plugin.CargoSpec(lootKey));
+                    string spec = Cargo.SpecFor(lootKey);
+                    float scale = UnityEngine.Random.Range(Mathf.Min(tpl.LootScaleMin, tpl.LootScaleMax), Mathf.Max(tpl.LootScaleMin, tpl.LootScaleMax));
+                    Plugin.Log.LogInfo("Loot: " + lootKey + " (" + spec + ") x" + Plugin.LootMultiplier.Value + " x" + scale.ToString("0.00") + " (template)");
+                    cargo = Cargo.Load(car, spec, scale);
                 }
 
                 yield return null;

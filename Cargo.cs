@@ -36,9 +36,53 @@ namespace Apocapatrol
                 else int.TryParse(countText, out count);
                 var prefab = Prefabs.FindAny(name);
                 if (prefab == null) { Plugin.Log.LogWarning("Cargo: item prefab not found: " + name); continue; }
+                count = Scaled(count);
                 if (count > 0) slots.Add(new Slot { Prefab = prefab, Count = Mathf.Min(count, 200) });
             }
             return slots;
+        }
+
+        private static readonly string[] Weapons =
+        {
+            "akm_drum", "akm_trash", "akms", "9mm_borz_smg", "crossbow", "folk_17", "m16a1", "redmark_m11", "redmark_m11_scoped",
+            "rochester_m24", "rochester_m24_chopped", "slamberg_500", "slamberg_500_chopped", "slamfire_shotgun",
+            "22_pipe_pistol", "22_pipe_revolver", "22_pipe_smg", "blastlance_1"
+        };
+        private static readonly string[] AmmoBoxes =
+        {
+            "ammo_box_12gauge", "ammo_box_20gauge", "ammo_box_22", "ammo_box_3006", "ammo_box_556mm", "ammo_box_762mm", "ammo_box_9mm", "ammo_arrow"
+        };
+
+        // Weapons truck: 0-3 random weapons and 3-8 ammo boxes, each box a random calibre (before the loot multiplier).
+        internal static string WeaponsSpec()
+        {
+            var parts = new List<string>();
+            int guns = UnityEngine.Random.Range(0, 4);
+            for (int i = 0; i < guns; i++) parts.Add(Weapons[UnityEngine.Random.Range(0, Weapons.Length)] + ":1");
+            int boxes = UnityEngine.Random.Range(3, 9);
+            for (int i = 0; i < boxes; i++) parts.Add(AmmoBoxes[UnityEngine.Random.Range(0, AmmoBoxes.Length)] + ":1");
+            return string.Join(";", parts.ToArray());
+        }
+
+        // The item spec of a loot type (hardcoded in CarTemplate.LootDefaults; "@weapons" is rolled fresh every time).
+        internal static string SpecFor(string key)
+        {
+            foreach (var d in CarTemplate.LootDefaults)
+                if (string.Equals(d[0], key, StringComparison.OrdinalIgnoreCase)) return d[1] == "@weapons" ? WeaponsSpec() : d[1];
+            return "";
+        }
+
+        private static float _scale = 1f;   // the template's per-spawn factor for the current load
+
+        // [Loot] Multiplier x template factor: counts are scaled, fractions rounded by chance (x1.5 of 1 = 1 or 2), 0 = nothing at all
+        private static int Scaled(int count)
+        {
+            float m = Plugin.LootMultiplier.Value * _scale;
+            if (m <= 0f) return 0;
+            float v = count * m;
+            int n = Mathf.FloorToInt(v);
+            if (UnityEngine.Random.value < v - n) n++;
+            return n;
         }
 
         // Picks a loot type by the [Loot] XChance weights (they should add up to 100; any total works, it is normalised).
@@ -57,9 +101,11 @@ namespace Apocapatrol
         }
 
         // Fills the car's PhysicsLock volume with the items of the spec. Returns the spawned items (already locked).
-        internal static List<GameObject> Load(GameObject car, string spec)
+        internal static List<GameObject> Load(GameObject car, string spec, float factor)
         {
             var items = new List<GameObject>();
+            if (Plugin.LootMultiplier.Value <= 0f) { Plugin.Verbose("Cargo: loot multiplier 0, nothing loaded"); return items; }
+            _scale = Mathf.Max(0f, factor);
             var slots = Parse(spec);
             if (slots.Count == 0) return items;
 

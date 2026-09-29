@@ -19,16 +19,18 @@ namespace Apocapatrol
         internal string Body = "", Wheel = "", Engine = "", Radiator = "", SteeringWheel = "", Exhaust = "", Seat = "", PassengerSeat = "";
         internal string Driver = "", Passenger = "";
         internal string Cargo = "";           // "Random" = a loot type rolled by the [Loot] chances, or a fixed [Loot] key ("Food", ...); "" = empty bed
+        internal float LootScaleMin = 1f, LootScaleMax = 1f;   // per-spawn loot amount factor rolled in this range (on top of [Loot] Multiplier)
         internal bool FillFuel = true, ReleaseHandbrake = true;
 
-        // [Loot] entries: key, default item spec ("prefab:count;prefab:min-max;...", prefab or in-game names), default chance (%)
+        // loot types: key, item spec ("prefab:count;prefab:min-max;..."; "@weapons" = rolled by Cargo.WeaponsSpec), default chance (%)
         internal static readonly string[][] LootDefaults =
         {
-            new[] { "Food", "dogfood_can:6", "30" },
-            new[] { "Gasoline", "Gasoline_Can:4", "20" },
-            new[] { "Water", "Water_Can_Plastic:4", "25" },
+            new[] { "Food", "dogfood_can:6", "25" },
+            new[] { "Gasoline", "Gasoline_Can:4", "15" },
+            new[] { "Water", "Water_Can_Plastic:4", "20" },
             new[] { "Medicine", "bandage_1:4;first_aid_1:2", "15" },
             new[] { "Drugs", "alcohol_canister:2;weed_bag:3;plant_weed:1", "10" },
+            new[] { "Weapons", "@weapons", "15" },
         };
 
         internal CarTemplate() { }
@@ -69,6 +71,8 @@ namespace Apocapatrol
             // the loot truck = Rustcargo_Basic with a loaded bed; the load is rolled by the [Loot] XChance weights, items and amounts in [Loot]
             new CarTemplate("Rustcargo_Loot", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
                 "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Random" },
+            new CarTemplate("Rustcargo_Loot_Advanced", "Rustcargo", "truck_wheel_2_armored", "7L I6 165HP 542Nm Diesel", "radiator_truck_big", "steeringwheel_3", "exhaust_single",
+                "rustallion_seat_front", "rustallion_seat_front", "Sprokka", "Flexa", RamTargets.Cars) { Cargo = "Random", LootScaleMin = 1.5f, LootScaleMax = 2f },
         };
 
         internal static RamTargets ParseRams(string s)
