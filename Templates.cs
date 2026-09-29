@@ -29,6 +29,8 @@ namespace Apocapatrol
         {
             new CarTemplate("PipeRat_Basic", "PipeRat", "small_wheel_1", "1.2L I4 59HP 87Nm Gasoline", "radiator_small", "steeringwheel_7",
                 "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Sprokka"),
+            new CarTemplate("PipeRat_Advanced", "PipeRat", "small_wheel_2", "2.8L V6 115HP 183Nm Gasoline", "Medium Radiator", "steeringwheel_7",
+                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Spanna", "Lugnut"),
         };
 
         internal static string[] Names()
