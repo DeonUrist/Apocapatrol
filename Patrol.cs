@@ -104,17 +104,32 @@ namespace Apocapatrol
                 if (Plugin.DriveTestSeconds.Value > 0f)
                 {
                     Plugin.Log.LogInfo("Drive test: throttle " + Plugin.DriveTestThrottle.Value + " for " + Plugin.DriveTestSeconds.Value + " s");
-                    Nwh.AutoInput(car, false);
+                    var drive = FindFsm(car, "DriveTrigger", "Drive");
+                    var ctl = new InputControl(car);   // silences the game's INPUT FSMs, which write input.* from the axes every frame
+                    ctl.Take();
                     float t = 0f; var rb = car.GetComponent<Rigidbody>();
                     float report = 1f;
                     while (t < Plugin.DriveTestSeconds.Value && car != null)
                     {
+                        if (drive != null && drive.Fsm.Initialized && drive.ActiveStateName == "inCar")
+                        { Plugin.Log.LogInfo("Drive test aborted: player got in at t=" + t.ToString("0.0")); break; }
                         Nwh.SetInput(car, Plugin.DriveTestThrottle.Value, 0f, 0f);
                         t += Time.deltaTime;
-                        if (t >= report) { report += 1f; Plugin.Verbose("  t=" + t.ToString("0.0") + " speed " + (rb != null ? (rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h"); }
+                        if (t >= report) { report += 1f; Plugin.Verbose("  t=" + t.ToString("0.0") + " speed " + (rb != null ? (rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h  gear " + Nwh.Gear(car)); }
                         yield return null;
                     }
-                    if (car != null) { Nwh.SetInput(car, 0f, 0f, 1f); Plugin.Log.LogInfo("Drive test over: " + (rb != null ? (rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h"); }
+                    if (car != null)
+                    {
+                        Plugin.Log.LogInfo("Drive test over: " + (rb != null ? (rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h");
+                        bool playerIn = drive != null && drive.Fsm.Initialized && drive.ActiveStateName == "inCar";
+                        if (!playerIn)
+                        {
+                            float b = 0f;
+                            while (b < 3f && car != null && (rb == null || rb.velocity.magnitude > 0.3f)) { Nwh.SetInput(car, 0f, 0f, 1f); b += Time.deltaTime; yield return null; }
+                            if (car != null) { Nwh.SetInput(car, 0f, 0f, 0f); Handbrake(car, true); }
+                        }
+                        ctl.Release();
+                    }
                 }
             }
             finally { _busy = false; }
@@ -368,6 +383,37 @@ namespace Apocapatrol
         }
     }
 
+    // =============================================================== who writes VehicleController.input
+    // The car's DriveTrigger/INPUT FSMs (INPUT_AxisInput, INPUT_AxisSteering, ...) copy the legacy axes into input.Throttle/Brakes/
+    // Clutch/Steering every frame, player inside or not. While the mod drives, they are disabled; Release() restores them
+    // (single-state FSMs, so PlayMaker's restart-on-enable is harmless).
+    internal class InputControl
+    {
+        private static readonly string[] Names = { "INPUT_AxisInput", "INPUT_AxisSteering", "INPUT_NormalizedAxisInput", "INPUT_MouseSteering" };
+        private readonly List<PlayMakerFSM> _taken = new List<PlayMakerFSM>();
+        private readonly GameObject _car;
+        private bool _autoWas;
+
+        internal InputControl(GameObject car) { _car = car; }
+
+        internal void Take()
+        {
+            _taken.Clear();
+            foreach (var f in _car.GetComponentsInChildren<PlayMakerFSM>(true))
+                if (f.gameObject.name == "INPUT" && f.enabled && Array.IndexOf(Names, f.FsmName) >= 0) { f.enabled = false; _taken.Add(f); }
+            _autoWas = Nwh.AutoInput(_car, false);
+            Plugin.Verbose("Input control taken: " + _taken.Count + " INPUT FSMs paused, autoSetInput was " + _autoWas);
+        }
+
+        internal void Release()
+        {
+            foreach (var f in _taken) if (f != null) f.enabled = true;
+            _taken.Clear();
+            if (_car != null) Nwh.AutoInput(_car, _autoWas);
+            Plugin.Verbose("Input control released");
+        }
+    }
+
     // =============================================================== vanilla spawn recipe
     internal static class Register
     {
@@ -451,10 +497,23 @@ namespace Apocapatrol
             catch (Exception e) { Plugin.Log.LogWarning("StartEngine: " + e.Message); }
         }
 
-        internal static void AutoInput(GameObject car, bool on)
+        // returns the previous value
+        internal static bool AutoInput(GameObject car, bool on)
         {
-            try { var input = Get(Vc(car), "input"); if (!Set(input, "autoSetInput", on)) Plugin.Verbose("no autoSetInput"); }
-            catch (Exception e) { Plugin.Log.LogWarning("AutoInput: " + e.Message); }
+            try
+            {
+                var input = Get(Vc(car), "input");
+                var was = Get(input, "autoSetInput");
+                if (!Set(input, "autoSetInput", on)) Plugin.Verbose("no autoSetInput");
+                return was is bool ? (bool)was : false;
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("AutoInput: " + e.Message); return false; }
+        }
+
+        internal static string Gear(GameObject car)
+        {
+            try { var tr = Get(Get(Vc(car), "powertrain"), "transmission"); var g = Get(tr, "Gear"); return g != null ? g.ToString() : "?"; }
+            catch (Exception) { return "?"; }
         }
 
         internal static void SetHandbrake(GameObject car, float value)
