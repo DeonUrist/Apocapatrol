@@ -6,4 +6,4 @@ mcs -nostdlib -noconfig -target:library -langversion:latest -optimize+ -out:${1:
   -r:$B/BepInEx.dll \
   -r:$M/UnityEngine.dll -r:$M/UnityEngine.CoreModule.dll -r:$M/UnityEngine.PhysicsModule.dll -r:$M/UnityEngine.IMGUIModule.dll \
   -r:$M/Unity.InputSystem.dll -r:$M/PlayMaker.dll -r:$M/Assembly-CSharp.dll -r:$M/Assembly-CSharp-firstpass.dll \
-  Plugin.cs Patrol.cs Crew.cs Pilot.cs Passenger.cs Pose.cs Persistence.cs
+  Plugin.cs Patrol.cs Crew.cs Pilot.cs Passenger.cs Pose.cs Persistence.cs Templates.cs

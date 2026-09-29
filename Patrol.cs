@@ -21,8 +21,9 @@ namespace Apocapatrol
         {
             PatrolPersistence.Tick(this);
             if (!InGame()) return;
+            if (Plugin.Pressed(Plugin.SaveTemplateKey.Value)) { CarTemplate.SaveCurrentFromConfig(); return; }
             if (_busy || !Plugin.Pressed(Plugin.SpawnKey.Value)) return;
-            StartCoroutine(Build());
+            StartCoroutine(Build(CarTemplate.Current()));
         }
 
         private bool InGame()
@@ -43,16 +44,17 @@ namespace Apocapatrol
 
         // =============================================================== build
 
-        private IEnumerator Build()
+        private IEnumerator Build(CarTemplate tpl)
         {
             _busy = true;
             try
             {
                 Vector3 p, fwd;
                 if (!PlayerPose(out p, out fwd)) { Plugin.Log.LogWarning("No player found"); yield break; }
+                Plugin.Log.LogInfo("Building template " + tpl.Name + ": " + tpl.Describe());
 
-                var body = Prefabs.Find(Plugin.Body.Value, "vehicle");
-                if (body == null) { Plugin.Log.LogWarning("Body prefab not found: " + Plugin.Body.Value); yield break; }
+                var body = Prefabs.Find(tpl.Body, "vehicle");
+                if (body == null) { Plugin.Log.LogWarning("Body prefab not found: " + tpl.Body); yield break; }
 
                 var pos = p + fwd * Plugin.SpawnDistance.Value + Vector3.up * 1.0f;
                 var car = UnityEngine.Object.Instantiate(body, pos, Quaternion.LookRotation(fwd));
@@ -63,26 +65,26 @@ namespace Apocapatrol
                 yield return null;   // let the frame's FSMs start (hinges, getEngine, START ...)
 
                 int parts = 0;
-                parts += AttachAll(car, new[] { "hinge_wheel_FL", "hinge_wheel_FR", "hinge_wheel_RL", "hinge_wheel_RR" }, Plugin.Wheel.Value, "wheel");
-                parts += AttachAll(car, new[] { "hinge_engine" }, Plugin.Engine.Value, "engine");
-                parts += AttachAll(car, new[] { "hinge_radiator" }, Plugin.Radiator.Value, "radiator");
-                parts += AttachAll(car, new[] { "hinge_steeringwheel" }, Plugin.SteeringWheel.Value, "steeringwheel");
-                parts += AttachAll(car, new[] { "hinge_seat_driver" }, Plugin.Seat.Value, "seat");
-                parts += AttachAll(car, new[] { "hinge_seat_passenger" }, Plugin.PassengerSeat.Value, "seat");
+                parts += AttachAll(car, new[] { "hinge_wheel_FL", "hinge_wheel_FR", "hinge_wheel_RL", "hinge_wheel_RR" }, tpl.Wheel, "wheel");
+                parts += AttachAll(car, new[] { "hinge_engine" }, tpl.Engine, "engine");
+                parts += AttachAll(car, new[] { "hinge_radiator" }, tpl.Radiator, "radiator");
+                parts += AttachAll(car, new[] { "hinge_steeringwheel" }, tpl.SteeringWheel, "steeringwheel");
+                parts += AttachAll(car, new[] { "hinge_seat_driver" }, tpl.Seat, "seat");
+                parts += AttachAll(car, new[] { "hinge_seat_passenger" }, tpl.PassengerSeat, "seat");
                 Plugin.Log.LogInfo(parts + " parts attached");
 
-                if (Plugin.FillFuel.Value) Fuel(car);
-                if (Plugin.ReleaseHandbrake.Value) Handbrake(car, false);
+                if (tpl.FillFuel) Fuel(car);
+                if (tpl.ReleaseHandbrake) Handbrake(car, false);
 
                 yield return null;
                 GameObject driver = null, passenger = null;
-                if (!string.IsNullOrEmpty(Plugin.Driver.Value))
+                if (!string.IsNullOrEmpty(tpl.Driver))
                 {
-                    if (Plugin.Driver.Value.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase)) driver = SeatDriver(car, Plugin.Driver.Value);
-                    else driver = SeatLiveDriver(car, Plugin.Driver.Value);
+                    if (tpl.Driver.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase)) driver = SeatDriver(car, tpl.Driver);
+                    else driver = SeatLiveDriver(car, tpl.Driver);
                 }
-                if (!string.IsNullOrEmpty(Plugin.Passenger.Value)) passenger = SeatPassenger(car, Plugin.Passenger.Value);
-                PatrolMarker.Attach(car, body.name, Plugin.Driver.Value, driver, Plugin.Passenger.Value, passenger);
+                if (!string.IsNullOrEmpty(tpl.Passenger)) passenger = SeatPassenger(car, tpl.Passenger);
+                PatrolMarker.Attach(car, body.name, tpl.Driver, driver, tpl.Passenger, passenger);
 
                 yield return new WaitForSeconds(1.5f);
                 if (Plugin.VerboseLog.Value) LogHingeStates(car);
@@ -110,7 +112,7 @@ namespace Apocapatrol
                     }
                 }
 
-                if (driver != null && !Plugin.Driver.Value.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase))
+                if (driver != null && !tpl.Driver.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase))
                 { Plugin.Log.LogInfo("Driver in place; the Crew component takes it from here"); yield break; }
 
                 if (Plugin.DriveTestSeconds.Value > 0f)
