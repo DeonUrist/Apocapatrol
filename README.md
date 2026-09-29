@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.4.0)
+# Apocapatrol (prototype 0.4.1)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -16,7 +16,7 @@ A live enemy prefab is put on the car's `sitPos`: its AI and body-mover FSMs (`D
 ranged attack, Codex, sounds) are switched off before they start and kept off every frame; `Health`, `Damage` and the `Bodypart` colliders stay
 vanilla, so it can be shot and killed like any enemy (its own death flow drops the carcass). Root Rigidbody kinematic, parented to the seat,
 collisions with the car ignored. While it lives the player cannot take the car: the `DriveTrigger` enter collider and the `Drive` FSM are off.
-After `DriveDelaySeconds` (and once the engine runs) it drives: shifts into 1st and holds `DriveThrottle`, steering straight for now.
+After `DriveDelaySeconds` (and once the engine runs; 0 = at once, -1 = never) it drives: shifts into 1st and holds `DriveThrottle`, steering straight for now.
 When it dies: with `StuckPedalChance` % its leg stays on the gas (throttle kept, car keeps going); otherwise the gas is simply released and the car rolls out
 on engine braking and drag until it stands still. Either way the seat is free again and the player can drive the car. A `*_Dead` prefab as `Driver` gives the old ragdoll
 passenger instead; an empty `Driver` falls back to the `[Build]` drive test.

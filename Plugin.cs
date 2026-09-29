@@ -15,7 +15,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.4.0";
+        public const string VERSION = "0.4.1";
 
         internal static ManualLogSource Log;
 
@@ -68,21 +68,22 @@ namespace Apocapatrol
             DriverDisabledFsms = Config.Bind("Driver", "DisabledFsms", "Movement;Unstuck;Rotate;Detection;Attack;RangedAttackWait;Damage Ranged;Codex;Sound;Sound2;Sound3",
                 "FSMs switched off on a live driver (the AI and the body movers); Health/Damage/Bodypart stay on so it can be killed");
             DriveDelaySeconds = Config.Bind("Driver", "DriveDelaySeconds", 3f, new ConfigDescription(
-                "The driver sits still this long after spawning before driving off", new AcceptableValueRange<float>(0f, 600f)));
+                "The driver sits still this long after spawning before driving off (0 = drives as soon as the engine runs, -1 = never drives, just sits)",
+                new AcceptableValueRange<float>(-1f, 600f)));
             DriveThrottle = Config.Bind("Driver", "DriveThrottle", 0.5f, new ConfigDescription(
                 "Throttle the driver holds (0..1); steering straight for now", new AcceptableValueRange<float>(0.05f, 1f)));
             StuckPedalChance = Config.Bind("Driver", "StuckPedalChance", 5f, new ConfigDescription(
                 "% chance that a killed driver's gas pedal stays stuck; otherwise the gas is released and the car slowly rolls to a stop",
                 new AcceptableValueRange<float>(0f, 100f)));
             DriverOffsetX = Config.Bind("Driver", "OffsetX", 0f, new ConfigDescription("Where the driver's hips go: offset from the car's sitPos, right (m)", new AcceptableValueRange<float>(-2f, 2f)));
-            DriverOffsetY = Config.Bind("Driver", "OffsetY", 0f, new ConfigDescription("Where the driver's hips go: offset from the car's sitPos, up (m)", new AcceptableValueRange<float>(-2f, 2f)));
+            DriverOffsetY = Config.Bind("Driver", "OffsetY", -0.3f, new ConfigDescription("Where the driver's hips go: offset from the car's sitPos, up (m)", new AcceptableValueRange<float>(-2f, 2f)));
             DriverOffsetZ = Config.Bind("Driver", "OffsetZ", 0f, new ConfigDescription("Where the driver's hips go: offset from the car's sitPos, forward (m)", new AcceptableValueRange<float>(-2f, 2f)));
             RegisterDriver = Config.Bind("Driver", "RegisterDriver", false, "Register the driver like a vanilla spawn (saved, but the seat pin is not - after a load it is loose)");
 
             PoseEnabled = Config.Bind("Pose", "Enabled", true, "Seated pose for a live driver (bone override after the animation; Mixamo rigs)");
             PoseThigh = Config.Bind("Pose", "ThighAngle", 85f, new ConfigDescription("Thighs swung forward from hanging straight down (degrees; 90 = horizontal)", new AcceptableValueRange<float>(0f, 130f)));
-            PoseKnee = Config.Bind("Pose", "KneeAngle", 80f, new ConfigDescription("Shins swung back down relative to the thigh (degrees; = ThighAngle keeps them vertical, less = slight bend forward)", new AcceptableValueRange<float>(0f, 130f)));
-            PoseArm = Config.Bind("Pose", "ArmAngle", 70f, new ConfigDescription("Upper arms swung forward from hanging down (degrees; 90 = horizontal)", new AcceptableValueRange<float>(0f, 130f)));
+            PoseKnee = Config.Bind("Pose", "KneeAngle", 30f, new ConfigDescription("Shins swung back down relative to the thigh (degrees; = ThighAngle keeps them vertical, less = slight bend forward)", new AcceptableValueRange<float>(0f, 130f)));
+            PoseArm = Config.Bind("Pose", "ArmAngle", 65f, new ConfigDescription("Upper arms swung forward from hanging down (degrees; 90 = horizontal)", new AcceptableValueRange<float>(0f, 130f)));
             PoseElbow = Config.Bind("Pose", "ElbowAngle", 25f, new ConfigDescription("Extra forearm bend upward at the elbow (degrees)", new AcceptableValueRange<float>(0f, 130f)));
 
             SpawnKey = Config.Bind("Debug", "SpawnKey", Key.F7, "Assemble one car in front of the player. None = off");

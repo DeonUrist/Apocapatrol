@@ -41,7 +41,7 @@ namespace Apocapatrol
             // nobody else drives while the driver lives: no enter trigger (no F prompt), no Drive FSM (Activate events are ignored).
             // The car's DistanceKinematic FSM is left alone: re-enabling it restarts it in KinematicOn, which freezes a moving car.
             SeatLocked(true);
-            Plugin.Log.LogInfo("Crew: driver " + driver.name + " seated, drives in " + Plugin.DriveDelaySeconds.Value + " s"
+            Plugin.Log.LogInfo("Crew: driver " + driver.name + " seated, " + (Plugin.DriveDelaySeconds.Value < 0f ? "never drives" : "drives in " + Plugin.DriveDelaySeconds.Value + " s")
                 + (_enterTrigger != null ? "" : " (no enter trigger found!)") + (_drive != null ? "" : " (no Drive FSM found!)"));
         }
 
@@ -71,7 +71,8 @@ namespace Apocapatrol
                 if (!DriverAlive()) { OnDriverDied(); return; }
                 MuteAi();
                 _seated += Time.deltaTime;
-                if (!_driving && _seated >= Plugin.DriveDelaySeconds.Value && Nwh.EngineRunning(_car)) StartDriving();
+                float delay = Plugin.DriveDelaySeconds.Value;
+                if (!_driving && delay >= 0f && _seated >= delay && Nwh.EngineRunning(_car)) StartDriving();   // -1 = never
                 if (_driving) Drive();
                 return;
             }
