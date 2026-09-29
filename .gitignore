@@ -11,5 +11,3 @@ obj/
 LogOutput.log
 *.cfg
 
-# car templates shipped with the mod
-!Templates/*.cfg

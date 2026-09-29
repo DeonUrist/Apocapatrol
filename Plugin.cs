@@ -17,11 +17,11 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.13.0";
+        public const string VERSION = "0.13.1";
 
         internal static ManualLogSource Log;
 
-        internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel, Seat, PassengerSeat, Driver, Passenger, Template, SaveTemplateAs;
+        internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel, Seat, PassengerSeat, Driver, Passenger, Template, TemplateName;
         internal static ConfigEntry<Key> SaveTemplateKey;
         internal static ConfigEntry<bool> ReleaseHandbrake, RegisterDriver;
         internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
@@ -57,12 +57,12 @@ namespace Apocapatrol
                 "To expose seat offsets, shared pose settings and all per-human controls, uncomment the next line and restart:\n" +
                 "PoseConfiguration = true");
 
-            CarTemplate.EnsureBuiltins();
             Template = Config.Bind("Build", "Template", "",
-                "Car template to build with the spawn key: a file name (without .cfg) from BepInEx/config/Apocapatrol/Templates. " +
-                "Empty = the Body/Wheel/.../Driver/Passenger fields below. Available now: " + string.Join(", ", CarTemplate.List()));
-            SaveTemplateAs = Config.Bind("Build", "SaveAs", "",
-                "Name for the template written by the SaveTemplateKey from the fields below (empty = <Body>_Custom)");
+                "Car template from the built-in park to build with the spawn key: " + string.Join(", ", CarTemplate.Names()) +
+                ". Empty = the Body/Wheel/.../Driver/Passenger fields below");
+            TemplateName = Config.Bind("Build", "TemplateName", "",
+                "Name used when the TemplateKey prints the fields below as a park entry to the log (empty = <Body>_Custom)");
+            Config.Remove(new ConfigDefinition("Build", "SaveAs"));
             Body = Config.Bind("Build", "Body", "PipeRat", "Vehicle frame prefab (e.g. PipeRat, Duke, TinyTyrant)");
             Wheel = Config.Bind("Build", "Wheel", "small_wheel_1",
                 "Wheel item, prefab name or in-game name (e.g. small_wheel_1 or \"Small rubbish wheel\"); one per hinge_wheel_*");
@@ -236,7 +236,8 @@ namespace Apocapatrol
             if (!exposePose) ArmPoseProfile.RemoveStoredConfiguration(Config);
 
             SpawnKey = Config.Bind("Debug", "SpawnKey", Key.F7, "Assemble one car in front of the player. None = off");
-            SaveTemplateKey = Config.Bind("Debug", "SaveTemplateKey", Key.F9, "Save the [Build]/[Driver]/[Passenger] fields as the template [Build] SaveAs. None = off");
+            SaveTemplateKey = Config.Bind("Debug", "TemplateKey", Key.F9, "Print the [Build]/[Driver]/[Passenger] fields as a park entry (Templates.cs) to the log. None = off");
+            Config.Remove(new ConfigDefinition("Debug", "SaveTemplateKey"));
             VerboseLog = Config.Bind("Debug", "VerboseLog", true, "Log every build step (prefab lookups, hinge states, engine state)");
             AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances");
 

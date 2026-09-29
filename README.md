@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.13.0)
+# Apocapatrol (prototype 0.13.1)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -8,13 +8,12 @@ Default build: **PipeRat** frame, 4 × `small_wheel_1`, `1.2L I4 59HP 87Nm Gasol
 wheel and a **Flexa** on the passenger seat (`[Driver] Driver`, `[Passenger] Passenger`). The passenger has no AI either: it sits (same pose and
 offsets, at sitPos shifted by the distance between the two seat hinges) until killed; its death changes nothing about the driving.
 
-## Car templates (Templates.cs)
-A template is one file `BepInEx/config/Apocapatrol/Templates/<Name>.cfg` with `Key = value` lines: `Body`, `Wheel`, `Engine`, `Radiator`,
-`SteeringWheel`, `Seat`, `PassengerSeat`, `Driver`, `Passenger`, `FillFuel`, `ReleaseHandbrake` (prefab names or in-game item names, empty = no part).
-`[Build] Template` names the one the spawn key builds (empty = the `[Build]`/`[Driver]`/`[Passenger]` fields as before). `F9` (`SaveTemplateKey`)
-writes those fields to a new template named `[Build] SaveAs`. Shipped: **PipeRat_Basic** (PipeRat, 4× small_wheel_1, 1.2L I4 engine, radiator_small,
-steeringwheel_7, poloska homemade seats, Scraffa driving, Sprokka passenger) - written once if missing, never overwritten. The park of templates is
-what a convoy spawner will draw from.
+## Car templates - the park (Templates.cs)
+The park is hardcoded: `CarTemplate.Park[]` lists each car as name, body, wheel, engine, radiator, steering wheel, driver seat, passenger seat,
+driver, passenger (prefab names or in-game item names, empty = no part). `[Build] Template` names the one the spawn key builds (empty = the
+`[Build]`/`[Driver]`/`[Passenger]` fields as before). To add a car: set it up in the fields, press `F9` (`TemplateKey`) - the log prints the
+matching `new CarTemplate(...)` line named `[Build] TemplateName` - and paste it into `Park`. Currently: **PipeRat_Basic** (PipeRat, 4× small_wheel_1,
+1.2L I4 engine, radiator_small, steeringwheel_7, poloska homemade seats, Scraffa driving, Sprokka passenger). A convoy spawner will draw from the park.
 
 ## Seated pose (Pose.cs)
 The game has no sit animation, so after the Animator has posed an occupant each frame the mod overrides the Mixamo bones into a seated pose and

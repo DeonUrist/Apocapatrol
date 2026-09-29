@@ -21,7 +21,7 @@ namespace Apocapatrol
         {
             PatrolPersistence.Tick(this);
             if (!InGame()) return;
-            if (Plugin.Pressed(Plugin.SaveTemplateKey.Value)) { CarTemplate.SaveCurrentFromConfig(); return; }
+            if (Plugin.Pressed(Plugin.SaveTemplateKey.Value)) { CarTemplate.PrintCurrentAsParkEntry(); return; }
             if (_busy || !Plugin.Pressed(Plugin.SpawnKey.Value)) return;
             StartCoroutine(Build(CarTemplate.Current()));
         }
