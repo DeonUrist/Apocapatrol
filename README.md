@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.16.0)
+# Apocapatrol (prototype 0.16.2)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -24,8 +24,9 @@ matching `new CarTemplate(...)` line named `[Build] TemplateName` - and paste it
 Sprokka passenger), **TinyTyrant_Basic** / **TinyTyrant_Advanced** (PipeRat_Basic / PipeRat_Advanced on a TinyTyrant frame), **Junker_Basic** / **Junker_Advanced** (Junker, small_wheel_1, 2.3L I4 engine, Medium
 Radiator, Sprokka driving, Lugnut / Flexa passenger) - all eight ram Pedestrians; **Rustcargo_Basic** (Rustcargo truck, truck_wheel_1, 5.8L I6 diesel,
 Truck Radiator, rustallion seats, Spanna driving, Flexa passenger) and **Rustcargo_Advanced** (truck_wheel_2_armored, 7L I6 diesel, Big Truck
-Radiator, Sprokka driving, Flexa passenger) ram Cars. Every car gets an exhaust on `hinge_exhaust` (single / v6 / the_four / poloska /
-rustallion, matched to the engine and frame). A convoy spawner will draw from the park.
+Radiator, Sprokka driving, Flexa passenger) ram Cars. Every car gets an exhaust on `hinge_exhaust`: `poloska_exhaust` on the small cars (the game's
+own choice - the other small exhaust items are upright header models and stand vertical on that hinge), `exhaust_single_big` / `exhaust_duo_big`
+stacks on the trucks. A convoy spawner will draw from the park.
 
 ## Cargo trucks (Cargo.cs)
 Every vehicle has `parts/PhysicsLock`: two BoxColliders on layer 18, the floor and ceiling of its cargo volume. Vanilla items carry a `LockPhysics`

@@ -17,7 +17,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.16.1";
+        public const string VERSION = "0.16.2";
 
         internal static ManualLogSource Log;
 
@@ -78,8 +78,9 @@ namespace Apocapatrol
             Engine = Config.Bind("Build", "Engine", "1.2L I4 59HP 87Nm Gasoline", "Engine item, prefab name or in-game name");
             Radiator = Config.Bind("Build", "Radiator", "radiator_small", "Radiator item, prefab name or in-game name (empty = none)");
             SteeringWheel = Config.Bind("Build", "SteeringWheel", "steeringwheel_7", "Steering wheel item, prefab name or in-game name (empty = none)");
-            Exhaust = Config.Bind("Build", "Exhaust", "exhaust_single", "Exhaust item, prefab name or in-game name (empty = none): exhaust_single/_big, exhaust_duo/_big, " +
-                "exhaust_quad/_big, exhaust_the_four, exhaust_the_six, exhaust_v6, exhaust_v8, exhaust_buggy, poloska_exhaust, rustallion_exhaust_1..3");
+            Exhaust = Config.Bind("Build", "Exhaust", "poloska_exhaust", "Exhaust item, prefab name or in-game name (empty = none). Tailpipes that sit right on hinge_exhaust: poloska_exhaust (the game's own choice " +
+                "on small cars), rustallion_exhaust_1..3, exhaust_single_big / exhaust_duo_big (truck stacks); exhaust_single/duo/quad, exhaust_the_four/six, " +
+                "exhaust_v6/v8 are upright header models and stand vertical on that hinge");
             Seat = Config.Bind("Build", "Seat", "poloska_seat_front_homemade", "Driver seat item, prefab name or in-game name (empty = none)");
             PassengerSeat = Config.Bind("Build", "PassengerSeat", "poloska_seat_front_homemade", "Front passenger seat item, prefab name or in-game name (empty = none)");
             ReleaseHandbrake = Config.Bind("Build", "ReleaseHandbrake", true, "Release the handbrake (handbrake lever FSM -> HandbrakeOff)");
