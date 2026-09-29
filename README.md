@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.11.0)
+# Apocapatrol (prototype 0.12.0)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -79,6 +79,13 @@ The ranged prefabs' separate right-hand melee props (`machete`, `old_knife`, or 
 the close-range state from visually drawing a blade without affecting the left-hand firearm, burst cadence, muzzle effects, or firing sound.
 Their melee `Damage` and contact `FireDamage` FSM actions are neutralized and `FireDamageCollider` is disabled as well, so native FSMs cannot
 re-enable an invisible close-range hit. Projectile damage continues through the separate `Damage Ranged` FSM.
+
+### A shooting driver
+With `[Driver] RangedCombat` a ranged human at the wheel gets the same treatment as a ranged passenger (vanilla detection, ranged-only attack
+inside `FireArcHalfAngle`, spine aiming) but only in **bursts**: every `FireIntervalMin`..`FireIntervalMax` seconds, once a target is inside the
+arc, it fires for `FireBurstSeconds`. Between bursts its Attack FSM is off and it sits in the generic driver pose (`[Pose]` ArmAngle / ElbowAngle /
+ArmCloser, hands on the wheel); the per-human `[Pose.<human>]` shooting profile and weapon offsets apply only while it fires. A passenger promoted
+to the wheel switches to this mode.
 
 ### When the car is stuck for good
 When the pilot has reversed out `MaxRecovers` times in a row without getting anywhere, `[Driver] StuckBailChance` % (50) of the time the whole crew

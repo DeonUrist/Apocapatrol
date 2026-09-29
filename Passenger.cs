@@ -20,8 +20,13 @@ namespace Apocapatrol
         private GameObject[] _meleeWeapons;
         private Pose _pose;
         private bool _rangedPrefab, _ranged, _targetDiagnosticLogged, _targetAcquired;
+        // driver mode: the same combat, but only in random bursts; the driver pose in between
+        private bool _driverMode, _shooting;
+        private float _nextBurst, _burstUntil;
 
-        internal static void Prepare(GameObject passenger)
+        internal static bool IsRangedHuman(GameObject who) { return IsRanged(who); }
+
+        internal static void Prepare(GameObject passenger, bool combatAllowed)
         {
             bool ranged = IsRanged(passenger);
             if (ranged)
@@ -29,16 +34,46 @@ namespace Apocapatrol
                 ForceRangedOnly(passenger);
                 NeutralizeMeleeDamage(passenger);
             }
-            Crew.MuteAi(passenger, ranged && Plugin.PassengerRangedCombat.Value ? CombatFsms : null);
+            Crew.MuteAi(passenger, ranged && combatAllowed ? CombatFsms : null);
         }
 
-        private static void MuteNonCombatAi(GameObject passenger)
+        private static void MuteNonCombatAi(GameObject passenger, bool combatAllowed)
         {
             bool ranged = IsRanged(passenger);
             if (ranged)
                 foreach (var fsm in passenger.GetComponents<PlayMakerFSM>())
                     if (fsm.FsmName == "Damage" && fsm.enabled) fsm.enabled = false;
-            Crew.MuteAi(passenger, ranged && Plugin.PassengerRangedCombat.Value ? CombatFsms : null);
+            Crew.MuteAi(passenger, ranged && combatAllowed ? CombatFsms : null);
+        }
+
+        private bool CombatAllowed { get { return _driverMode ? Plugin.DriverRangedCombat.Value : Plugin.PassengerRangedCombat.Value; } }
+
+        // A shooting mob at the wheel: like a passenger, but it only shoots in bursts at random intervals and sits in the
+        // generic driver pose (hands on the wheel) in between.
+        internal static PassengerGuard AttachDriver(GameObject driver, GameObject car, Transform sit)
+        {
+            Attach(driver, car, sit);
+            var guard = driver.GetComponent<PassengerGuard>();
+            guard.SetDriverMode(sit);
+            return guard;
+        }
+
+        internal void SetDriverMode(Transform sit)
+        {
+            _anchor = sit;
+            _driverMode = true;
+            _shooting = false;
+            _ranged = _rangedPrefab && Plugin.DriverRangedCombat.Value;
+            if (_ranged) foreach (var fsm in _combat) if (fsm != null) fsm.enabled = true;
+            if (_attack != null) _attack.enabled = false;
+            if (_pose != null) { _pose.SetShooting(false); _pose.SetAim(Vector3.zero, false); }
+            ScheduleBurst();
+            Plugin.Log.LogInfo("Driver: " + _passenger.name + (_ranged ? " shoots in bursts every " + Plugin.DriverFireIntervalMin.Value + "-" + Plugin.DriverFireIntervalMax.Value + " s" : " does not shoot"));
+        }
+
+        private void ScheduleBurst()
+        {
+            _nextBurst = Time.time + UnityEngine.Random.Range(Plugin.DriverFireIntervalMin.Value, Mathf.Max(Plugin.DriverFireIntervalMin.Value, Plugin.DriverFireIntervalMax.Value));
         }
 
         // Ranged enemies normally switch to their separate melee Damage FSM when Attack's distance FloatCompare emits
@@ -116,7 +151,7 @@ namespace Apocapatrol
             guard.HideMeleeWeapons();
             guard._pose = passenger.GetComponent<Pose>();
             if (guard._pose != null) guard._pose.ConfigurePassengerAim();
-            MuteNonCombatAi(passenger);
+            MuteNonCombatAi(passenger, Plugin.PassengerRangedCombat.Value);
             Plugin.Log.LogInfo("Passenger: " + passenger.name + " fixed in driver pose; "
                 + (guard._ranged ? "vanilla ranged fire and Sound2 enabled in +/-" + Plugin.PassengerFireArc.Value + " degree arc" : "passive"));
         }
@@ -161,7 +196,7 @@ namespace Apocapatrol
             if (_passenger == null || _car == null || _anchor == null) { Destroy(this); return; }
             if (Time.timeScale <= 0f) return;
 
-            bool enabled = _rangedPrefab && Plugin.PassengerRangedCombat.Value;
+            bool enabled = _rangedPrefab && CombatAllowed;
             if (enabled != _ranged)
             {
                 _ranged = enabled;
@@ -169,7 +204,7 @@ namespace Apocapatrol
                 if (_ranged) foreach (var fsm in _combat) if (fsm != null) fsm.enabled = true;
                 else if (_attack != null) _attack.enabled = false;
             }
-            MuteNonCombatAi(_passenger);
+            MuteNonCombatAi(_passenger, CombatAllowed);
             if (!_ranged)
             {
                 if (_pose != null) _pose.SetAim(Vector3.zero, false);
@@ -187,6 +222,32 @@ namespace Apocapatrol
                 if (flat.sqrMagnitude > 0.001f)
                     inArc = Mathf.Abs(Vector3.SignedAngle(_car.transform.forward, flat, _car.transform.up)) <= Plugin.PassengerFireArc.Value;
             }
+
+            if (_driverMode)
+            {
+                // bursts: open one when due and a target is in the arc, close it after FireBurstSeconds
+                if (!_shooting && Time.time >= _nextBurst && target != null && inArc)
+                {
+                    _shooting = true;
+                    _burstUntil = Time.time + Plugin.DriverFireBurstSeconds.Value;
+                    if (_pose != null) _pose.SetShooting(true);
+                    Plugin.Verbose("Driver: " + _passenger.name + " opens fire for " + Plugin.DriverFireBurstSeconds.Value + " s");
+                }
+                else if (_shooting && (Time.time >= _burstUntil || target == null))
+                {
+                    _shooting = false;
+                    if (_pose != null) _pose.SetShooting(false);
+                    ScheduleBurst();
+                    Plugin.Verbose("Driver: " + _passenger.name + " back on the wheel, next burst in " + (_nextBurst - Time.time).ToString("0") + " s");
+                }
+                if (!_shooting)
+                {
+                    if (_attack != null) _attack.enabled = false;
+                    if (_pose != null) _pose.SetAim(Vector3.zero, false);
+                    return;
+                }
+            }
+
             if (_attack != null && (_targetAcquired || target != null)) _attack.enabled = target != null && inArc;
             if (_pose != null) _pose.SetAim(aimPoint, target != null && inArc);
         }

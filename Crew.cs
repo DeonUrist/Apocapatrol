@@ -108,7 +108,11 @@ namespace Apocapatrol
                     && (allowedFsms == null || Array.IndexOf(allowedFsms, f.FsmName) < 0)) f.enabled = false;
         }
 
-        internal void MuteAi() { MuteAi(_driver); }
+        // a shooting driver keeps its combat FSMs (its guard gates the Attack FSM); everything else is muted
+        internal void MuteAi()
+        {
+            MuteAi(_driver, _driver != null && _driver.GetComponent<PassengerGuard>() != null ? PassengerGuard.CombatFsms : null);
+        }
 
         private static bool Alive(GameObject who, PlayMakerFSM health)
         {

@@ -16,6 +16,7 @@ namespace Apocapatrol
         private Vector3 _aimPoint;
         private float _aimYaw, _aimPitch;
         private bool _lockSeatRotation;
+        private bool _useProfile = true;      // per-human arm/weapon profile (shooting pose) vs the generic driver arms
         private Quaternion _seatRotation;
         private bool _logged;
 
@@ -67,6 +68,9 @@ namespace Apocapatrol
             _aimActive = active;
         }
 
+        // A shooting mob at the wheel: generic driver arms (hands on the wheel), the per-human shooting profile only while firing.
+        internal void SetShooting(bool on) { _useProfile = on; }
+
         internal void ConfigurePassengerAim()
         {
             _lockSeatRotation = true;
@@ -104,7 +108,7 @@ namespace Apocapatrol
             Swing(_lUpLeg, -thigh, right); Swing(_lUpLeg, Plugin.PoseLeftLegCloser.Value, up); Swing(_lLeg, knee, right);
             Swing(_rUpLeg, -thigh, right); Swing(_rUpLeg, -Plugin.PoseRightLegCloser.Value, up); Swing(_rLeg, knee, right);
 
-            if (_armPose != null)
+            if (_armPose != null && _useProfile)
             {
                 ApplyBone(_lArm, _lForeArm, _armPose.LeftArm, right, up);
                 ApplyBone(_lForeArm, _lHand, _armPose.LeftElbow, right, up);

@@ -17,14 +17,15 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.11.0";
+        public const string VERSION = "0.12.0";
 
         internal static ManualLogSource Log;
 
         internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel, Seat, PassengerSeat, Driver, Passenger;
         internal static ConfigEntry<bool> ReleaseHandbrake, RegisterDriver;
         internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
-        internal static ConfigEntry<bool> PassengerRangedCombat;
+        internal static ConfigEntry<bool> PassengerRangedCombat, DriverRangedCombat;
+        internal static ConfigEntry<float> DriverFireIntervalMin, DriverFireIntervalMax, DriverFireBurstSeconds;
         internal static ConfigEntry<float> PassengerFireArc, PassengerMaxAimPitch, PassengerAimTurnSpeed;
         internal static ConfigEntry<float> PassengerBailChance, PassengerTakeoverSeconds, StuckPedalTakeoverSeconds, EjectDistance, BailDistance, StuckBailChance;
         internal static PoseBool PoseEnabled;
@@ -89,6 +90,16 @@ namespace Apocapatrol
             StuckPedalChance = Config.Bind("Driver", "StuckPedalChance", 5f, new ConfigDescription(
                 "% chance that a killed driver's gas pedal stays stuck; otherwise the gas is released and the car slowly rolls to a stop",
                 new AcceptableValueRange<float>(0f, 100f)));
+            DriverRangedCombat = Config.Bind("Driver", "RangedCombat", true,
+                "A ranged human at the wheel (Boltjaw/Flexa/Lugnut/Scrud/Sprokka) shoots like a passenger, but only in bursts at random intervals; " +
+                "between bursts it sits in the driver pose with its hands on the wheel");
+            DriverFireIntervalMin = Config.Bind("Driver", "FireIntervalMin", 8f, new ConfigDescription(
+                "Shortest pause between two bursts of the driver, s", new AcceptableValueRange<float>(0f, 120f)));
+            DriverFireIntervalMax = Config.Bind("Driver", "FireIntervalMax", 20f, new ConfigDescription(
+                "Longest pause between two bursts of the driver, s", new AcceptableValueRange<float>(0f, 300f)));
+            DriverFireBurstSeconds = Config.Bind("Driver", "FireBurstSeconds", 3f, new ConfigDescription(
+                "How long a burst lasts (the driver is in its shooting pose and its vanilla Attack runs inside the fire arc), s",
+                new AcceptableValueRange<float>(0.5f, 30f)));
             StuckBailChance = Config.Bind("Driver", "StuckBailChance", 50f, new ConfigDescription(
                 "% chance that, when the driving AI gives up on a stuck car (after [AI] MaxRecovers), the driver and the passenger get out and " +
                 "fight on foot instead of the car waiting [AI] WaitSeconds and trying again; the car is left standing",

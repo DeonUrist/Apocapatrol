@@ -253,6 +253,7 @@ namespace Apocapatrol
             if (sit == null) { Plugin.Log.LogWarning("No sitPos on " + car.name); return null; }
             var drv = SeatOccupant(car, prefabName, sit, "Driver", false, health);
             if (drv == null) return null;
+            if (Plugin.DriverRangedCombat.Value && PassengerGuard.IsRangedHuman(drv)) PassengerGuard.AttachDriver(drv, car, sit);
             var crew = phase == CrewPhase.Waiting && seated <= 0f ? Crew.Attach(car, drv) : Crew.Restore(car, drv, phase, seated);
             crew.MuteAi();
             return drv;
@@ -289,8 +290,9 @@ namespace Apocapatrol
             var rot = Quaternion.LookRotation(car.transform.forward, car.transform.up);
             var go = UnityEngine.Object.Instantiate(prefab, pos, rot);
             go.SetActive(true);
-            if (passenger) PassengerGuard.Prepare(go);
-            else Crew.MuteAi(go);                            // before the FSMs' Start
+            if (passenger) PassengerGuard.Prepare(go, Plugin.PassengerRangedCombat.Value);
+            else if (Plugin.DriverRangedCombat.Value) PassengerGuard.Prepare(go, true);   // ranged-only rewiring + mute, before the FSMs' Start
+            else Crew.MuteAi(go);
             go.name = prefab.name + "(" + role + ")";
 
             foreach (var a in go.GetComponentsInChildren<Collider>(true))
@@ -406,8 +408,8 @@ namespace Apocapatrol
             EjectCorpses(car, pax);
             var guard = pax.GetComponent<PassengerGuard>();
             var oldAnchor = pax.transform.parent;
-            if (guard != null) UnityEngine.Object.Destroy(guard);
-            Crew.MuteAi(pax);
+            if (guard != null && Plugin.DriverRangedCombat.Value) Crew.MuteAi(pax, PassengerGuard.CombatFsms);
+            else { if (guard != null) UnityEngine.Object.Destroy(guard); guard = null; Crew.MuteAi(pax); }
             var off = new Vector3(Plugin.DriverOffsetX.Value, Plugin.DriverOffsetY.Value, Plugin.DriverOffsetZ.Value);
             pax.transform.SetParent(sit, true);
             pax.transform.position = sit.position + car.transform.right * off.x + car.transform.up * off.y + car.transform.forward * off.z;
@@ -415,6 +417,7 @@ namespace Apocapatrol
             var pose = pax.GetComponent<Pose>();
             if (pose != null) pose.Reseat(sit);
             pax.name = pax.name.Replace("(Passenger)", "(Driver)");
+            if (guard != null) guard.SetDriverMode(sit);
             int pairs = IgnoreCollisions(pax, car);
             Plugin.Log.LogInfo("Takeover: " + pax.name + " on " + sit.name + ", " + pairs + " collider pairs vs the car ignored");
             if (oldAnchor != null && oldAnchor.name == "Apocapatrol.PassengerPos") UnityEngine.Object.Destroy(oldAnchor.gameObject);
