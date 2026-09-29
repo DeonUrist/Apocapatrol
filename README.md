@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.10.0)
+# Apocapatrol (prototype 0.10.1)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -81,7 +81,8 @@ re-enable an invisible close-range hit. Projectile damage continues through the 
 ### When the driver dies
 A passenger that outlives the driver acts as soon as the car stands still (a stuck pedal is kicked off after `StuckPedalTakeoverSeconds`, 6 s):
 with `BailChance` % (25) it **bails out** - it is replaced by a fresh instance of its prefab beside the car, fully vanilla AI, registered like a
-spawned enemy (so the game saves it), with the health it had left; otherwise it **takes the wheel**: it climbs onto the driver seat, the seat
+spawned enemy (so the game saves it), with the health it had left; otherwise it **takes the wheel**: the dead driver's carcass is thrown out to the left first (its colliders ignore the car and the new driver,
+and it is pushed out again if it is still inside a moment later), then it climbs onto the driver seat, the seat
 locks again, and after `TakeoverSeconds` (2) it drives off with the driving AI. If the player got into the car first, the passenger always bails.
 The save sidecar follows: a promoted passenger is saved as the driver with an empty passenger seat.
 

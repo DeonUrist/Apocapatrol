@@ -307,11 +307,67 @@ namespace Apocapatrol
             return go;
         }
 
+        // Before the passenger climbs over: the dead driver's carcass (the <X>_Dead ragdoll its Health FSM dropped on the seat) is
+        // thrown out to the car's left. Its colliders are told to ignore the car and the passenger first, so whatever happens it
+        // cannot blow the car up; CorpseWatch then makes sure it really ends up outside the car.
+        internal static void EjectCorpses(GameObject car, GameObject pax)
+        {
+            var sit = FindChild(car.transform, "sitPos") ?? FindChild(car.transform, "hinge_seat_driver");
+            if (sit == null) return;
+            var roots = new List<Transform>();
+            foreach (var c in Physics.OverlapSphere(sit.position, 3f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide))
+            {
+                if (c == null) continue;
+                var root = c.transform.root;
+                if (root == car.transform || (pax != null && root == pax.transform.root)) continue;
+                if (root.name.IndexOf("_Dead", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (!roots.Contains(root)) roots.Add(root);
+            }
+            if (roots.Count == 0) { Plugin.Verbose("Eject: no carcass near the driver seat"); return; }
+            var carCols = car.GetComponentsInChildren<Collider>(true);
+            var paxCols = pax != null ? pax.GetComponentsInChildren<Collider>(true) : new Collider[0];
+            var left = -car.transform.right;
+            foreach (var root in roots)
+            {
+                foreach (var a in root.GetComponentsInChildren<Collider>(true))
+                {
+                    if (a == null) continue;
+                    foreach (var b in carCols) if (b != null) Physics.IgnoreCollision(a, b, true);
+                    foreach (var b in paxCols) if (b != null) Physics.IgnoreCollision(a, b, true);
+                }
+                Throw(root, sit.position + left * 2.5f + Vector3.up * 0.8f, left * 7f + Vector3.up * 3f);
+                Plugin.Log.LogInfo("Eject: " + root.name + " thrown out of " + car.name);
+            }
+            var watch = car.AddComponent<CorpseWatch>();
+            watch.Init(sit, roots, left);
+        }
+
+        // Moves a ragdoll as a whole (every rigidbody by the same offset) and gives all of it one velocity.
+        internal static void Throw(Transform root, Vector3 to, Vector3 velocity)
+        {
+            var rbs = root.GetComponentsInChildren<Rigidbody>(true);
+            Vector3 from = root.position;
+            if (rbs.Length > 0)
+            {
+                from = Vector3.zero;
+                foreach (var rb in rbs) from += rb.position;
+                from /= rbs.Length;
+            }
+            var offset = to - from;
+            root.position += offset;
+            foreach (var rb in rbs)
+            {
+                rb.position += offset;
+                if (!rb.isKinematic) { rb.velocity = velocity; rb.angularVelocity = Vector3.zero; }
+            }
+        }
+
         // The surviving passenger climbs over to the driver seat: same placement as SeatOccupant, AI fully muted, pose re-anchored.
         internal static GameObject MoveToDriverSeat(GameObject car, GameObject pax)
         {
             var sit = FindChild(car.transform, "sitPos") ?? FindChild(car.transform, "hinge_seat_driver");
             if (sit == null || pax == null) return null;
+            EjectCorpses(car, pax);
             var guard = pax.GetComponent<PassengerGuard>();
             var oldAnchor = pax.transform.parent;
             if (guard != null) UnityEngine.Object.Destroy(guard);
@@ -391,7 +447,42 @@ namespace Apocapatrol
             }
         }
 
-        // Re-applies a health value for a few frames after Instantiate, in case the Health FSM's start state resets it.
+        // Guarantees an ejected carcass stays out of the car: for a few seconds after the throw, anything still within the seat
+    // area is moved out again (further each time). Removes itself when done.
+    internal class CorpseWatch : MonoBehaviour
+    {
+        private Transform _sit;
+        private List<Transform> _roots;
+        private Vector3 _left;
+        private float _t, _nextCheck;
+        private int _pushes;
+
+        internal void Init(Transform sit, List<Transform> roots, Vector3 left) { _sit = sit; _roots = roots; _left = left; _nextCheck = 0.3f; }
+
+        private void FixedUpdate()
+        {
+            if (_sit == null || _roots == null) { Destroy(this); return; }
+            _t += Time.fixedDeltaTime;
+            if (_t < _nextCheck) return;
+            _nextCheck = _t + 0.3f;
+            bool anyInside = false;
+            foreach (var root in _roots)
+            {
+                if (root == null) continue;
+                var rb = root.GetComponentInChildren<Rigidbody>();
+                var p = rb != null ? rb.position : root.position;
+                var d = p - _sit.position; d.y = 0f;
+                if (d.magnitude >= 1.8f) continue;
+                anyInside = true;
+                _pushes++;
+                Patrol.Throw(root, _sit.position + _left * (3f + _pushes) + Vector3.up * 1f, _left * 6f + Vector3.up * 2f);
+                Plugin.Log.LogInfo("Eject: " + root.name + " was still in the car, moved out again (" + _pushes + ")");
+            }
+            if (!anyInside && _t > 1f || _t > 6f) { Plugin.Verbose("Eject: done, " + _pushes + " extra push(es)"); Destroy(this); }
+        }
+    }
+
+    // Re-applies a health value for a few frames after Instantiate, in case the Health FSM's start state resets it.
     internal class LateHealth : MonoBehaviour
     {
         internal float Value;
