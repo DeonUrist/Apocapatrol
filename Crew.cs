@@ -80,14 +80,14 @@ namespace Apocapatrol
                 return;
             }
 
-            // dead and not stuck: brake to a stop, then hand the car back
+            // dead and not stuck: the foot came off the gas - no brakes, the car rolls out on engine braking and drag;
+            // once it has come to rest (or after a long while) the handbrake goes on so it stays put, and the car is handed back
             _braking += Time.deltaTime;
             bool stopped = _rb == null || _rb.velocity.magnitude < 0.3f;
-            if (!stopped && _braking < 8f) { Nwh.SetInput(_car, 0f, 0f, 1f); return; }
-            Nwh.SetInput(_car, 0f, 0f, 0f);
+            if (!stopped && _braking < 60f) { Nwh.SetInput(_car, 0f, 0f, 0f); return; }
             Patrol.Handbrake(_car, true);
             _ctl.Release();
-            Plugin.Log.LogInfo("Crew: car stopped (" + (_rb != null ? (_rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h), handbrake on");
+            Plugin.Log.LogInfo("Crew: car rolled out (" + (_rb != null ? (_rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h after " + _braking.ToString("0.0") + " s), handbrake on");
             _done = true;
         }
 
@@ -144,7 +144,7 @@ namespace Apocapatrol
                 _done = true;
                 Plugin.Log.LogInfo("Crew: driver died - leg stuck on the gas (" + Plugin.StuckPedalChance.Value + " % roll), seat free");
             }
-            else Plugin.Log.LogInfo("Crew: driver died - braking, seat free");
+            else Plugin.Log.LogInfo("Crew: driver died - gas released, rolling out, seat free");
         }
     }
 }

@@ -15,7 +15,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.3.0";
+        public const string VERSION = "0.3.1";
 
         internal static ManualLogSource Log;
 
@@ -70,7 +70,7 @@ namespace Apocapatrol
             DriveThrottle = Config.Bind("Driver", "DriveThrottle", 0.5f, new ConfigDescription(
                 "Throttle the driver holds (0..1); steering straight for now", new AcceptableValueRange<float>(0.05f, 1f)));
             StuckPedalChance = Config.Bind("Driver", "StuckPedalChance", 5f, new ConfigDescription(
-                "% chance that a killed driver's leg stays on the gas; otherwise the car brakes to a stop and the handbrake goes on",
+                "% chance that a killed driver's leg stays on the gas; otherwise the gas is released and the car rolls out on its own (handbrake once it rests)",
                 new AcceptableValueRange<float>(0f, 100f)));
             DriverOffsetX = Config.Bind("Driver", "OffsetX", 0f, new ConfigDescription("Driver offset from the car's sitPos, right (m)", new AcceptableValueRange<float>(-2f, 2f)));
             DriverOffsetY = Config.Bind("Driver", "OffsetY", 0f, new ConfigDescription("Driver offset from the car's sitPos, up (m)", new AcceptableValueRange<float>(-2f, 2f)));
