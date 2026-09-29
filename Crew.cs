@@ -80,14 +80,16 @@ namespace Apocapatrol
                 return;
             }
 
-            // dead and not stuck: the foot came off the gas - no brakes, the car rolls out on engine braking and drag;
-            // once it has come to rest (or after a long while) the handbrake goes on so it stays put, and the car is handed back
+            // dead and not stuck: the foot came off the gas - throttle 0, no brakes, the car rolls out on engine braking and drag.
+            // Once it has come to rest (or after 60 s) the car is handed back; nobody pulls the handbrake unless configured.
+            Nwh.SetInput(_car, 0f, 0f, 0f);
             _braking += Time.deltaTime;
             bool stopped = _rb == null || _rb.velocity.magnitude < 0.3f;
-            if (!stopped && _braking < 60f) { Nwh.SetInput(_car, 0f, 0f, 0f); return; }
-            Patrol.Handbrake(_car, true);
+            if (!stopped && _braking < 60f) return;
+            if (Plugin.HandbrakeWhenStopped.Value) Patrol.Handbrake(_car, true);
             _ctl.Release();
-            Plugin.Log.LogInfo("Crew: car rolled out (" + (_rb != null ? (_rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h after " + _braking.ToString("0.0") + " s), handbrake on");
+            Plugin.Log.LogInfo("Crew: car rolled out (" + (_rb != null ? (_rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h after "
+                + _braking.ToString("0.0") + " s)" + (Plugin.HandbrakeWhenStopped.Value ? ", handbrake on" : ""));
             _done = true;
         }
 
