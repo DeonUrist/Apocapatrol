@@ -117,7 +117,7 @@ namespace Apocapatrol
                         if (Nwh.GearIndex(car) <= 0) Nwh.ShiftInto(car, 1);
                         Nwh.SetInput(car, Plugin.DriveTestThrottle.Value, 0f, 0f);
                         t += Time.deltaTime;
-                        if (t >= report) { report += 1f; Plugin.Verbose("  t=" + t.ToString("0.0") + " speed " + (rb != null ? (rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h  gear " + Nwh.Gear(car)); }
+                        if (t >= report) { report += 1f; Plugin.Verbose("  t=" + t.ToString("0.0") + " speed " + (rb != null ? (rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h  gear " + Nwh.Gear(car) + "  " + Nwh.Diag(car)); }
                         yield return null;
                     }
                     if (car != null)
@@ -531,6 +531,22 @@ namespace Apocapatrol
             }
             catch (Exception e) { Plugin.Log.LogWarning("ShiftInto: " + e.Message); }
         }
+
+        // one-line state readback for the drive test log
+        internal static string Diag(GameObject car)
+        {
+            try
+            {
+                var vc = Vc(car); var input = Get(vc, "input"); var pt = Get(vc, "powertrain");
+                var eng = Get(pt, "engine"); var tr = Get(pt, "transmission");
+                return "thr=" + Get(input, "Throttle") + " clutch=" + Get(input, "Clutch") + " hb=" + Get(input, "Handbrake")
+                     + " rpm=" + F(Get(eng, "RPM") ?? Get(eng, "OutputRPM")) + " trType=" + Get(tr, "transmissionType")
+                     + " active=" + (Get(vc, "IsActive") ?? Get(vc, "Active")) + " enabled=" + (vc != null ? ((Behaviour)vc).enabled.ToString() : "?");
+            }
+            catch (Exception e) { return "diag: " + e.Message; }
+        }
+
+        private static string F(object o) { return o is float ? ((float)o).ToString("0") : (o == null ? "?" : o.ToString()); }
 
         internal static string Gear(GameObject car)
         {
