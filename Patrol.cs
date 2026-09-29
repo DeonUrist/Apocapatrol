@@ -314,6 +314,26 @@ namespace Apocapatrol
         // Every collider of an occupant vs every collider of the car. Unity drops an ignore pair when either collider is
         // disabled or its object deactivated (weapon props toggled by WeaponType/Attack, the FireDamage hitbox...), and an
         // occupant's root is kinematic, so a single live pair shoves the car around unopposed. Cheap; re-applied periodically.
+        private static readonly Dictionary<GameObject, long> _ignoreSignature = new Dictionary<GameObject, long>();
+
+        // Cheap signature of the occupant's + car's enabled colliders; the pairs are re-applied only when it changes
+        // (a toggled prop, a part fallen off), not every second - each IgnoreCollision call makes PhysX rebuild pair filters.
+        internal static int IgnoreCollisionsIfChanged(GameObject who, GameObject car)
+        {
+            if (who == null || car == null) return 0;
+            long sig = 17;
+            foreach (var a in who.GetComponentsInChildren<Collider>(true))
+                if (a != null && a.enabled && a.gameObject.activeInHierarchy) sig = sig * 31 + a.GetInstanceID();
+            foreach (var b in car.GetComponentsInChildren<Collider>(true))
+                if (b != null && b.enabled && b.gameObject.activeInHierarchy) sig = sig * 31 + b.GetInstanceID();
+            long old;
+            if (_ignoreSignature.TryGetValue(who, out old) && old == sig) return 0;
+            _ignoreSignature[who] = sig;
+            int n = IgnoreCollisions(who, car);
+            Plugin.Verbose("Collision ignores re-applied for " + who.name + ": " + n + " pairs");
+            return n;
+        }
+
         internal static int IgnoreCollisions(GameObject who, GameObject car)
         {
             if (who == null || car == null) return 0;

@@ -135,9 +135,9 @@ namespace Apocapatrol
             if (Time.time >= _nextIgnore)
             {
                 _nextIgnore = Time.time + 1f;
-                if (!_dead && _driver != null) Patrol.IgnoreCollisions(_driver, _car);
+                if (!_dead && _driver != null) Patrol.IgnoreCollisionsIfChanged(_driver, _car);
                 var marker = _car.GetComponent<PatrolMarker>();
-                if (marker != null && marker.Passenger != null) Patrol.IgnoreCollisions(marker.Passenger, _car);
+                if (marker != null && marker.Passenger != null) Patrol.IgnoreCollisionsIfChanged(marker.Passenger, _car);
             }
             if (_dead && PassengerReacts()) return;
             if (_done) return;
@@ -270,7 +270,7 @@ namespace Apocapatrol
             Init(_car, drv);
             _seated = 0f;
             MuteAi();
-            Plugin.Log.LogInfo("Crew: " + drv.name + " took the wheel, drives off in " + _delayOverride + " s; car " + Speed() + " km/h, " + Nwh.Diag(_car));
+            Plugin.Log.LogInfo("Crew: " + drv.name + " took the wheel, " + (Plugin.DriveDelaySeconds.Value < 0f ? "never drives ([Driver] DriveDelaySeconds = -1)" : "drives off in " + _delayOverride + " s") + "; car " + Speed() + " km/h, " + Nwh.Diag(_car));
         }
 
         private bool PlayerInside()

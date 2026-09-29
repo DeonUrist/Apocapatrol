@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using HutongGames.PlayMaker;
 using UnityEngine;
@@ -20,6 +21,12 @@ namespace Apocapatrol
         private GameObject[] _meleeWeapons;
         private Pose _pose;
         private bool _rangedPrefab, _ranged, _targetDiagnosticLogged, _targetAcquired;
+        // target sources, resolved once by reflection (was: every frame): FsmGameObject variables and action fields whose
+        // name suggests a target, with their score
+        private FsmGameObject[] _targetVars; private int[] _targetVarScores;
+        private FsmStateAction[] _targetActions; private FieldInfo[] _targetFields; private int[] _targetFieldScores;
+        private GameObject _aimTargetGo; private Transform _aimHead;   // AimPoint cache
+        private float _nextTargetSearch; private GameObject _lastTarget;
         // driver mode: the same combat, but only in random bursts; the driver pose in between
         private bool _driverMode, _shooting;
         private float _nextBurst, _burstUntil;
@@ -148,6 +155,7 @@ namespace Apocapatrol
             guard._combat = Array.FindAll(passenger.GetComponents<PlayMakerFSM>(), f => Array.IndexOf(CombatFsms, f.FsmName) >= 0);
             guard._attack = Array.Find(guard._combat, f => f.FsmName == "Attack");
             guard._meleeWeapons = guard._rangedPrefab ? FindMeleeWeapons(passenger) : new GameObject[0];
+            guard.IndexTargetSources();
             guard.HideMeleeWeapons();
             guard._pose = passenger.GetComponent<Pose>();
             if (guard._pose != null) guard._pose.ConfigurePassengerAim();
@@ -167,18 +175,26 @@ namespace Apocapatrol
             });
         }
 
+        // The melee prop is neutralised in place (renderers and colliders off) rather than deactivated: the Attack FSM's
+        // close-range state re-activates the object every frame, and a SetActive ping-pong made its collider enter the car's
+        // CarAttack trigger every frame ("Could not find FSM: ID on collider" spam, a physics pair reset per frame, lag).
+        private float _nextWeaponCheck;
         private void HideMeleeWeapons()
         {
             if (_meleeWeapons == null) return;
             foreach (var weapon in _meleeWeapons)
-                if (weapon != null && weapon.activeSelf) weapon.SetActive(false);
+            {
+                if (weapon == null) continue;
+                foreach (var r in weapon.GetComponentsInChildren<Renderer>(true)) if (r.enabled) r.enabled = false;
+                foreach (var c in weapon.GetComponentsInChildren<Collider>(true)) if (c.enabled) c.enabled = false;
+            }
         }
 
         private void LateUpdate()
         {
             // Attack can activate the right-hand blade after Update when its close-range state runs. Apply this after
             // PlayMaker so no melee prop is ever displayed, while leaving left-hand firearms and their effects alone.
-            if (_rangedPrefab) HideMeleeWeapons();
+            if (_rangedPrefab && Time.time >= _nextWeaponCheck) { _nextWeaponCheck = Time.time + 0.5f; HideMeleeWeapons(); }
         }
 
         private static bool IsRanged(GameObject passenger)
@@ -252,15 +268,25 @@ namespace Apocapatrol
             if (_pose != null) _pose.SetAim(aimPoint, target != null && inArc);
         }
 
-        private GameObject FindVanillaTarget()
+        private static int ScoreOf(string name)
         {
-            GameObject best = null;
-            int bestScore = 0;
+            string n = (name ?? "").ToLowerInvariant();
+            return n.Contains("target") ? 5 : n.Contains("player") ? 4 : n.Contains("enemy") ? 3 : n.Contains("closest") ? 2 : 0;
+        }
+
+        // One reflection pass over the combat FSMs: remember every FsmGameObject variable / action field that can hold a target.
+        private void IndexTargetSources()
+        {
+            var vars = new List<FsmGameObject>(); var varScores = new List<int>();
+            var actions = new List<FsmStateAction>(); var fields = new List<FieldInfo>(); var fieldScores = new List<int>();
             foreach (var fsm in _combat)
             {
                 if (fsm == null || Array.IndexOf(TargetFsms, fsm.FsmName) < 0) continue;
                 foreach (var variable in fsm.FsmVariables.GameObjectVariables)
-                    Score(variable.Name, variable.Value, ref best, ref bestScore);
+                {
+                    int s = ScoreOf(variable.Name);
+                    if (s > 0) { vars.Add(variable); varScores.Add(s); }
+                }
                 foreach (var state in fsm.FsmStates)
                     foreach (var action in state.Actions)
                     {
@@ -269,38 +295,64 @@ namespace Apocapatrol
                         {
                             if (field.FieldType != typeof(FsmGameObject)) continue;
                             var value = field.GetValue(action) as FsmGameObject;
-                            if (value != null) Score(field.Name + " " + value.Name, value.Value, ref best, ref bestScore);
+                            if (value == null) continue;
+                            int s = Mathf.Max(ScoreOf(field.Name), ScoreOf(value.Name));
+                            if (s > 0) { actions.Add(action); fields.Add(field); fieldScores.Add(s); }
                         }
                     }
             }
+            _targetVars = vars.ToArray(); _targetVarScores = varScores.ToArray();
+            _targetActions = actions.ToArray(); _targetFields = fields.ToArray(); _targetFieldScores = fieldScores.ToArray();
+            Plugin.Verbose("Passenger: " + _passenger.name + " target sources: " + _targetVars.Length + " variables, " + _targetFields.Length + " action fields");
+        }
+
+        private GameObject FindVanillaTarget()
+        {
+            if (Time.time < _nextTargetSearch) return _lastTarget;     // 10× a second is plenty
+            _nextTargetSearch = Time.time + 0.1f;
+            GameObject best = null;
+            int bestScore = 0;
+            if (_targetVars != null)
+                for (int i = 0; i < _targetVars.Length; i++)
+                    if (_targetVarScores[i] > bestScore) Consider(_targetVars[i].Value, _targetVarScores[i], ref best, ref bestScore);
+            if (_targetFields != null)
+                for (int i = 0; i < _targetFields.Length; i++)
+                {
+                    if (_targetFieldScores[i] <= bestScore) continue;
+                    var value = _targetFields[i].GetValue(_targetActions[i]) as FsmGameObject;
+                    if (value != null) Consider(value.Value, _targetFieldScores[i], ref best, ref bestScore);
+                }
             if (best == null && !_targetDiagnosticLogged)
             {
                 _targetDiagnosticLogged = true;
                 Plugin.Verbose("Passenger ranged combat: waiting for vanilla FSM target");
             }
+            _lastTarget = best;
             return best;
         }
 
-        private void Score(string name, GameObject candidate, ref GameObject best, ref int bestScore)
+        private void Consider(GameObject candidate, int score, ref GameObject best, ref int bestScore)
         {
             if (candidate == null || candidate == _passenger || candidate.transform.IsChildOf(_passenger.transform)) return;
-            string n = (name ?? "").ToLowerInvariant();
-            int score = n.Contains("target") ? 5 : n.Contains("player") ? 4 : n.Contains("enemy") ? 3 : n.Contains("closest") ? 2 : 0;
-            if (score <= bestScore) return;
             best = candidate;
             bestScore = score;
         }
 
-        private static Vector3 AimPoint(GameObject target)
+        // the Head bone of the target (found once per target, not by walking its whole hierarchy every frame)
+        private Vector3 AimPoint(GameObject target)
         {
-            foreach (var t in target.GetComponentsInChildren<Transform>(true))
+            if (target != _aimTargetGo || (_aimHead == null && target != null))
             {
-                string n = t.name;
-                int colon = n.LastIndexOf(':');
-                if ((colon >= 0 ? n.Substring(colon + 1) : n) == "Head") return t.position;
+                _aimTargetGo = target; _aimHead = null;
+                foreach (var t in target.GetComponentsInChildren<Transform>(true))
+                {
+                    string n = t.name;
+                    int colon = n.LastIndexOf(':');
+                    if ((colon >= 0 ? n.Substring(colon + 1) : n) == "Head") { _aimHead = t; break; }
+                }
+                if (_aimHead == null) _aimHead = target.transform;   // no Head: aim at the root (collider centre would need a lookup per frame too)
             }
-            var col = target.GetComponentInChildren<Collider>();
-            return col != null ? col.bounds.center : target.transform.position;
+            return _aimHead.position;
         }
     }
 }
