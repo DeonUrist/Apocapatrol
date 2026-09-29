@@ -17,7 +17,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.9.0";
+        public const string VERSION = "0.9.1";
 
         internal static ManualLogSource Log;
 
@@ -30,7 +30,7 @@ namespace Apocapatrol
         internal static PoseFloat PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLeftLegCloser, PoseRightLegCloser, PoseLeftArmCloser, PoseRightArmCloser;
         internal static ConfigEntry<float> DriveDelaySeconds, DriveThrottle, StuckPedalChance;
         internal static ConfigEntry<bool> AiEnabled, AiInvertSteering, AiOverlay;
-        internal static ConfigEntry<float> AiLeadTime, AiCommitSeconds, AiSteerRate, AiSteerAngle, AiMaxSteerAtSpeed, AiTurnSafeSpeed,
+        internal static ConfigEntry<float> AiThrottle, AiLeadTime, AiCommitSeconds, AiSteerRate, AiSteerAngle, AiMaxSteerAtSpeed, AiTurnSafeSpeed,
             AiRamDistance, AiPassWidth, AiRunOutMeters, AiRunOutMaxSeconds, AiReverseSeconds, AiReverseThrottle, AiStuckSeconds,
             AiRecoverWindow, AiMaxRecovers, AiWaitSeconds, AiFeelerRange, AiFeelerSpeedFactor, AiFrontOffset, AiMaxSlopeDeg, AiAvoidGain,
             AiIgnoreMassBelow, AiGiveUpDistance;
@@ -84,7 +84,7 @@ namespace Apocapatrol
                 "The driver sits still this long after spawning before driving off (0 = drives as soon as the engine runs, -1 = never drives, just sits)",
                 new AcceptableValueRange<float>(-1f, 600f)));
             DriveThrottle = Config.Bind("Driver", "DriveThrottle", 0.5f, new ConfigDescription(
-                "Maximum throttle the driver uses (0..1)", new AcceptableValueRange<float>(0.05f, 1f)));
+                "Throttle with the driving AI off (straight ahead) and of a stuck pedal (0..1); the AI has its own [AI] Throttle", new AcceptableValueRange<float>(0.05f, 1f)));
             StuckPedalChance = Config.Bind("Driver", "StuckPedalChance", 5f, new ConfigDescription(
                 "% chance that a killed driver's gas pedal stays stuck; otherwise the gas is released and the car slowly rolls to a stop",
                 new AcceptableValueRange<float>(0f, 100f)));
@@ -98,6 +98,9 @@ namespace Apocapatrol
             AiEnabled = Config.Bind("AI", "Enabled", true,
                 "Driving AI: chase and ram the player (on foot or in a car) hit-and-run style, reverse out of obstacles and steer around them. " +
                 "false = the driver just drives straight ahead like before");
+            AiThrottle = Config.Bind("AI", "Throttle", 1f, new ConfigDescription(
+                "Maximum throttle the driving AI uses (0..1); [Driver] DriveThrottle is only for the AI-off drive and the stuck pedal",
+                new AcceptableValueRange<float>(0.05f, 1f)));
             AiLeadTime = Config.Bind("AI", "LeadTime", 1f, new ConfigDescription(
                 "Aim this many seconds ahead of the target's movement (intercept), s", new AcceptableValueRange<float>(0f, 4f)));
             AiCommitSeconds = Config.Bind("AI", "CommitSeconds", 0.5f, new ConfigDescription(
@@ -112,7 +115,7 @@ namespace Apocapatrol
             AiMaxSteerAtSpeed = Config.Bind("AI", "MaxSteerAtSpeed", 0.35f, new ConfigDescription(
                 "Steering limit at 72 km/h and above (0..1); full lock is allowed below 18 km/h, blended in between. Keeps the car on its wheels",
                 new AcceptableValueRange<float>(0.05f, 1f)));
-            AiTurnSafeSpeed = Config.Bind("AI", "TurnSafeSpeed", 12f, new ConfigDescription(
+            AiTurnSafeSpeed = Config.Bind("AI", "TurnSafeSpeed", 18f, new ConfigDescription(
                 "Above this speed (m/s) the driver lifts off and brakes lightly when the target is more than 40 degrees off the nose",
                 new AcceptableValueRange<float>(3f, 40f)));
             AiRamDistance = Config.Bind("AI", "RamDistance", 15f, new ConfigDescription(

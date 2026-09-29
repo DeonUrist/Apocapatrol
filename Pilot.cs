@@ -184,10 +184,12 @@ namespace Apocapatrol
             desired = Mathf.Clamp(desired, -maxSteer, maxSteer);
             float steer = MoveSteer(desired, dt);
 
-            float throttle = Plugin.DriveThrottle.Value * Mathf.Lerp(1f, 0.45f, Mathf.Clamp01((absAngle - 15f) / 75f));
+            float max = Plugin.AiThrottle.Value;
+            float taper = Mathf.Lerp(1f, 0.5f, Mathf.Clamp01((absAngle - 20f) / 70f)) ;   // ease off when pointing well away...
+            float throttle = max * Mathf.Lerp(1f, taper, Mathf.InverseLerp(4f, 10f, speed));   // ...but only once rolling (need speed to turn)
             float brakes = 0f;
             if (speed > Plugin.AiTurnSafeSpeed.Value && absAngle > 40f) { throttle = 0f; brakes = 0.5f; }
-            if (turning) throttle = Mathf.Min(throttle, Plugin.DriveThrottle.Value * 0.7f);
+            if (turning && speed > 6f) throttle = Mathf.Min(throttle, max * 0.7f);
             if (!ramming) { throttle *= avoidThrottle; brakes = Mathf.Max(brakes, avoidBrake); }
             Apply(throttle, steer, brakes);
 
@@ -217,11 +219,11 @@ namespace Apocapatrol
             float avoidSteer, avoidThrottle, avoidBrake;
             Sense(speed, out avoidSteer, out avoidThrottle, out avoidBrake);
             float steer = MoveSteer(Mathf.Clamp(avoidSteer, -MaxSteerFor(speed), MaxSteerFor(speed)), dt);
-            Apply(Plugin.DriveThrottle.Value * avoidThrottle, steer, avoidBrake);
+            Apply(Plugin.AiThrottle.Value * avoidThrottle, steer, avoidBrake);
             float ran = Flat(_tf.position - _runStart).magnitude;
             if (ran >= Plugin.AiRunOutMeters.Value || _stateTime >= Plugin.AiRunOutMaxSeconds.Value)
             { Enter(PilotState.Turnaround, "ran out " + ran.ToString("0") + " m"); return; }
-            Stuck(Plugin.DriveThrottle.Value * avoidThrottle, speed, dt);
+            Stuck(Plugin.AiThrottle.Value * avoidThrottle, speed, dt);
         }
 
         private void StepRecover(float forwardSpeed, float dt)
@@ -297,7 +299,7 @@ namespace Apocapatrol
         // in front of a wall with the throttle cut, and that is exactly when it has to back out).
         private void Stuck(float throttle, float speed, float dt)
         {
-            if (speed < 0.8f) _stuckTime += dt; else _stuckTime = 0f;
+            if (speed < 0.5f) _stuckTime += dt; else _stuckTime = 0f;
             if (_stuckTime >= Plugin.AiStuckSeconds.Value) { _stuckTime = 0f; StartRecover("stuck " + Plugin.AiStuckSeconds.Value + " s", 0f); }
         }
 
@@ -329,8 +331,8 @@ namespace Apocapatrol
         {
             steer = 0f; throttleFactor = 1f; brake = 0f;
             float range = Plugin.AiFeelerRange.Value + speed * Plugin.AiFeelerSpeedFactor.Value;
-            var origin = _tf.position + _tf.forward * Plugin.AiFrontOffset.Value + _tf.up * 0.6f;
-            if (_rb != null) origin = _rb.worldCenterOfMass + _tf.forward * Plugin.AiFrontOffset.Value + _tf.up * 0.3f;
+            var origin = _tf.position + _tf.forward * Plugin.AiFrontOffset.Value + _tf.up * 0.8f;
+            if (_rb != null) origin = _rb.worldCenterOfMass + _tf.forward * Plugin.AiFrontOffset.Value + _tf.up * 0.5f;
             float minSlopeNormalY = Mathf.Cos(Plugin.AiMaxSlopeDeg.Value * Mathf.Deg2Rad);
 
             if (Time.time > _cacheClear) { _cacheClear = Time.time + 5f; _obstacleCache.Clear(); }
@@ -342,7 +344,7 @@ namespace Apocapatrol
                 float len = range * (a == 0f ? 1f : Mathf.Abs(a) < 30f ? 0.75f : 0.5f);
                 _feelerLen[i] = len;
                 var dir = Quaternion.AngleAxis(a, _tf.up) * _tf.forward;
-                _feelerHit[i] = Cast(origin, dir, len, a == 0f ? 0.6f : 0.25f, minSlopeNormalY);
+                _feelerHit[i] = Cast(origin, dir, len, a == 0f ? 0.4f : 0.2f, minSlopeNormalY);
                 float d = _feelerHit[i] < 0f ? len : _feelerHit[i];
                 if (a < 0f) leftRoom += d; else if (a > 0f) rightRoom += d;
             }
@@ -383,6 +385,7 @@ namespace Apocapatrol
                 var h = hits[i];
                 if (best >= 0f && h.distance >= best) continue;
                 if (h.collider == null) continue;
+                if (h.distance < 0.05f) continue;                      // overlap at the start of the cast (Unity reports distance 0, a sideways normal)
                 if (h.normal.y >= minSlopeNormalY) continue;           // ground / gentle slope, drivable
                 if (!IsObstacle(h.collider)) continue;
                 best = h.distance;
@@ -446,10 +449,12 @@ namespace Apocapatrol
         {
             if (col.collider == null || col.contactCount == 0) return;
             float rel = col.relativeVelocity.magnitude;
-            if (rel < 2f) return;
+            if (rel < 3f) return;
             var contact = col.GetContact(0);
             var local = _tf.InverseTransformPoint(contact.point);
             if (local.z < 0.3f) return;                                  // not a frontal hit
+            if (contact.normal.y >= Mathf.Cos(Plugin.AiMaxSlopeDeg.Value * Mathf.Deg2Rad)) return;   // ground / bump under the nose, not a wall
+            if (Vector3.Dot(contact.normal, _tf.forward) > -0.3f) return;   // glancing / from below, not something in the way
             bool target = PlayerRef.IsPlayerOrPlayerCar(col.collider.transform);
             bool npc = !target && !IsObstacle(col.collider);
             if (npc) return;                                              // ran over a creature or a loose item: keep going

@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.9.0)
+# Apocapatrol (prototype 0.9.1)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -38,13 +38,13 @@ Every part is configurable by prefab name or in-game item name (`[Build]`; edit 
 
 ## The driving AI (Pilot.cs)
 Hit and run. The target is the player - the player's car while they drive, the player on foot otherwise; the car behaves the same either way.
-- **Charge**: aim at an intercept point (`LeadTime` seconds ahead of the target's movement, re-taken every `CommitSeconds`) and steer toward it.
+- **Charge**: full `[AI] Throttle` (eased off only once rolling and pointing well away), aim at an intercept point (`LeadTime` seconds ahead of the target's movement, re-taken every `CommitSeconds`) and steer toward it.
   The wheel turns at `SteerRate` (full-lock units per second) and is limited at speed (`MaxSteerAtSpeed`), so the car sweeps toward the player
   in a wide arc instead of pivoting onto them; above `TurnSafeSpeed` with the target far off the nose it lifts off and brakes lightly.
 - **Overshoot**: once the target is passed (behind the car, within `PassWidth` of its track) or rammed (collision with the player / their car),
   the car keeps going for `RunOutMeters` (at most `RunOutMaxSeconds`), then
 - **Turnaround**: full lock toward the target until it faces them again (back to Charge). Too slow and too far off for two seconds = a three-point turn.
-- **Recover**: a frontal hit against anything that is not the target, or not moving for `StuckSeconds` in a forward state, reverses for
+- **Recover**: a frontal hit (steep contact normal - ground bumps under the nose do not count) against anything that is not the target, or not moving for `StuckSeconds` in a forward state, reverses for
   `ReverseSeconds` with the wheels turned so the nose swings away from the obstacle (or toward the target), then charges again. Recoveries
   within `RecoverWindow` of each other reverse longer and, from the third on, in a random direction; after `MaxRecovers` the car gives up for
   `WaitSeconds`. How NWH reverses (gear -1 + throttle, or brake input at standstill) is detected on the first recovery and logged.
