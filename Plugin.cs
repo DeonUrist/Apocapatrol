@@ -15,12 +15,12 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.3.2";
+        public const string VERSION = "0.3.3";
 
         internal static ManualLogSource Log;
 
         internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel, Seat, Driver;
-        internal static ConfigEntry<bool> ReleaseHandbrake, RegisterDriver, HandbrakeWhenStopped;
+        internal static ConfigEntry<bool> ReleaseHandbrake, RegisterDriver;
         internal static ConfigEntry<float> DriverOffsetX, DriverOffsetY, DriverOffsetZ;
         internal static ConfigEntry<string> DriverDisabledFsms;
         internal static ConfigEntry<float> DriveDelaySeconds, DriveThrottle, StuckPedalChance;
@@ -70,13 +70,11 @@ namespace Apocapatrol
             DriveThrottle = Config.Bind("Driver", "DriveThrottle", 0.5f, new ConfigDescription(
                 "Throttle the driver holds (0..1); steering straight for now", new AcceptableValueRange<float>(0.05f, 1f)));
             StuckPedalChance = Config.Bind("Driver", "StuckPedalChance", 5f, new ConfigDescription(
-                "% chance that a killed driver's leg stays on the gas; otherwise the gas is released and the car rolls out on its own (handbrake once it rests)",
+                "% chance that a killed driver's gas pedal stays stuck; otherwise the gas is released and the car slowly rolls to a stop",
                 new AcceptableValueRange<float>(0f, 100f)));
             DriverOffsetX = Config.Bind("Driver", "OffsetX", 0f, new ConfigDescription("Driver offset from the car's sitPos, right (m)", new AcceptableValueRange<float>(-2f, 2f)));
             DriverOffsetY = Config.Bind("Driver", "OffsetY", 0f, new ConfigDescription("Driver offset from the car's sitPos, up (m)", new AcceptableValueRange<float>(-2f, 2f)));
             DriverOffsetZ = Config.Bind("Driver", "OffsetZ", 0f, new ConfigDescription("Driver offset from the car's sitPos, forward (m)", new AcceptableValueRange<float>(-2f, 2f)));
-            HandbrakeWhenStopped = Config.Bind("Driver", "HandbrakeWhenStopped", false,
-                "Pull the handbrake once a driverless car has rolled to a stop (off = it just stands there, like any car the player leaves)");
             RegisterDriver = Config.Bind("Driver", "RegisterDriver", false, "Register the driver like a vanilla spawn (saved, but the seat pin is not - after a load it is loose)");
 
             SpawnKey = Config.Bind("Debug", "SpawnKey", Key.F7, "Assemble one car in front of the player. None = off");

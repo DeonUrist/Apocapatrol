@@ -131,12 +131,7 @@ namespace Apocapatrol
                     {
                         Plugin.Log.LogInfo("Drive test over: " + (rb != null ? (rb.velocity.magnitude * 3.6f).ToString("0.0") : "?") + " km/h");
                         bool playerIn = drive != null && drive.Fsm.Initialized && drive.ActiveStateName == "inCar";
-                        if (!playerIn)
-                        {
-                            float b = 0f;
-                            while (b < 3f && car != null && (rb == null || rb.velocity.magnitude > 0.3f)) { Nwh.SetInput(car, 0f, 0f, 1f); b += Time.deltaTime; yield return null; }
-                            if (car != null) { Nwh.SetInput(car, 0f, 0f, 0f); Handbrake(car, true); }
-                        }
+                        if (!playerIn) Nwh.SetInput(car, 0f, 0f, 0f);   // gas released; the car rolls out by itself
                         ctl.Release();
                     }
                 }
