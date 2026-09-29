@@ -73,6 +73,14 @@ namespace Apocapatrol
             _seatRotation = _root.localRotation;
         }
 
+        // the occupant changed seats (passenger promoted to driver): follow the new anchor, no passenger aiming any more
+        internal void Reseat(Transform anchor)
+        {
+            _anchor = anchor;
+            _lockSeatRotation = false;
+            _aimActive = false;
+        }
+
         private static Transform Find(Transform[] all, string bone)
         {
             foreach (var t in all)

@@ -23,6 +23,9 @@ namespace Apocapatrol
         private float _seated;                // seconds since the driver sat down
         private bool _driving, _dead, _stuck, _done;
         private float _rolling, _nextLog;
+        private float _delayOverride = -1f;   // a promoted passenger drives off after TakeoverSeconds instead of DriveDelaySeconds
+        private float _deadFor;               // seconds since the driver died
+        private bool _paxDecided, _paxBails;  // the surviving passenger's decision (rolled once)
 
         internal static Crew Attach(GameObject car, GameObject driver)
         {
@@ -122,6 +125,7 @@ namespace Apocapatrol
         {
             if (_car == null) { Destroy(this); return; }
             if (Time.timeScale <= 0f) return;
+            if (_dead && PassengerReacts()) return;
             if (_done) return;
 
             if (!_dead)
@@ -129,7 +133,7 @@ namespace Apocapatrol
                 if (!DriverAlive()) { OnDriverDied(); return; }
                 MuteAi();
                 _seated += Time.deltaTime;
-                float delay = Plugin.DriveDelaySeconds.Value;
+                float delay = _delayOverride >= 0f && Plugin.DriveDelaySeconds.Value >= 0f ? _delayOverride : Plugin.DriveDelaySeconds.Value;
                 if (!_driving && delay >= 0f && _seated >= delay && Nwh.EngineRunning(_car)) StartDriving();   // -1 = never
                 return;
             }
@@ -158,6 +162,62 @@ namespace Apocapatrol
         }
 
         private bool DriverAlive() { return Alive(_driver, _health); }
+
+        // ------------------------------------------------------------ the surviving passenger
+
+        // After the driver's death a live passenger either takes the wheel or bails out (BailChance %), as soon as the car
+        // stands still. A stuck pedal is kicked off after StuckPedalTakeover seconds so the car can stop. If the player took
+        // the car first, the passenger always gets out. Returns true while it handled the frame.
+        private bool PassengerReacts()
+        {
+            var marker = _car.GetComponent<PatrolMarker>();
+            var pax = marker != null ? marker.Passenger : null;
+            if (pax == null || !Alive(pax, marker.PassengerHealthFsm)) return false;
+            _deadFor += Time.deltaTime;
+            if (!_paxDecided)
+            {
+                _paxDecided = true;
+                _paxBails = UnityEngine.Random.Range(0f, 100f) < Plugin.PassengerBailChance.Value;
+                Plugin.Log.LogInfo("Crew: passenger " + pax.name + " will " + (_paxBails ? "bail out" : "take the wheel") + " once the car stops ("
+                    + Plugin.PassengerBailChance.Value + " % bail roll)");
+            }
+            bool playerIn = PlayerInside();
+            if (playerIn) _paxBails = true;
+            if (_stuck && _deadFor >= Plugin.StuckPedalTakeoverSeconds.Value)
+            {
+                _stuck = false; _rolling = 0f;
+                Nwh.SetInput(_car, 0f, 0f, 0f);
+                Plugin.Log.LogInfo("Crew: passenger kicked the dead driver's foot off the pedal");
+            }
+            float speed = _rb != null ? _rb.velocity.magnitude : 0f;
+            if (speed > 1f && !playerIn) return false;                  // still rolling: let the roll-out logic run
+            if (_stuck) return false;
+            if (_paxBails)
+            {
+                Patrol.BailOut(_car, pax, marker);
+                return true;
+            }
+            Promote(pax, marker);
+            return true;
+        }
+
+        // The passenger climbs onto the driver seat and Crew starts over with it as the driver.
+        private void Promote(GameObject pax, PatrolMarker marker)
+        {
+            if (_ctl != null && _ctl.Taken) _ctl.Release();
+            if (_pilot != null) { _pilot.Detach(); _pilot = null; }
+            Nwh.SetInput(_car, 0f, 0f, 0f);
+            var drv = Patrol.MoveToDriverSeat(_car, pax);
+            if (drv == null) { Plugin.Log.LogWarning("Crew: could not seat the passenger as driver"); _paxBails = true; return; }
+            marker.Promote(drv);
+            _dead = false; _stuck = false; _done = false; _driving = false;
+            _rolling = 0f; _deadFor = 0f; _paxDecided = false; _paxBails = false;
+            _delayOverride = Plugin.PassengerTakeoverSeconds.Value;
+            Init(_car, drv);
+            _seated = 0f;
+            MuteAi();
+            Plugin.Log.LogInfo("Crew: " + drv.name + " took the wheel");
+        }
 
         private bool PlayerInside()
         {

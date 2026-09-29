@@ -17,7 +17,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.9.1";
+        public const string VERSION = "0.10.0";
 
         internal static ManualLogSource Log;
 
@@ -26,6 +26,7 @@ namespace Apocapatrol
         internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
         internal static ConfigEntry<bool> PassengerRangedCombat;
         internal static ConfigEntry<float> PassengerFireArc, PassengerMaxAimPitch, PassengerAimTurnSpeed;
+        internal static ConfigEntry<float> PassengerBailChance, PassengerTakeoverSeconds, StuckPedalTakeoverSeconds;
         internal static PoseBool PoseEnabled;
         internal static PoseFloat PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLeftLegCloser, PoseRightLegCloser, PoseLeftArmCloser, PoseRightArmCloser;
         internal static ConfigEntry<float> DriveDelaySeconds, DriveThrottle, StuckPedalChance;
@@ -165,6 +166,15 @@ namespace Apocapatrol
 
             Passenger = Config.Bind("Passenger", "Passenger", "Flexa",
                 "Who sits in the front passenger seat; Boltjaw/Flexa/Lugnut/Scrud/Sprokka shoot, Scraffa/Spanna remain passive; empty = nobody");
+            PassengerBailChance = Config.Bind("Passenger", "BailChance", 25f, new ConfigDescription(
+                "% chance that a passenger who outlives the driver gets out of the car (and fights on foot with its remaining health) " +
+                "once the car stands still; otherwise it climbs over and takes the wheel. If the player took the car first it always gets out",
+                new AcceptableValueRange<float>(0f, 100f)));
+            PassengerTakeoverSeconds = Config.Bind("Passenger", "TakeoverSeconds", 2f, new ConfigDescription(
+                "A passenger that takes the wheel drives off this long after climbing over, s", new AcceptableValueRange<float>(0f, 60f)));
+            StuckPedalTakeoverSeconds = Config.Bind("Passenger", "StuckPedalTakeoverSeconds", 6f, new ConfigDescription(
+                "With a dead driver's foot stuck on the gas, a live passenger kicks it off after this long so the car can stop, s",
+                new AcceptableValueRange<float>(0f, 120f)));
             PassengerRangedCombat = Config.Bind("Passenger", "RangedCombat", true,
                 "Let ranged passengers use their vanilla targeting and attack logic while seated");
             PassengerFireArc = Config.Bind("Passenger", "FireArcHalfAngle", 90f, new ConfigDescription(

@@ -307,6 +307,63 @@ namespace Apocapatrol
             return go;
         }
 
+        // The surviving passenger climbs over to the driver seat: same placement as SeatOccupant, AI fully muted, pose re-anchored.
+        internal static GameObject MoveToDriverSeat(GameObject car, GameObject pax)
+        {
+            var sit = FindChild(car.transform, "sitPos") ?? FindChild(car.transform, "hinge_seat_driver");
+            if (sit == null || pax == null) return null;
+            var guard = pax.GetComponent<PassengerGuard>();
+            var oldAnchor = pax.transform.parent;
+            if (guard != null) UnityEngine.Object.Destroy(guard);
+            Crew.MuteAi(pax);
+            var off = new Vector3(Plugin.DriverOffsetX.Value, Plugin.DriverOffsetY.Value, Plugin.DriverOffsetZ.Value);
+            pax.transform.SetParent(sit, true);
+            pax.transform.position = sit.position + car.transform.right * off.x + car.transform.up * off.y + car.transform.forward * off.z;
+            pax.transform.rotation = Quaternion.LookRotation(car.transform.forward, car.transform.up);
+            var pose = pax.GetComponent<Pose>();
+            if (pose != null) pose.Reseat(sit);
+            pax.name = pax.name.Replace("(Passenger)", "(Driver)");
+            if (oldAnchor != null && oldAnchor.name == "Apocapatrol.PassengerPos") UnityEngine.Object.Destroy(oldAnchor.gameObject);
+            return pax;
+        }
+
+        // The passenger gets out: a fresh instance of its prefab (fully vanilla AI, registered like a spawned enemy so it is
+        // saved by the game) appears beside the car with the passenger's remaining health; the seated copy is destroyed.
+        // A fresh instance rather than the seated one because the seat setup rewires its FSM actions (ranged-only, melee off).
+        internal static void BailOut(GameObject car, GameObject pax, PatrolMarker marker)
+        {
+            float health = GetHealth(pax);
+            var prefab = Prefabs.FindAny(marker.PassengerPrefab);
+            var anchor = pax.transform.parent;
+            var sit = FindChild(car.transform, "sitPos");
+            float side = 1f;
+            if (anchor != null && sit != null) side = Vector3.Dot(anchor.position - sit.position, car.transform.right) >= 0f ? 1f : -1f;
+            var from = (anchor != null ? anchor.position : car.transform.position) + car.transform.right * side * 2.5f + Vector3.up * 1.5f;
+            var pos = from + Vector3.down * 1.2f;
+            var hits = Physics.RaycastAll(from, Vector3.down, 6f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float best = float.MaxValue;
+            foreach (var h in hits)
+                if (h.collider != null && !h.collider.transform.IsChildOf(car.transform) && !h.collider.transform.IsChildOf(pax.transform) && h.distance < best)
+                { best = h.distance; pos = h.point + Vector3.up * 0.1f; }
+            var rot = Quaternion.LookRotation(Vector3.ProjectOnPlane(car.transform.right * side, Vector3.up).normalized, Vector3.up);
+
+            marker.PassengerLeft();
+            if (prefab == null)
+            {
+                Plugin.Log.LogWarning("Bail-out: passenger prefab not found: " + marker.PassengerPrefab + "; the passenger just disappears");
+                UnityEngine.Object.Destroy(pax);
+                if (anchor != null && anchor.name == "Apocapatrol.PassengerPos") UnityEngine.Object.Destroy(anchor.gameObject);
+                return;
+            }
+            var mob = UnityEngine.Object.Instantiate(prefab, pos, rot);
+            mob.SetActive(true);
+            if (Plugin.RegisterWithGame.Value) { Register.Name(mob, prefab.name); Register.Add(mob, false); }
+            if (health > 0f) { SetHealth(mob, health); mob.AddComponent<LateHealth>().Value = health; }
+            UnityEngine.Object.Destroy(pax);
+            if (anchor != null && anchor.name == "Apocapatrol.PassengerPos") UnityEngine.Object.Destroy(anchor.gameObject);
+            Plugin.Log.LogInfo("Bail-out: " + mob.name + " got out of " + car.name + " with " + (health > 0f ? health.ToString("0") : "full") + " health at " + pos);
+        }
+
         internal static float GetHealth(GameObject who)
         {
             if (who == null) return -1f;
@@ -315,7 +372,7 @@ namespace Apocapatrol
             return h != null ? h.Value : -1f;
         }
 
-        private static void SetHealth(GameObject who, float value)
+        internal static void SetHealth(GameObject who, float value)
         {
             var f = who.GetComponents<PlayMakerFSM>().FirstOrDefault(x => x.FsmName == "Health");
             var h = f != null ? f.FsmVariables.GetFsmFloat("Health") : null;
@@ -334,7 +391,19 @@ namespace Apocapatrol
             }
         }
 
-        // =============================================================== helpers
+        // Re-applies a health value for a few frames after Instantiate, in case the Health FSM's start state resets it.
+    internal class LateHealth : MonoBehaviour
+    {
+        internal float Value;
+        private int _frames;
+        private void Update()
+        {
+            Patrol.SetHealth(gameObject, Value);
+            if (++_frames >= 3) Destroy(this);
+        }
+    }
+
+    // =============================================================== helpers
 
         private static bool PlayerPose(out Vector3 p, out Vector3 fwd)
         {
@@ -482,6 +551,8 @@ namespace Apocapatrol
         private bool _autoWas;
 
         internal InputControl(GameObject car) { _car = car; }
+
+        internal bool Taken { get { return _taken.Count > 0; } }
 
         internal void Take()
         {

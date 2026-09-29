@@ -47,6 +47,24 @@ namespace Apocapatrol
             return marker;
         }
 
+        internal GameObject Passenger { get { return _passenger; } }
+        internal string PassengerPrefab { get { return _passengerPrefab; } }
+        internal PlayMakerFSM PassengerHealthFsm
+        {
+            get { return _passenger != null ? _passenger.GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == "Health") : null; }
+        }
+
+        // the passenger became the driver: the car is saved with it at the wheel and an empty passenger seat
+        internal void Promote(GameObject newDriver)
+        {
+            _driverPrefab = _passengerPrefab;
+            _driver = newDriver;
+            _passenger = null;
+        }
+
+        // the passenger left the car (it lives on as an ordinary registered mob, saved by the game itself)
+        internal void PassengerLeft() { _passenger = null; }
+
         internal PatrolCarData Snapshot()
         {
             var crew = GetComponent<Crew>();

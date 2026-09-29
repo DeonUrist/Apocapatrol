@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.9.1)
+# Apocapatrol (prototype 0.10.0)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -77,6 +77,13 @@ The ranged prefabs' separate right-hand melee props (`machete`, `old_knife`, or 
 the close-range state from visually drawing a blade without affecting the left-hand firearm, burst cadence, muzzle effects, or firing sound.
 Their melee `Damage` and contact `FireDamage` FSM actions are neutralized and `FireDamageCollider` is disabled as well, so native FSMs cannot
 re-enable an invisible close-range hit. Projectile damage continues through the separate `Damage Ranged` FSM.
+
+### When the driver dies
+A passenger that outlives the driver acts as soon as the car stands still (a stuck pedal is kicked off after `StuckPedalTakeoverSeconds`, 6 s):
+with `BailChance` % (25) it **bails out** - it is replaced by a fresh instance of its prefab beside the car, fully vanilla AI, registered like a
+spawned enemy (so the game saves it), with the health it had left; otherwise it **takes the wheel**: it climbs onto the driver seat, the seat
+locks again, and after `TakeoverSeconds` (2) it drives off with the driving AI. If the player got into the car first, the passenger always bails.
+The save sidecar follows: a promoted passenger is saved as the driver with an empty passenger seat.
 
 ## Saving and loading
 Vanilla saves the registered car and its attached parts, but cannot save Apocapatrol's seat pins or autonomous-driving components. When the game
