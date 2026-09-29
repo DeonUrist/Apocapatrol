@@ -20,6 +20,9 @@ namespace Apocapatrol
         private GameObject _car;
         private Transform _tf;
         private Rigidbody _rb;
+        private RamTargets _rams = RamTargets.Pedestrians;   // from the car's template (PatrolMarker)
+        private bool _ramsTarget;                             // this step: may the current target (player / their car) be rammed?
+        private float _passSide = 1f;                         // drive-by side when the target must not be rammed
 
         private PilotState _state = PilotState.Charge;
         private float _stateTime;
@@ -64,9 +67,11 @@ namespace Apocapatrol
         {
             var p = car.GetComponent<Pilot>() ?? car.AddComponent<Pilot>();
             p._car = car; p._tf = car.transform; p._rb = car.GetComponent<Rigidbody>();
+            var marker = car.GetComponent<PatrolMarker>();
+            p._rams = marker != null ? marker.Rams : RamTargets.Pedestrians;
             p.Enter(PilotState.Charge, "start");
             if (!_ownRoots.Contains(car.transform)) _ownRoots.Add(car.transform);
-            Plugin.Log.LogInfo("Pilot: driving AI on " + car.name);
+            Plugin.Log.LogInfo("Pilot: driving AI on " + car.name + ", rams " + p._rams);
             return p;
         }
 
@@ -88,6 +93,7 @@ namespace Apocapatrol
 
             Vector3 tpos, tvel; GameObject tcar;
             _hasTarget = PlayerRef.Target(out tpos, out tvel, out tcar);
+            _ramsTarget = tcar != null ? _rams >= RamTargets.Cars : _rams >= RamTargets.Pedestrians;
             Vector3 fwd = Flat(_tf.forward);
             Vector3 vel = _rb != null ? _rb.velocity : Vector3.zero;
             float speed = vel.magnitude;
@@ -177,6 +183,13 @@ namespace Apocapatrol
                 var leadVec = Flat(tvel) * lead;
                 if (leadVec.magnitude > 25f) leadVec = leadVec.normalized * 25f;
                 _aim = tpos + leadVec;
+                if (!_ramsTarget)
+                {
+                    // drive-by: aim beside the target, on the side it already is relative to our nose (the smaller turn)
+                    var toT = Flat(tpos - _tf.position);
+                    var lateral = toT.sqrMagnitude > 1e-3f ? Vector3.Cross(Vector3.up, toT.normalized) : _tf.right;   // right of the line to it
+                    _aim -= lateral * _passSide * Plugin.AiDriveByOffset.Value;
+                }
             }
             var toAim = Flat(_aim - _tf.position);
             float aimAngle = toAim.sqrMagnitude > 1e-3f ? Vector3.SignedAngle(Flat(_tf.forward), toAim.normalized, Vector3.up) : 0f;
@@ -189,7 +202,7 @@ namespace Apocapatrol
             float avoidSteer, avoidThrottle, avoidBrake;
             Sense(speed, out avoidSteer, out avoidThrottle, out avoidBrake);
             // ...unless something (a parked car, a rock) sits between us and the target: the centre feeler never sees the target itself
-            bool ramming = _dist < Plugin.AiRamDistance.Value && Mathf.Abs(_angle) < 35f && (_feelerHit[0] < 0f || _feelerHit[0] > _dist);
+            bool ramming = _ramsTarget && _dist < Plugin.AiRamDistance.Value && Mathf.Abs(_angle) < 35f && (_feelerHit[0] < 0f || _feelerHit[0] > _dist);
             if (!ramming) desired = Mathf.Clamp(desired + avoidSteer, -1f, 1f);
 
             float maxSteer = MaxSteerFor(speed);
@@ -323,6 +336,7 @@ namespace Apocapatrol
         private void Enter(PilotState s, string why)
         {
             if (_state != s || _stateTime > 0f) Plugin.Verbose("Pilot: " + _state + " -> " + s + " (" + why + ")");
+            if (s == PilotState.Charge) _passSide = _angle > 1f ? 1f : _angle < -1f ? -1f : (UnityEngine.Random.value < 0.5f ? -1f : 1f);
             _state = s; _stateTime = 0f; _why = why; _turnSlow = 0f;
             if (s != PilotState.Recover) _stuckTime = 0f;
             _nextAim = 0f;
@@ -471,15 +485,17 @@ namespace Apocapatrol
         {
             var t = c.transform;
             if (t.IsChildOf(_tf)) return false;
-            if (PlayerRef.IsPlayerOrPlayerCar(t)) return false;
+            int kind = PlayerRef.Kind(t);
+            if (kind == 1) return _rams < RamTargets.Pedestrians;          // the player on foot
+            if (kind == 2) return _rams < RamTargets.Cars;                 // the player's car
             bool creature = false;
             for (var a = t; a != null; a = a.parent)
             {
-                if (PlayerRef.HasVehicleController(a)) return true;       // another car (parked, wreck, patrol): obstacle
+                if (PlayerRef.HasVehicleController(a)) return _rams < RamTargets.Cars;   // another car (parked, wreck, patrol)
                 foreach (var f in a.GetComponents<PlayMakerFSM>())
                     if (f.FsmName == "Health" || f.FsmName == "Detection") creature = true;
             }
-            if (creature) return false;                                   // creature / NPC: run it over
+            if (creature) return _rams < RamTargets.Pedestrians;         // creature / NPC: run it over, or avoid it
             var rb = c.attachedRigidbody;
             if (rb != null && !rb.isKinematic && rb.mass < Plugin.AiIgnoreMassBelow.Value) return false;   // loose item
             return true;
@@ -507,7 +523,8 @@ namespace Apocapatrol
             bool frontal = local.z > 0.3f && along < -0.3f;
             bool rear = local.z < -0.3f && along > 0.3f;
             if (!frontal && !rear) return;                                // glancing / side, not something in the way
-            bool target = PlayerRef.IsPlayerOrPlayerCar(col.collider.transform);
+            int kind = PlayerRef.Kind(col.collider.transform);
+            bool target = kind != 0 && !IsObstacle(col.collider);         // the player / their car, and we are allowed to ram it
             bool npc = !target && !IsObstacle(col.collider);
             if (npc) return;                                              // ran over a creature or a loose item: keep going
             if (rear)
@@ -533,7 +550,7 @@ namespace Apocapatrol
             if (local.z < 0.3f || Vector3.Dot(contact.normal, _tf.forward) > -0.3f) return;
             if (contact.normal.y >= Mathf.Cos(Plugin.AiMaxSlopeDeg.Value * Mathf.Deg2Rad)) return;
             if (_rb != null && Vector3.Dot(_rb.velocity, _tf.forward) > 2f) return;    // still making progress
-            if (PlayerRef.IsPlayerOrPlayerCar(col.collider.transform) || !IsObstacle(col.collider)) return;
+            if (!IsObstacle(col.collider)) return;
             _pushTime += Time.fixedDeltaTime;
             _pushStamp = Time.fixedTime;
             _pushName = col.collider.name;
@@ -642,20 +659,23 @@ namespace Apocapatrol
             return true;
         }
 
-        internal static bool IsPlayerOrPlayerCar(Transform t)
+        internal static bool IsPlayerOrPlayerCar(Transform t) { return Kind(t) != 0; }
+
+        // 0 = neither, 1 = the player on foot, 2 = the car the player is driving
+        internal static int Kind(Transform t)
         {
-            if (t == null) return false;
+            if (t == null) return 0;
             var p = _player;                       // no lookup here; a null player means nothing to ram anyway
-            if (p != null && (t == p || t.IsChildOf(p))) return true;
             var car = _playerCar;
-            if (car != null && t.IsChildOf(car.transform)) return true;
+            if (car != null && t.IsChildOf(car.transform)) return 2;
             // the player object may not be parented under its car: anything the player is inside of counts
             if (p != null && car == null)
             {
                 for (var a = p.parent; a != null; a = a.parent)
-                    if (t.IsChildOf(a) && HasVehicleController(a)) return true;
+                    if (t.IsChildOf(a) && HasVehicleController(a)) return 2;
             }
-            return false;
+            if (p != null && (t == p || t.IsChildOf(p))) return car != null ? 2 : 1;
+            return 0;
         }
     }
 }

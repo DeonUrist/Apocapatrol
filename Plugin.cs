@@ -17,7 +17,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.13.3";
+        public const string VERSION = "0.14.0";
 
         internal static ManualLogSource Log;
 
@@ -33,6 +33,8 @@ namespace Apocapatrol
         internal static PoseFloat PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLeftLegCloser, PoseRightLegCloser, PoseLeftArmCloser, PoseRightArmCloser;
         internal static ConfigEntry<float> DriveDelaySeconds, DriveThrottle, StuckPedalChance;
         internal static ConfigEntry<bool> AiEnabled, AiInvertSteering, AiOverlay;
+        internal static ConfigEntry<RamTargets> ConfigRamTargets;
+        internal static ConfigEntry<float> AiDriveByOffset;
         internal static ConfigEntry<float> AiThrottle, AiLeadTime, AiCommitSeconds, AiSteerRate, AiSteerAngle, AiMaxSteerAtSpeed, AiTurnSafeSpeed,
             AiRamDistance, AiPassWidth, AiRunOutMeters, AiRunOutMaxSeconds, AiReverseSeconds, AiReverseThrottle, AiStuckSeconds,
             AiRecoverWindow, AiMaxRecovers, AiWaitSeconds, AiFeelerRange, AiFeelerSpeedFactor, AiFrontOffset, AiMaxSlopeDeg, AiAvoidGain,
@@ -124,6 +126,11 @@ namespace Apocapatrol
             AiThrottle = Config.Bind("AI", "Throttle", 1f, new ConfigDescription(
                 "Maximum throttle the driving AI uses (0..1); [Driver] DriveThrottle is only for the AI-off drive and the stuck pedal",
                 new AcceptableValueRange<float>(0.05f, 1f)));
+            ConfigRamTargets = Config.Bind("AI", "RamTargets", RamTargets.Pedestrians,
+                "For a car built from the [Build] fields (templates carry their own): what the AI runs into on purpose. None = rams nothing, " +
+                "drive-bys only; Pedestrians = runs over the player on foot and creatures, avoids cars; Cars = rams the player's car and other vehicles too");
+            AiDriveByOffset = Config.Bind("AI", "DriveByOffset", 5f, new ConfigDescription(
+                "When the target may not be rammed, the car aims this far beside it and drives past instead, m", new AcceptableValueRange<float>(1f, 20f)));
             AiLeadTime = Config.Bind("AI", "LeadTime", 1f, new ConfigDescription(
                 "Aim this many seconds ahead of the target's movement (intercept), s", new AcceptableValueRange<float>(0f, 4f)));
             AiCommitSeconds = Config.Bind("AI", "CommitSeconds", 0.5f, new ConfigDescription(

@@ -84,7 +84,7 @@ namespace Apocapatrol
                     else driver = SeatLiveDriver(car, tpl.Driver);
                 }
                 if (!string.IsNullOrEmpty(tpl.Passenger)) passenger = SeatPassenger(car, tpl.Passenger);
-                PatrolMarker.Attach(car, body.name, tpl.Driver, driver, tpl.Passenger, passenger);
+                PatrolMarker.Attach(car, body.name, tpl.Driver, driver, tpl.Passenger, passenger, tpl.Rams);
 
                 yield return new WaitForSeconds(1.5f);
                 if (Plugin.VerboseLog.Value) LogHingeStates(car);

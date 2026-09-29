@@ -20,7 +20,7 @@ namespace Apocapatrol
 
     public class PatrolCarData
     {
-        public string carName, bodyPrefab;
+        public string carName, bodyPrefab, ramTargets;
         public float positionX, positionY, positionZ;
         public string driverPrefab, driverPhase;
         public bool driverPresent;
@@ -34,11 +34,15 @@ namespace Apocapatrol
     {
         private string _bodyPrefab, _driverPrefab, _passengerPrefab;
         private GameObject _driver, _passenger;
+        private RamTargets _rams = RamTargets.Pedestrians;
+
+        internal RamTargets Rams { get { return _rams; } }
 
         internal static PatrolMarker Attach(GameObject car, string bodyPrefab, string driverPrefab, GameObject driver,
-            string passengerPrefab, GameObject passenger)
+            string passengerPrefab, GameObject passenger, RamTargets rams)
         {
             var marker = car.GetComponent<PatrolMarker>() ?? car.AddComponent<PatrolMarker>();
+            marker._rams = rams;
             marker._bodyPrefab = bodyPrefab ?? "";
             marker._driverPrefab = driverPrefab ?? "";
             marker._passengerPrefab = passengerPrefab ?? "";
@@ -83,6 +87,7 @@ namespace Apocapatrol
             {
                 carName = gameObject.name,
                 bodyPrefab = _bodyPrefab,
+                ramTargets = _rams.ToString(),
                 positionX = p.x, positionY = p.y, positionZ = p.z,
                 driverPrefab = _driverPrefab,
                 driverPresent = driverPresent,
@@ -98,7 +103,7 @@ namespace Apocapatrol
 
     internal static class PatrolPersistence
     {
-        private const int SchemaVersion = 1;
+        private const int SchemaVersion = 2;   // 1 = no ramTargets (read as Pedestrians)
         private const int Magic = 0x434F5041; // "APOC" in little-endian; rejects unrelated/corrupt files.
         private const int MaxCarsPerSave = 1024;
         private static PlayMakerFSM _saveLoad, _newGoSave;
@@ -189,7 +194,7 @@ namespace Apocapatrol
             _restoreRunning = true;
             PatrolSaveData data = Load(slot);
             if (data == null) { _restoreRunning = false; yield break; }
-            if (data.version != SchemaVersion || data.worldSeed != seed
+            if (data.version < 1 || data.version > SchemaVersion || data.worldSeed != seed
                 || !string.Equals(data.saveFile, Path.GetFileName(slot), StringComparison.OrdinalIgnoreCase))
             {
                 Plugin.Log.LogWarning("Persistence: sidecar version/slot/seed does not match " + slot + "; skipped");
@@ -259,7 +264,7 @@ namespace Apocapatrol
             if (data.passengerPresent && !string.IsNullOrEmpty(data.passengerPrefab))
                 passenger = Patrol.SeatPassenger(car, data.passengerPrefab, data.passengerHealth);
 
-            PatrolMarker.Attach(car, data.bodyPrefab, data.driverPrefab, driver, data.passengerPrefab, passenger);
+            PatrolMarker.Attach(car, data.bodyPrefab, data.driverPrefab, driver, data.passengerPrefab, passenger, CarTemplate.ParseRams(data.ramTargets));
             Plugin.Log.LogInfo("Persistence: crew restored on " + car.name + " (" + phase + ")");
         }
 
@@ -325,7 +330,7 @@ namespace Apocapatrol
                 int count = reader.ReadInt32();
                 if (count < 0 || count > MaxCarsPerSave) throw new InvalidDataException("invalid car count " + count);
                 var cars = new PatrolCarData[count];
-                for (int i = 0; i < count; i++) cars[i] = ReadCar(reader);
+                for (int i = 0; i < count; i++) cars[i] = ReadCar(reader, version);
                 if (stream.Position != stream.Length) Plugin.Verbose("Persistence: sidecar has trailing data: " + path);
                 return new PatrolSaveData { version = version, saveFile = slot, worldSeed = seed, cars = cars };
             }
@@ -338,11 +343,12 @@ namespace Apocapatrol
             WriteString(writer, car.driverPrefab); WriteString(writer, car.driverPhase);
             writer.Write(car.driverPresent); writer.Write(car.driverHealth); writer.Write(car.seatedSeconds);
             WriteString(writer, car.passengerPrefab); writer.Write(car.passengerPresent); writer.Write(car.passengerHealth);
+            WriteString(writer, car.ramTargets ?? "Pedestrians");
         }
 
-        private static PatrolCarData ReadCar(BinaryReader reader)
+        private static PatrolCarData ReadCar(BinaryReader reader, int version)
         {
-            return new PatrolCarData
+            var car = new PatrolCarData
             {
                 carName = ReadString(reader), bodyPrefab = ReadString(reader),
                 positionX = reader.ReadSingle(), positionY = reader.ReadSingle(), positionZ = reader.ReadSingle(),
@@ -350,6 +356,8 @@ namespace Apocapatrol
                 driverPresent = reader.ReadBoolean(), driverHealth = reader.ReadSingle(), seatedSeconds = reader.ReadSingle(),
                 passengerPrefab = ReadString(reader), passengerPresent = reader.ReadBoolean(), passengerHealth = reader.ReadSingle()
             };
+            car.ramTargets = version >= 2 ? ReadString(reader) : "Pedestrians";
+            return car;
         }
 
         private static void WriteString(BinaryWriter writer, string value) { writer.Write(value ?? ""); }
