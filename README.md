@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.15.1)
+# Apocapatrol (prototype 0.16.0)
 
 BepInEx 5 plugin for **Apocalypter** — groundwork for AI-driven raider cars. Right now it is a debug builder:
 press `SpawnKey` (F7) in game and a complete car is assembled in front of you with the game's own part-attach recipe.
@@ -26,6 +26,16 @@ Radiator, Sprokka driving, Lugnut / Flexa passenger) - all eight ram Pedestrians
 Truck Radiator, rustallion seats, Spanna driving, Flexa passenger) and **Rustcargo_Advanced** (truck_wheel_2_armored, 7L I6 diesel, Big Truck
 Radiator, Sprokka driving, Flexa passenger) ram Cars. Every car gets an exhaust on `hinge_exhaust` (single / v6 / the_four / poloska /
 rustallion, matched to the engine and frame). A convoy spawner will draw from the park.
+
+## Cargo trucks (Cargo.cs)
+Every vehicle has `parts/PhysicsLock`: two BoxColliders on layer 18, the floor and ceiling of its cargo volume. Vanilla items carry a `LockPhysics`
+FSM that raycasts up and down on that layer and, when both hit, parents the item to the lower box and destroys its Rigidbody - that is how cargo
+rides along until the player grabs it (`GrabItem` sends `LockPhysics_OFF` and the Rigidbody comes back). A template with `Cargo = "<key>"` fills
+that volume at build time with the items of the `[Cargo] <key>` config entry (`prefab:count;prefab:min-max;...`, prefab or in-game names): the
+items are spawned with the vanilla recipe (registered, so the game saves them), packed on the bed floor in rows and layers, and locked at once.
+Trucks: **Rustcargo_Food** (dogfood_can ×16), **Rustcargo_Gasoline** (Gasoline_Can ×8), **Rustcargo_Water** (Water_Can_Plastic ×8),
+**Rustcargo_Medicine** (bandage_1 ×10, first_aid_1 ×4), **Rustcargo_Drugs** (alcohol_canister ×6, weed_bag ×8, plant_weed ×3) - all Rustcargo_Basic
+otherwise (Spanna driving, Flexa passenger, rams Cars). Edit the amounts live in Apocasetter.
 
 ## Seated pose (Pose.cs)
 The game has no sit animation, so after the Animator has posed an occupant each frame the mod overrides the Mixamo bones into a seated pose and

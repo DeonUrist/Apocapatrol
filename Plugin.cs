@@ -17,12 +17,19 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.15.1";
+        public const string VERSION = "0.16.0";
 
         internal static ManualLogSource Log;
 
         internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel, Exhaust, Seat, PassengerSeat, Driver, Passenger, Template, TemplateName;
         internal static ConfigEntry<Key> SaveTemplateKey, MenuKey;
+        internal static readonly Dictionary<string, ConfigEntry<string>> CargoSpecs = new Dictionary<string, ConfigEntry<string>>(StringComparer.OrdinalIgnoreCase);
+
+        internal static string CargoSpec(string key)
+        {
+            ConfigEntry<string> e;
+            return key != null && CargoSpecs.TryGetValue(key, out e) ? e.Value : "";
+        }
         internal static ConfigEntry<bool> ReleaseHandbrake, RegisterDriver;
         internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
         internal static ConfigEntry<bool> PassengerRangedCombat, DriverRangedCombat;
@@ -194,6 +201,11 @@ namespace Apocapatrol
                 new AcceptableValueRange<float>(20f, 2000f)));
             AiInvertSteering = Config.Bind("AI", "InvertSteering", false,
                 "Flip the steering sign if the car turns away from the target instead of toward it");
+
+            foreach (var d in CarTemplate.CargoDefaults)
+                CargoSpecs[d[0]] = Config.Bind("Cargo", d[0], d[1],
+                    "Items loaded into the bed of the Rustcargo_" + d[0] + " truck: prefab:count;prefab:min-max;... (prefab or in-game item names). " +
+                    "They are locked in the covered bed like vanilla cargo until the player grabs them");
 
             Passenger = Config.Bind("Passenger", "Passenger", "Flexa",
                 "Who sits in the front passenger seat; Boltjaw/Flexa/Lugnut/Scrud/Sprokka shoot, Scraffa/Spanna remain passive; empty = nobody");

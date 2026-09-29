@@ -133,7 +133,7 @@ namespace Apocapatrol
         private static string Summary(CarTemplate t)
         {
             return t.Body + "  ·  " + t.Engine + "  ·  " + (t.Driver.Length > 0 ? t.Driver : "no driver") + " / " + (t.Passenger.Length > 0 ? t.Passenger : "no passenger")
-                + "  ·  rams " + t.Rams;
+                + "  ·  rams " + t.Rams + (t.Cargo.Length > 0 ? "  ·  cargo: " + t.Cargo : "");
         }
     }
 }

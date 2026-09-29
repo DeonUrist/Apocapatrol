@@ -86,6 +86,8 @@ namespace Apocapatrol
 
                 if (tpl.FillFuel) Fuel(car);
                 if (tpl.ReleaseHandbrake) Handbrake(car, false);
+                List<GameObject> cargo = null;
+                if (!string.IsNullOrEmpty(tpl.Cargo)) cargo = Cargo.Load(car, Plugin.CargoSpec(tpl.Cargo));
 
                 yield return null;
                 GameObject driver = null, passenger = null;
@@ -98,6 +100,7 @@ namespace Apocapatrol
                 PatrolMarker.Attach(car, body.name, tpl.Driver, driver, tpl.Passenger, passenger, tpl.Rams);
 
                 yield return new WaitForSeconds(1.5f);
+                if (cargo != null) Cargo.SettleFsms(cargo);
                 if (Plugin.VerboseLog.Value) LogHingeStates(car);
 
                 if (Plugin.StartEngine.Value)

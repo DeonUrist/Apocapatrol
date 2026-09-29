@@ -18,7 +18,18 @@ namespace Apocapatrol
         internal RamTargets Rams = RamTargets.Pedestrians;
         internal string Body = "", Wheel = "", Engine = "", Radiator = "", SteeringWheel = "", Exhaust = "", Seat = "", PassengerSeat = "";
         internal string Driver = "", Passenger = "";
+        internal string Cargo = "";           // key of a [Cargo] config entry ("Food", "Gasoline", ...) whose items fill the bed; "" = empty bed
         internal bool FillFuel = true, ReleaseHandbrake = true;
+
+        // default item specs for the [Cargo] config entries ("prefab:count;prefab:min-max;...", prefab or in-game names)
+        internal static readonly string[][] CargoDefaults =
+        {
+            new[] { "Food", "dogfood_can:16" },
+            new[] { "Gasoline", "Gasoline_Can:8" },
+            new[] { "Water", "Water_Can_Plastic:8" },
+            new[] { "Medicine", "bandage_1:10;first_aid_1:4" },
+            new[] { "Drugs", "alcohol_canister:6;weed_bag:8;plant_weed:3" },
+        };
 
         internal CarTemplate() { }
 
@@ -55,6 +66,17 @@ namespace Apocapatrol
                 "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars),
             new CarTemplate("Rustcargo_Advanced", "Rustcargo", "truck_wheel_2_armored", "7L I6 165HP 542Nm Diesel", "radiator_truck_big", "steeringwheel_3", "rustallion_exhaust_2",
                 "rustallion_seat_front", "rustallion_seat_front", "Sprokka", "Flexa", RamTargets.Cars),
+            // cargo trucks = Rustcargo_Basic with a loaded bed; the items and amounts are the [Cargo] config entries
+            new CarTemplate("Rustcargo_Food", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "rustallion_exhaust_1",
+                "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Food" },
+            new CarTemplate("Rustcargo_Gasoline", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "rustallion_exhaust_1",
+                "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Gasoline" },
+            new CarTemplate("Rustcargo_Water", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "rustallion_exhaust_1",
+                "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Water" },
+            new CarTemplate("Rustcargo_Medicine", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "rustallion_exhaust_1",
+                "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Medicine" },
+            new CarTemplate("Rustcargo_Drugs", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "rustallion_exhaust_1",
+                "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Drugs" },
         };
 
         internal static RamTargets ParseRams(string s)
@@ -105,7 +127,8 @@ namespace Apocapatrol
         internal string Describe()
         {
             return Body + " / " + Wheel + " / " + Engine + " / " + Radiator + " / " + SteeringWheel + " / " + (Exhaust.Length > 0 ? Exhaust : "no exhaust") + " / seats " + Seat + " + " + PassengerSeat
-                + " / driver " + (Driver.Length > 0 ? Driver : "-") + " / passenger " + (Passenger.Length > 0 ? Passenger : "-") + " / rams " + Rams;
+                + " / driver " + (Driver.Length > 0 ? Driver : "-") + " / passenger " + (Passenger.Length > 0 ? Passenger : "-") + " / rams " + Rams
+                + (Cargo.Length > 0 ? " / cargo " + Cargo + " (" + Plugin.CargoSpec(Cargo) + ")" : "");
         }
 
         // F9: print the current [Build]/[Driver]/[Passenger] fields as a park entry (paste it into Park above).
