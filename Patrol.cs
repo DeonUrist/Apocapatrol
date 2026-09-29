@@ -79,6 +79,7 @@ namespace Apocapatrol
                 parts += AttachAll(car, new[] { "hinge_engine" }, tpl.Engine, "engine");
                 parts += AttachAll(car, new[] { "hinge_radiator" }, tpl.Radiator, "radiator");
                 parts += AttachAll(car, new[] { "hinge_steeringwheel" }, tpl.SteeringWheel, "steeringwheel");
+                parts += AttachAll(car, new[] { "hinge_exhaust" }, tpl.Exhaust, "exhaust");
                 parts += AttachAll(car, new[] { "hinge_seat_driver" }, tpl.Seat, "seat");
                 parts += AttachAll(car, new[] { "hinge_seat_passenger" }, tpl.PassengerSeat, "seat");
                 Plugin.Log.LogInfo(parts + " parts attached");

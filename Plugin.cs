@@ -17,11 +17,11 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.15.0";
+        public const string VERSION = "0.15.1";
 
         internal static ManualLogSource Log;
 
-        internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel, Seat, PassengerSeat, Driver, Passenger, Template, TemplateName;
+        internal static ConfigEntry<string> Body, Wheel, Engine, Radiator, SteeringWheel, Exhaust, Seat, PassengerSeat, Driver, Passenger, Template, TemplateName;
         internal static ConfigEntry<Key> SaveTemplateKey, MenuKey;
         internal static ConfigEntry<bool> ReleaseHandbrake, RegisterDriver;
         internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
@@ -71,6 +71,8 @@ namespace Apocapatrol
             Engine = Config.Bind("Build", "Engine", "1.2L I4 59HP 87Nm Gasoline", "Engine item, prefab name or in-game name");
             Radiator = Config.Bind("Build", "Radiator", "radiator_small", "Radiator item, prefab name or in-game name (empty = none)");
             SteeringWheel = Config.Bind("Build", "SteeringWheel", "steeringwheel_7", "Steering wheel item, prefab name or in-game name (empty = none)");
+            Exhaust = Config.Bind("Build", "Exhaust", "exhaust_single", "Exhaust item, prefab name or in-game name (empty = none): exhaust_single/_big, exhaust_duo/_big, " +
+                "exhaust_quad/_big, exhaust_the_four, exhaust_the_six, exhaust_v6, exhaust_v8, exhaust_buggy, poloska_exhaust, rustallion_exhaust_1..3");
             Seat = Config.Bind("Build", "Seat", "poloska_seat_front_homemade", "Driver seat item, prefab name or in-game name (empty = none)");
             PassengerSeat = Config.Bind("Build", "PassengerSeat", "poloska_seat_front_homemade", "Front passenger seat item, prefab name or in-game name (empty = none)");
             ReleaseHandbrake = Config.Bind("Build", "ReleaseHandbrake", true, "Release the handbrake (handbrake lever FSM -> HandbrakeOff)");
