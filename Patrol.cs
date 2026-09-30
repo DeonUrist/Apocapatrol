@@ -116,7 +116,7 @@ namespace Apocapatrol
 
                 car = UnityEngine.Object.Instantiate(body, pos, rot);
                 car.SetActive(true);
-                Paint.Apply(car);   // Textures/<texture>.png over the frame (e.g. junker.png)
+                Paint.Apply(car, body.name);   // Textures/<body>.png or <texture>.png over the frame (e.g. poloska.png, junker.png)
                 Register.Name(car, body.name); Register.Add(car, true);
                 Plugin.Verbose("Car frame " + car.name + " at " + pos);
 

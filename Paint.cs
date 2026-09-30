@@ -21,10 +21,27 @@ namespace Apocapatrol
             _dir = Path.Combine(Path.GetDirectoryName(pluginDll) ?? ".", Folder);   // called early in Awake: no logging here
         }
 
-        internal static void Apply(GameObject car)
+        // Textures/<body>.png (poloska.png, tinytyrant.png, rustcargo.png, junker.png) = that body's main paint texture, whatever the game
+        // calls it; wins over a file named after the texture itself. PipeRat has no single body texture (shared tiling rust textures).
+        private static readonly Dictionary<string, string> BodyTexture = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Poloska", "DefaultMaterial_BaseColor" },
+            { "TinyTyrant", "tinytyrant_yellow" },
+            { "Rustcargo", "rustcargo_green_2" },
+            { "Junker", "junker" },
+        };
+        private static readonly Dictionary<string, Material> _bodyMat = new Dictionary<string, Material>();   // "<orig mat id>|<file>"
+
+        internal static void Apply(GameObject car, string body)
         {
             if (car == null || _dir == null || !Directory.Exists(_dir)) return;
             int n = 0;
+            string bodyTexName = null, bodyFile = null; Texture2D bodyTex = null;
+            if (!string.IsNullOrEmpty(body) && BodyTexture.TryGetValue(body, out bodyTexName))
+            {
+                bodyFile = body.ToLowerInvariant();
+                bodyTex = Load(bodyFile);
+            }
             try
             {
                 foreach (var r in car.GetComponentsInChildren<Renderer>(true))
@@ -36,7 +53,18 @@ namespace Apocapatrol
                     {
                         var m = mats[i];
                         if (m == null || !m.HasProperty("_MainTex")) continue;
-                        var painted = Painted(m);
+                        Material painted = null;
+                        if (bodyTex != null && m.mainTexture != null && m.mainTexture.name == bodyTexName)
+                        {
+                            string key = m.GetInstanceID() + "|" + bodyFile;
+                            if (!_bodyMat.TryGetValue(key, out painted) || painted == null)
+                            {
+                                painted = new Material(m) { name = m.name + " (Apocapatrol " + bodyFile + ")" };
+                                painted.mainTexture = bodyTex;
+                                _bodyMat[key] = painted;
+                            }
+                        }
+                        else painted = Painted(m);
                         if (painted != null && painted != m) { mats[i] = painted; changed = true; n++; }
                     }
                     if (changed) r.sharedMaterials = mats;

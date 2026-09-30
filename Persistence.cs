@@ -291,7 +291,7 @@ namespace Apocapatrol
         private static void RestoreCar(GameObject car, PatrolCarData data)
         {
             if (car.GetComponent<PatrolMarker>() != null) return;
-            Paint.Apply(car);   // the game rebuilt the frame from its prefab: the mod's paint again
+            Paint.Apply(car, data.bodyPrefab);   // the game rebuilt the frame from its prefab: the mod's paint again
             Paint.ApplyCargo(car, data.cargoKey);
             GameObject driver = null, passenger = null;
             CrewPhase phase;
