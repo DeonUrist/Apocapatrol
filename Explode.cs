@@ -90,6 +90,23 @@ namespace Apocapatrol
                 }
 
             Deaden(car, truck);
+
+            // a small car's chassis: once it has come to rest (or after 12 s at most) it is parked for good - kinematic, the same state a
+            // loaded wreck ends up in (DistanceKinematic restarts in KinematicOn before Deaden switches it off). This loop ends; nothing polls later.
+            if (truck) yield break;
+            float until = Time.time + 12f, still = 0f;
+            Rigidbody body = car != null ? car.GetComponent<Rigidbody>() : null;
+            while (body != null && !body.isKinematic && Time.time < until)
+            {
+                yield return new WaitForSeconds(0.25f);
+                if (body == null) yield break;
+                still = body.velocity.sqrMagnitude < 0.04f && body.angularVelocity.sqrMagnitude < 0.04f ? still + 0.25f : 0f;
+                if (still >= 1f) break;
+            }
+            if (body == null || body.isKinematic) yield break;
+            body.velocity = Vector3.zero; body.angularVelocity = Vector3.zero;
+            body.isKinematic = true;
+            Plugin.Verbose("Explode: " + car.name + " chassis settled" + (still >= 1f ? "" : " (timeout)"));
         }
 
         // ------------------------------------------------------------ pieces
@@ -262,6 +279,7 @@ namespace Apocapatrol
                 string n = c.GetType().Name;
                 if (n == "VehicleController" || n == "WheelController") ((Behaviour)c).enabled = false;
             }
+            if (!truck) Grip(car);
             // engine sound scripts (SkrilStudio RealisticEngineSound, gearbox whine, muffler crackle) and every looping sound on the frame -
             // the START FSM's cranking loop kept playing when the car blew up mid-start
             foreach (var b in car.GetComponentsInChildren<Behaviour>(true))
@@ -275,6 +293,34 @@ namespace Apocapatrol
             if (pilot != null) pilot.Detach();
             var crew = car.GetComponent<Crew>();
             if (crew != null) crew.enabled = false;
+        }
+
+        // A small car's chassis without its wheels and with the NWH controllers off rests on its frame colliders and the wheel hubs' sphere
+        // colliders (wheel_hub/collider, added by the AddSphereCollider FSM) - built for the wheel simulation, with next to no friction, so the
+        // wreck kept sliding over the ground. One-time: a high-friction, no-bounce material on every solid frame collider plus a little drag.
+        private static PhysicMaterial _grip;
+        private static void Grip(GameObject car)
+        {
+            if (_grip == null)
+                _grip = new PhysicMaterial("ApocapatrolWreckGrip")
+                {
+                    dynamicFriction = 1f, staticFriction = 1f, frictionCombine = PhysicMaterialCombine.Maximum,
+                    bounciness = 0f, bounceCombine = PhysicMaterialCombine.Minimum
+                };
+            int n = 0;
+            foreach (var col in car.GetComponentsInChildren<Collider>(true))
+            {
+                if (col == null || col.isTrigger) continue;
+                bool skip = false;
+                for (var a = col.transform; a != null && a != car.transform; a = a.parent)
+                    if (a.CompareTag("vehPart") || a.name.IndexOf("_Dead", StringComparison.Ordinal) >= 0 || a.name == "PhysicsLock") { skip = true; break; }
+                if (skip) continue;
+                col.sharedMaterial = _grip;
+                n++;
+            }
+            var rb = car.GetComponent<Rigidbody>();
+            if (rb != null) { rb.drag = Mathf.Max(rb.drag, 0.5f); rb.angularDrag = Mathf.Max(rb.angularDrag, 1f); }
+            Plugin.Verbose("Explode: grip on " + n + " frame collider(s)");
         }
 
         private static void StopLoops(GameObject car)
