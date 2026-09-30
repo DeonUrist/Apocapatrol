@@ -66,9 +66,23 @@ namespace Apocapatrol
 
         internal GameObject Passenger { get { return _passenger; } }
         internal string PassengerPrefab { get { return _passengerPrefab; } }
+
+        // the passenger's Health FSM and its Health variable, resolved once per passenger (the Crew asks every frame after the
+        // driver's death; this used to allocate a GetComponents array + a LINQ search per frame)
+        private PlayMakerFSM _passengerHealth; private GameObject _passengerHealthOf;
+        internal FsmFloat PassengerHealthVar;
         internal PlayMakerFSM PassengerHealthFsm
         {
-            get { return _passenger != null ? _passenger.GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == "Health") : null; }
+            get
+            {
+                if (_passenger == null) return null;
+                if (_passengerHealthOf != _passenger)
+                {
+                    _passengerHealthOf = _passenger; PassengerHealthVar = null;
+                    _passengerHealth = _passenger.GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == "Health");
+                }
+                return _passengerHealth;
+            }
         }
 
         // the passenger became the driver: the car is saved with it at the wheel and an empty passenger seat
@@ -77,10 +91,11 @@ namespace Apocapatrol
             _driverPrefab = _passengerPrefab;
             _driver = newDriver;
             _passenger = null;
+            _passengerHealth = null; _passengerHealthOf = null; PassengerHealthVar = null;
         }
 
         // the passenger left the car (it lives on as an ordinary registered mob, saved by the game itself)
-        internal void PassengerLeft() { _passenger = null; }
+        internal void PassengerLeft() { _passenger = null; _passengerHealth = null; _passengerHealthOf = null; PassengerHealthVar = null; }
         internal string DriverPrefab { get { return _driverPrefab; } }
         internal string BodyPrefab { get { return _bodyPrefab; } }
         internal void DriverLeft() { _driver = null; }

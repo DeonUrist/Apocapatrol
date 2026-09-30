@@ -209,9 +209,13 @@ namespace Apocapatrol
         private static CarTemplate Junker(bool advanced) { return Pick(t => IsJunkerTpl(t) && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }
         private static CarTemplate Truck(bool advanced) { return Pick(t => IsTruckTpl(t) && (advanced ? IsAdvancedTpl(t) : !IsAdvancedTpl(t))); }
 
-        private static int Scaled(int baseCount, float heat) { return Mathf.Max(1, Mathf.RoundToInt(baseCount * heat)); }
+        // base count x heat x [General] PatrolSizePercent, never below min (1 = a spawn always brings a car)
+        private static int Scaled(int baseCount, float heat, int min) { return Mathf.Max(min, Mathf.RoundToInt(baseCount * heat * Plugin.SizeFactor)); }
+        private static int Scaled(int baseCount, float heat) { return Scaled(baseCount, heat, 1); }
 
         // Cars are rolled body first (small or junker), then whether that car is advanced; minimums are applied afterwards.
+        // A convoy always starts with its truck; the escort counts are scaled (down to nothing at a small patrol size, but the
+        // truck never travels completely alone).
         internal static List<CarTemplate> Compose(SpawnKind kind, float heat)
         {
             var list = new List<CarTemplate>();
@@ -251,8 +255,10 @@ namespace Apocapatrol
                 case SpawnKind.AdvancedConvoy:
                 {
                     bool advancedConvoy = kind == SpawnKind.AdvancedConvoy;
-                    Add(list, Truck(advancedConvoy) ?? Truck(!advancedConvoy));
-                    int junkers = Scaled(2, heat), smalls = Scaled(UnityEngine.Random.Range(3, 6), heat);
+                    Add(list, Truck(advancedConvoy) ?? Truck(!advancedConvoy));                 // the truck first, always
+                    int escortMin = Plugin.SizeFactor < 1f ? 0 : 1;                                // at 100 %+ every escort role keeps its old minimum of one
+                    int junkers = Scaled(2, heat, escortMin), smalls = Scaled(UnityEngine.Random.Range(3, 6), heat, escortMin);
+                    if (junkers + smalls == 0) smalls = 1;                                         // never a lone truck
                     int n = junkers + smalls;
                     var adv = new bool[n];
                     if (advancedConvoy)
@@ -311,7 +317,8 @@ namespace Apocapatrol
             }
             if (spots == null) { Plugin.Log.LogWarning("Convoy: no ground for " + Label(kind) + " around the player"); return false; }
 
-            Plugin.Verbose("Convoy: " + Label(kind) + (debug ? " (debug)" : "") + " at heat " + (heat * 100f).ToString("0") + " % (km " + _km.ToString("0.0") + ", bosses " + _bosses + "), "
+            Plugin.Verbose("Convoy: " + Label(kind) + (debug ? " (debug)" : "") + " at heat " + (heat * 100f).ToString("0") + " % (km " + _km.ToString("0.0") + ", bosses " + _bosses
+                + ", patrol size " + Plugin.PatrolSizePercent.Value + " %), "
                 + where + ": " + string.Join(", ", group.Select(t => t.Name).ToArray()));
             StartCoroutine(BuildAll(group, spots, Quaternion.LookRotation(facing)));
             return true;

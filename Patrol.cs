@@ -14,8 +14,10 @@ namespace Apocapatrol
         private PlayMakerFSM _menu, _saveLoad;
         private float _nextRefScan;
         private bool _busy;                 // the template spawner's own build (one at a time)
+        private int _inGameFrame = -1;      // InGame() is asked by four runner components every frame: evaluated once per frame
+        private bool _inGame;
 
-        internal static void ResetForScene() { Prefabs.Invalidate(); }
+        internal static void ResetForScene() { Prefabs.Invalidate(); Register.Invalidate(); }
 
         private void Update()
         {
@@ -23,6 +25,19 @@ namespace Apocapatrol
             if (!InGame()) return;
             Ram.Tick();
             ExitSpeed.Tick();
+        }
+
+        // [Debug] AiOverlay: one OnGUI for every pilot (an OnGUI on each car would be dispatched per IMGUI event whether or not it draws)
+        private void OnGUI()
+        {
+            if (!Plugin.AiOverlay.Value || Time.timeScale <= 0f) return;
+            var all = Pilot.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var p = all[i];
+                if (p == null) continue;
+                GUI.Label(new Rect(10, 10 + 18 * i, 1400, 22), p.OverlayLine());
+            }
         }
 
         // builds a template (from the F8 menu); one at a time
@@ -43,6 +58,13 @@ namespace Apocapatrol
         }
 
         internal bool InGame()
+        {
+            if (_inGameFrame == Time.frameCount) return _inGame;
+            _inGameFrame = Time.frameCount;
+            return _inGame = InGameNow();
+        }
+
+        private bool InGameNow()
         {
             if (Time.unscaledTime >= _nextRefScan && (!Alive(_menu) || !Alive(_saveLoad)))
             {
@@ -114,7 +136,9 @@ namespace Apocapatrol
                     string spec = Cargo.SpecFor(lootKey);
                     float scale = UnityEngine.Random.Range(Mathf.Min(tpl.LootScaleMin, tpl.LootScaleMax), Mathf.Max(tpl.LootScaleMin, tpl.LootScaleMax));
                     Plugin.Verbose("Loot: " + lootKey + " (" + spec + ") x" + Plugin.LootMultiplier.Value + " x" + scale.ToString("0.00") + " (template)");
-                    cargo = Cargo.Load(car, spec, scale);
+                    cargo = new List<GameObject>();
+                    yield return Cargo.Load(car, spec, scale, cargo);   // a few items per frame, not the whole bed in one
+                    if (car == null) yield break;
                 }
 
                 yield return null;
@@ -345,8 +369,9 @@ namespace Apocapatrol
             else Crew.MuteAi(go);
             go.name = prefab.name + "(" + role + ")";
 
+            var carCols = car.GetComponentsInChildren<Collider>(true);   // once, not once per occupant collider
             foreach (var a in go.GetComponentsInChildren<Collider>(true))
-                foreach (var b in car.GetComponentsInChildren<Collider>(true))
+                foreach (var b in carCols)
                     if (a != null && b != null) Physics.IgnoreCollision(a, b, true);
 
             var root = go.GetComponent<Rigidbody>() ?? go.AddComponent<Rigidbody>();
@@ -369,15 +394,22 @@ namespace Apocapatrol
         internal static int IgnoreCollisionsIfChanged(GameObject who, GameObject car)
         {
             if (who == null || car == null) return 0;
+            return IgnoreCollisionsIfChanged(who, car, car.GetComponentsInChildren<Collider>(true));
+        }
+
+        // carCols = the car's colliders, fetched by the caller once for every occupant it checks
+        internal static int IgnoreCollisionsIfChanged(GameObject who, GameObject car, Collider[] carCols)
+        {
+            if (who == null || car == null) return 0;
             long sig = 17;
             foreach (var a in who.GetComponentsInChildren<Collider>(true))
                 if (a != null && a.enabled && a.gameObject.activeInHierarchy) sig = sig * 31 + a.GetInstanceID();
-            foreach (var b in car.GetComponentsInChildren<Collider>(true))
+            foreach (var b in carCols)
                 if (b != null && b.enabled && b.gameObject.activeInHierarchy) sig = sig * 31 + b.GetInstanceID();
             long old;
             if (_ignoreSignature.TryGetValue(who, out old) && old == sig) return 0;
             _ignoreSignature[who] = sig;
-            int n = IgnoreCollisions(who, car);
+            int n = IgnoreCollisions(who, car, carCols);
             Plugin.Verbose("Collision ignores re-applied for " + who.name + ": " + n + " pairs");
             return n;
         }
@@ -385,8 +417,13 @@ namespace Apocapatrol
         internal static int IgnoreCollisions(GameObject who, GameObject car)
         {
             if (who == null || car == null) return 0;
+            return IgnoreCollisions(who, car, car.GetComponentsInChildren<Collider>(true));
+        }
+
+        internal static int IgnoreCollisions(GameObject who, GameObject car, Collider[] carCols)
+        {
+            if (who == null || car == null) return 0;
             int n = 0;
-            var carCols = car.GetComponentsInChildren<Collider>(true);
             foreach (var a in who.GetComponentsInChildren<Collider>(true))
             {
                 if (a == null || !a.enabled || !a.gameObject.activeInHierarchy) continue;
@@ -823,6 +860,7 @@ namespace Apocapatrol
         internal void Take()
         {
             _taken.Clear();
+            Nwh.ForgetInput(_car);
             foreach (var f in _car.GetComponentsInChildren<PlayMakerFSM>(true))
                 if (f.gameObject.name == "INPUT" && f.enabled && Array.IndexOf(Names, f.FsmName) >= 0) { f.enabled = false; _taken.Add(f); }
             _autoWas = Nwh.AutoInput(_car, false);
@@ -883,20 +921,48 @@ namespace Apocapatrol
     }
 
     // =============================================================== vanilla spawn recipe
+    // The counter FSM and the registry lists are looked up once and kept (GameObject.Find is a scene-wide name search; a loot
+    // truck used to run it twice per item, sixty-odd times in one frame). Re-found when the objects are gone (scene change).
     internal static class Register
     {
+        private static PlayMakerFSM _counterFsm;
+        private static FsmInt _counter;
+        private static GameObject _reg;
+        private static PlayMakerArrayListProxy _cars, _items;
+
+        internal static void Invalidate() { _counterFsm = null; _counter = null; _reg = null; _cars = null; _items = null; }
+
+        private static FsmInt Counter()
+        {
+            if (_counterFsm != null && _counterFsm.gameObject != null && _counter != null) return _counter;
+            _counterFsm = null; _counter = null;
+            var counterGo = GameObject.Find("itemNameID");
+            if (counterGo == null) return null;
+            foreach (var f in counterGo.GetComponents<PlayMakerFSM>())
+                if (f.FsmName == "itemNameID") { _counterFsm = f; _counter = f.FsmVariables.GetFsmInt("intName"); break; }
+            return _counter;
+        }
+
+        private static GameObject Registry()
+        {
+            if (_reg != null) return _reg;
+            _cars = _items = null;
+            _reg = GameObject.Find("NewGO_ArrayList");
+            if (_reg == null) return null;
+            foreach (var p in _reg.GetComponents<PlayMakerArrayListProxy>())
+            {
+                string n = (p.referenceName ?? "").ToLowerInvariant();
+                if (_cars == null && n.Contains("car")) _cars = p;
+                if (_items == null && n.Contains("item")) _items = p;
+            }
+            return _reg;
+        }
+
         internal static void Name(GameObject go, string prefab)
         {
             int id = -1;
-            var counterGo = GameObject.Find("itemNameID");
-            if (counterGo != null)
-                foreach (var f in counterGo.GetComponents<PlayMakerFSM>())
-                    if (f.FsmName == "itemNameID")
-                    {
-                        var v = f.FsmVariables.GetFsmInt("intName");
-                        if (v != null) { v.Value += 1; id = v.Value; }
-                        break;
-                    }
+            var v = Counter();
+            if (v != null) { v.Value += 1; id = v.Value; }
             go.name = prefab + "(Clone)" + (id >= 0 ? id.ToString() : "");
         }
 
@@ -904,7 +970,7 @@ namespace Apocapatrol
         // save does not keep references to it.
         internal static void RemoveTree(GameObject root)
         {
-            var reg = GameObject.Find("NewGO_ArrayList");
+            var reg = Registry();
             if (reg == null || root == null) return;
             var set = new HashSet<GameObject>();
             foreach (var t in root.GetComponentsInChildren<Transform>(true)) set.Add(t.gameObject);
@@ -922,13 +988,10 @@ namespace Apocapatrol
 
         internal static void Add(GameObject go, bool isVehicle)
         {
-            var reg = GameObject.Find("NewGO_ArrayList");
-            if (reg == null) return;
-            var proxies = reg.GetComponents<PlayMakerArrayListProxy>();
-            string want = isVehicle ? "car" : "item";
-            var list = proxies.FirstOrDefault(p => (p.referenceName ?? "").ToLowerInvariant().Contains(want));
-            if (list != null) list.arrayList.Add(go);
-            else Plugin.Log.LogWarning("NewGO_ArrayList has no '" + want + "' list");
+            if (Registry() == null) return;
+            var list = isVehicle ? _cars : _items;
+            if (list != null && list.arrayList != null) list.arrayList.Add(go);
+            else Plugin.Log.LogWarning("NewGO_ArrayList has no '" + (isVehicle ? "car" : "item") + "' list");
         }
     }
 
@@ -942,7 +1005,10 @@ namespace Apocapatrol
         {
             public Component Vc;
             public object Input, Engine, Transmission;
+            public float Throttle = float.NaN, Steering = float.NaN, Brakes = float.NaN, WrittenAt = -1f;   // last SetInput, to skip identical writes
         }
+
+        private const float InputRefresh = 0.5f;   // identical inputs are still re-written this often (a stopped or idle car writes 3 boxed floats per step otherwise)
 
         private static readonly Dictionary<int, Handle> _handles = new Dictionary<int, Handle>();
         private static readonly Dictionary<Type, Dictionary<string, MemberInfo>> _members = new Dictionary<Type, Dictionary<string, MemberInfo>>();
@@ -1094,11 +1160,20 @@ namespace Apocapatrol
             {
                 var h = Of(car);
                 if (h == null || h.Input == null) { Plugin.Log.LogWarning("No VehicleController.input"); return; }
+                if (h.Throttle == throttle && h.Steering == steering && h.Brakes == brakes && Time.fixedTime - h.WrittenAt < InputRefresh) return;
+                h.Throttle = throttle; h.Steering = steering; h.Brakes = brakes; h.WrittenAt = Time.fixedTime;
                 Set(h.Input, "Throttle", throttle);
                 Set(h.Input, "Steering", steering);
                 Set(h.Input, "Brakes", brakes);
             }
             catch (Exception e) { Plugin.Log.LogWarning("SetInput: " + e.Message); }
+        }
+
+        // the next SetInput writes whatever it is given (after the game's INPUT FSMs had the input for a while)
+        internal static void ForgetInput(GameObject car)
+        {
+            var h = Of(car);
+            if (h != null) { h.Throttle = h.Steering = h.Brakes = float.NaN; h.WrittenAt = -1f; }
         }
     }
 }

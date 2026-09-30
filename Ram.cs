@@ -15,6 +15,8 @@ namespace Apocapatrol
         // sits on every AI car root (next to PatrolMarker); the Rigidbody is there, so every collision of the car arrives here
         internal sealed class Sensor : MonoBehaviour
         {
+            private PatrolMarker _mk; private Rigidbody _rb;   // cached (a car scraping along a wall fires this many times a second)
+
             private void OnCollisionEnter(Collision col)
             {
                 try
@@ -23,8 +25,9 @@ namespace Apocapatrol
                     var p = PlayerRef.Player;                                   // refresh the cached player first
                     int kind = p == null ? 0 : PlayerRef.Kind(col.collider.transform);
                     if (kind == 0) return;
-                    var mk = GetComponent<PatrolMarker>();
-                    var rb = GetComponent<Rigidbody>();
+                    if (_mk == null) _mk = GetComponent<PatrolMarker>();
+                    if (_rb == null) _rb = GetComponent<Rigidbody>();
+                    var mk = _mk; var rb = _rb;
                     var carVel = rb != null ? rb.velocity : Vector3.zero;
                     // The impact speed is how fast THIS car moves into the contact point - not the relative speed, which is just as
                     // high when the player runs or drives into a parked car. A standing car never hurts anyone.

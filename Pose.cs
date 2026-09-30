@@ -98,13 +98,34 @@ namespace Apocapatrol
         }
 
         private int _lodFrame;
+        // the camera position, read once per frame for every occupant
+        private static int _camFrame = -1; private static bool _camOk; private static Vector3 _camPos;
+
+        private static bool CameraPos(out Vector3 pos)
+        {
+            if (_camFrame != Time.frameCount)
+            {
+                _camFrame = Time.frameCount;
+                var cam = Camera.main;
+                _camOk = cam != null;
+                _camPos = _camOk ? cam.transform.position : Vector3.zero;
+            }
+            pos = _camPos;
+            return _camOk;
+        }
 
         private void LateUpdate()
         {
             if (_root == null || _anchor == null) return;
-            // far from the camera the pose is refreshed every 4th frame only (several crews at 300 m add up)
-            var cam = Camera.main;
-            if (cam != null && (cam.transform.position - _anchor.position).sqrMagnitude > 120f * 120f && (++_lodFrame & 3) != 0) return;
+            // Far from the camera the pose is refreshed less often: every 4th frame beyond 120 m, every 16th beyond 300 m (a convoy
+            // spawning 350 m away is fourteen occupants; ~40 bone rotations each). The animator keeps the body in a sane idle in between.
+            Vector3 camPos;
+            if (CameraPos(out camPos))
+            {
+                float d2 = (camPos - _anchor.position).sqrMagnitude;
+                int mask = d2 > 300f * 300f ? 15 : d2 > 120f * 120f ? 3 : 0;
+                if (mask != 0 && (++_lodFrame & mask) != 0) return;
+            }
             if (_lockSeatRotation) _root.localRotation = _seatRotation;
             var right = _anchor.right;
             var up = _anchor.up;

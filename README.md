@@ -1,4 +1,4 @@
-# Apocapatrol 1.2.0
+# Apocapatrol 1.3.0
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -83,6 +83,10 @@ the mod to a game in progress picks up right where you are.
 
 A group builds up out of sight and then sets off all at once.
 
+**Patrol size** (the first setting, 25 / 50 / 100 / 125 / 150 %) scales how many cars every group brings. Lower it if the game stutters
+when a convoy appears: fewer cars means fewer crews, physics bodies and AI drivers at once. A group always brings at least one car, and a
+convoy always brings its truck first.
+
 ## Cleanup
 
 Raider cars you leave behind don't pile up in your world or your save. A raider car that stays more than 800 m away from you for
@@ -99,6 +103,7 @@ and carry on. The timer until the next convoy is saved too.
 Every setting can be changed in game through the Apocasetter Mods menu if you have it, or in
 `BepInEx\config\com.denis.apocalypter.apocapatrol.cfg`.
 
+- **General**: the patrol size (100 %), see above.
 - **Combat**: whether gunmen shoot, how far (40 m) and how wide around the car's front they can fire, how long and how often the driver's
   bursts come, ram damage on/off, its strength (0–3×) and the full-damage speed, damage per car type, the knock-back strength, and ram
   damage while you're in your car.

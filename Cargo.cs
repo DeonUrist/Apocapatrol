@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -116,21 +117,23 @@ namespace Apocapatrol
             return CarTemplate.LootDefaults[CarTemplate.LootDefaults.Length - 1][0];
         }
 
-        // Fills the car's PhysicsLock volume with the items of the spec. Returns the spawned items (already locked).
-        internal static List<GameObject> Load(GameObject car, string spec, float factor)
+        private const int ItemsPerFrame = 4;   // a full bed (30+ items, each an Instantiate + bounds + a raycast) is spread over frames
+
+        // Fills the car's PhysicsLock volume with the items of the spec, a few items per frame (a coroutine step of the build).
+        // The spawned items (already locked) are appended to `items`.
+        internal static IEnumerator Load(GameObject car, string spec, float factor, List<GameObject> items)
         {
-            var items = new List<GameObject>();
-            if (Plugin.LootMultiplier.Value <= 0f) { Plugin.Verbose("Cargo: loot multiplier 0, nothing loaded"); return items; }
+            if (Plugin.LootMultiplier.Value <= 0f) { Plugin.Verbose("Cargo: loot multiplier 0, nothing loaded"); yield break; }
             _scale = Mathf.Max(0f, factor);
             var slots = Parse(spec);
-            if (slots.Count == 0) return items;
+            if (slots.Count == 0) yield break;
 
             var lockGo = Patrol.FindChild(car.transform, "PhysicsLock");
             var boxes = lockGo != null ? lockGo.GetComponents<BoxCollider>() : null;
             if (boxes == null || boxes.Length < 1)
             {
                 Plugin.Log.LogWarning("Cargo: " + car.name + " has no parts/PhysicsLock box; no cargo");
-                return items;
+                yield break;
             }
             // each BoxCollider is one lock zone (an item inside it, or up to 10 m above it, gets locked by its own LockPhysics raycasts);
             // the bed is the zone with the largest footprint
@@ -145,16 +148,20 @@ namespace Apocapatrol
             foreach (var bx in boxes) Plugin.Verbose("Cargo: lock zone centre " + bx.center.ToString("0.00") + " size " + bx.size.ToString("0.00") + (bx == bed ? " (bed)" : ""));
             Plugin.Verbose("Cargo: volume x " + minX.ToString("0.00") + ".." + maxX.ToString("0.00") + " z " + minZ.ToString("0.00") + ".." + maxZ.ToString("0.00")
                 + " y " + floorY.ToString("0.00") + ".." + ceilY.ToString("0.00") + " (local, scale " + scale + ")");
-            if (maxX <= minX || maxZ <= minZ || ceilY <= floorY) { Plugin.Log.LogWarning("Cargo: PhysicsLock volume is degenerate on " + car.name); return items; }
+            if (maxX <= minX || maxZ <= minZ || ceilY <= floorY) { Plugin.Log.LogWarning("Cargo: PhysicsLock volume is degenerate on " + car.name); yield break; }
 
             // scatter over the bed floor: random XZ that keeps clear of the items already placed (a few tries, then stack on top)
             var placedPos = new List<Vector3>(); var placedR = new List<float>(); var placedTop = new List<float>();
-            int placed = 0, wanted = 0;
+            int placed = 0, wanted = 0, sinceYield = 0;
+            bool full = false;
             foreach (var slot in slots)
             {
+                if (full) break;
                 wanted += slot.Count;
                 for (int i = 0; i < slot.Count; i++)
                 {
+                    if (sinceYield >= ItemsPerFrame) { sinceYield = 0; yield return null; if (car == null || t == null) yield break; }
+                    sinceYield++;
                     var go = UnityEngine.Object.Instantiate(slot.Prefab, t.TransformPoint(new Vector3(0f, ceilY + 5f, 0f)), t.rotation);
                     go.SetActive(true);
                     // orientation: random yaw; cans / bottles / canisters lie on their side more often than not
@@ -188,7 +195,7 @@ namespace Apocapatrol
                         }
                     }
                     if (baseY < 0f) baseY = FloorAt(car, t, lx, lz, floorY, ceilY);
-                    if (baseY + h > ceilY) { Plugin.Verbose("Cargo: bed full after " + placed + " of " + wanted + " items"); UnityEngine.Object.Destroy(go); goto done; }
+                    if (baseY + h > ceilY) { Plugin.Verbose("Cargo: bed full after " + placed + " of " + wanted + " items"); UnityEngine.Object.Destroy(go); full = true; break; }
                     // move the renderer bottom-centre onto (lx, baseY, lz)
                     var pivotWorld = go.transform.position;
                     var bottomWorld = new Vector3(b.center.x, b.min.y, b.center.z);
@@ -202,9 +209,7 @@ namespace Apocapatrol
                     placed++;
                 }
             }
-            done:
             Plugin.Verbose("Cargo: " + placed + " item(s) loaded into " + car.name);
-            return items;
         }
 
         private static bool IsCanLike(string prefab)

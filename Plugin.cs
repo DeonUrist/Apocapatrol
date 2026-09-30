@@ -18,9 +18,13 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.2.0";
+        public const string VERSION = "1.3.0";
 
         internal static ManualLogSource Log;
+
+        // [General] PatrolSizePercent: scales how many cars every spawn brings (25 / 50 / 100 / 125 / 150 %)
+        internal static ConfigEntry<int> PatrolSizePercent;
+        internal static float SizeFactor { get { return Mathf.Clamp(PatrolSizePercent != null ? PatrolSizePercent.Value : 100, 25, 150) / 100f; } }
 
         internal static ConfigEntry<Key> MenuKey;
         internal static readonly Dictionary<string, ConfigEntry<float>> LootChances = new Dictionary<string, ConfigEntry<float>>(StringComparer.OrdinalIgnoreCase);
@@ -100,6 +104,11 @@ namespace Apocapatrol
                 "Show this mod in the Apocasetter Mods menu.\n" +
                 "To expose seat offsets, shared pose settings and all per-human controls, uncomment the next line and restart:\n" +
                 "PoseConfiguration = true");
+            PatrolSizePercent = Config.Bind("General", "PatrolSizePercent", 100, new ConfigDescription(
+                "Patrol size: how many cars every enemy spawn brings, in % of the normal group (100 = as designed: 3 cars, a 5-car super group, " +
+                "a convoy of a truck + 2 junkers + 3-5 small cars at 100 % heat). Lower it on a weak PC - fewer cars means fewer crews, " +
+                "physics bodies and AI drivers at once. A spawn always brings at least one car; a convoy always brings its truck first",
+                new AcceptableValueList<int>(25, 50, 100, 125, 150)));
 
             RangedCombat = Config.Bind("Combat", "RangedCombat", true,
                 "Ranged humans (Boltjaw/Flexa/Lugnut/Scrud/Sprokka) in a car use their vanilla targeting and ranged attack: the passenger whenever a target " +

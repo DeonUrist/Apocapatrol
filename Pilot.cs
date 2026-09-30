@@ -57,10 +57,12 @@ namespace Apocapatrol
         private readonly Dictionary<Collider, Verdict> _obstacleCache = new Dictionary<Collider, Verdict>();   // per-collider, 5 s each
         private readonly List<Collider> _expired = new List<Collider>();
         private float _cachePrune;
-        private static readonly List<Transform> _ownRoots = new List<Transform>();
+        internal static readonly List<Pilot> All = new List<Pilot>();     // every live pilot (the overlay draws from here)
         private static readonly RaycastHit[] _hits = new RaycastHit[24];   // non-allocating cast buffer (shared; casts never nest)
-        private int _senseStep;                                            // feelers run every other physics step
-        private float _senseSteer, _senseThrottle = 1f, _senseBrake;       // last feeler result, reused on the skipped step
+        private static readonly List<PlayMakerFSM> _fsmBuffer = new List<PlayMakerFSM>();   // non-allocating GetComponents buffer
+        private int _senseStep;                                            // feelers run every 2nd physics step (every 4th far from the target)
+        private float _senseSteer, _senseThrottle = 1f, _senseBrake;       // last feeler result, reused on the skipped steps
+        private int _gear; private float _gearNext;                        // NWH gear, read by reflection 5x a second instead of every step
 
         internal PilotState State { get { return _state; } }
 
@@ -71,18 +73,27 @@ namespace Apocapatrol
             var marker = car.GetComponent<PatrolMarker>();
             p._rams = marker != null ? marker.Rams : RamTargets.Pedestrians;
             p.Enter(PilotState.Charge, "start");
-            if (!_ownRoots.Contains(car.transform)) _ownRoots.Add(car.transform);
+            if (!All.Contains(p)) All.Add(p);
             Plugin.Verbose("Pilot: driving AI on " + car.name + ", rams " + p._rams);
             return p;
         }
 
         internal void Detach()
         {
-            _ownRoots.Remove(_tf);
+            All.Remove(this);
             Destroy(this);
         }
 
-        private void OnDestroy() { _ownRoots.Remove(_tf); }
+        private void OnDestroy() { All.Remove(this); }
+
+        // the transmission's gear index, refreshed 5x a second (a reflection read + boxing per step per car otherwise)
+        private int Gear()
+        {
+            if (Time.fixedTime >= _gearNext) { _gearNext = Time.fixedTime + 0.2f; _gear = Nwh.GearIndex(_car); }
+            return _gear;
+        }
+
+        private void Shift(int gear) { Nwh.ShiftInto(_car, gear); _gear = gear; _gearNext = Time.fixedTime + 0.2f; }   // assume it lands; re-read shortly
 
         // ------------------------------------------------------------ main step (called by Crew from FixedUpdate)
 
@@ -174,7 +185,7 @@ namespace Apocapatrol
 
         private void StepCharge(Vector3 tpos, Vector3 tvel, float speed, float forwardSpeed, float dt, bool turning)
         {
-            if (Nwh.GearIndex(_car) <= 0) Nwh.ShiftInto(_car, 1);
+            if (Gear() <= 0) Shift(1);
 
             // intercept point, re-sampled every CommitSeconds so the car commits to a heading instead of twitching
             if (Time.time >= _nextAim)
@@ -241,7 +252,7 @@ namespace Apocapatrol
 
         private void StepOvershoot(float speed, float forwardSpeed, float dt)
         {
-            if (Nwh.GearIndex(_car) <= 0) Nwh.ShiftInto(_car, 1);
+            if (Gear() <= 0) Shift(1);
             float avoidSteer, avoidThrottle, avoidBrake;
             Sense(speed, out avoidSteer, out avoidThrottle, out avoidBrake);
             float steer = MoveSteer(Mathf.Clamp(avoidSteer, -MaxSteerFor(speed), MaxSteerFor(speed)), dt);
@@ -260,17 +271,17 @@ namespace Apocapatrol
             {
                 string why = _rearHit ? "hit something behind" : "obstacle " + _rearClear.ToString("0.0") + " m behind";
                 _rearHit = false;
-                if (Nwh.GearIndex(_car) < 0) Nwh.ShiftInto(_car, 1);
+                if (Gear() < 0) Shift(1);
                 _steer = -_steer;                         // nose was swinging one way in reverse; keep swinging it that way going forward
                 Enter(PilotState.Charge, why);
                 return;
             }
             // reverse = gear -1 + throttle (NWH's automatic takes the reverse gear from input.ShiftInto)
-            if (Nwh.GearIndex(_car) >= 0) Nwh.ShiftInto(_car, -1);
+            if (Gear() >= 0) Shift(-1);
             Apply(Plugin.AiReverseThrottle.Value, MoveSteer(_recoverSteer, dt), 0f);
             if (_stateTime >= _recoverDur)
             {
-                if (Nwh.GearIndex(_car) < 0) Nwh.ShiftInto(_car, 1);
+                if (Gear() < 0) Shift(1);
                 Enter(PilotState.Charge, "reversed " + _recoverDur.ToString("0.0") + " s");
             }
         }
@@ -348,8 +359,10 @@ namespace Apocapatrol
         // Casts the front feelers and the cliff probe; returns a steering correction (+ = right), a throttle factor and a brake amount.
         private void Sense(float speed, out float steer, out float throttleFactor, out float brake)
         {
-            // every other physics step (25 Hz is plenty for a car; halves the raycasts of a convoy); the skipped step reuses the last result
-            if ((++_senseStep & 1) == 1) { steer = _senseSteer; throttleFactor = _senseThrottle; brake = _senseBrake; return; }
+            // every other physics step (25 Hz is plenty for a car; halves the raycasts of a convoy), every 4th beyond 150 m from the
+            // target (a far car has room; a convoy approaching from 350 m casts a quarter as much); the skipped steps reuse the last result
+            int every = _dist > 150f ? 4 : 2;
+            if ((++_senseStep % every) != 0) { steer = _senseSteer; throttleFactor = _senseThrottle; brake = _senseBrake; return; }
             SenseNow(speed, out steer, out throttleFactor, out brake);
             _senseSteer = steer; _senseThrottle = throttleFactor; _senseBrake = brake;
         }
@@ -482,8 +495,13 @@ namespace Apocapatrol
             for (var a = t; a != null; a = a.parent)
             {
                 if (PlayerRef.HasVehicleController(a)) return _rams < RamTargets.Cars;   // another car (parked, wreck, patrol)
-                foreach (var f in a.GetComponents<PlayMakerFSM>())
-                    if (f.FsmName == "Health" || f.FsmName == "Detection") creature = true;
+                _fsmBuffer.Clear();
+                a.GetComponents(_fsmBuffer);
+                for (int i = 0; i < _fsmBuffer.Count; i++)
+                {
+                    var f = _fsmBuffer[i];
+                    if (f != null && (f.FsmName == "Health" || f.FsmName == "Detection")) creature = true;
+                }
             }
             if (creature) return _rams < RamTargets.Pedestrians;         // creature / NPC: run it over, or avoid it
             var rb = c.attachedRigidbody;
@@ -549,19 +567,16 @@ namespace Apocapatrol
 
         // ------------------------------------------------------------ overlay
 
-        private void OnGUI()
+        // one line of the [Debug] AiOverlay (drawn by the runner's OnGUI for every pilot in All)
+        internal string OverlayLine()
         {
-            if (!Plugin.AiOverlay.Value || Time.timeScale <= 0f) return;
-            int line = 0;
-            foreach (var t in _ownRoots) { if (t == _tf) break; line++; }
             var vel = _rb != null ? _rb.velocity : Vector3.zero;
-            string s = _car.name + ": " + _state + " (" + _why + ")  " + (vel.magnitude * 3.6f).ToString("0") + " km/h  gear " + Nwh.Gear(_car)
+            return _car.name + ": " + _state + " (" + _why + ")  " + (vel.magnitude * 3.6f).ToString("0") + " km/h  gear " + Nwh.Gear(_car)
                 + "  target " + _dist.ToString("0") + " m @ " + _angle.ToString("0") + "°  steer " + _steer.ToString("0.00")
                 + "  thr " + _throttle.ToString("0.00") + "  brk " + _brakes.ToString("0.00") + Feelers()
                 + "  recovers " + _recoverCount
                 + (_state == PilotState.Recover ? "  rear " + (_rearClear < 0f ? "clear" : _rearClear.ToString("0.0") + " m") : "")
                 + (_pushTime > 0f ? "  push " + _pushTime.ToString("0.0") + " s " + _pushName : "");
-            GUI.Label(new Rect(10, 10 + 18 * line, 1400, 22), s);
         }
     }
 
@@ -571,14 +586,21 @@ namespace Apocapatrol
         private static Transform _player;
         private static float _nextFind;
         private static GameObject _playerCar;
+        private static Rigidbody _playerCarRb;
         private static PlayMakerFSM _playerCarDrive;
+        // Target() answers every pilot on the same physics step from one evaluation
+        private static float _targetStamp = -1f;
+        private static bool _targetOk;
+        private static Vector3 _targetPos, _targetVel;
+        private static GameObject _targetCar;
+        private static readonly List<Component> _components = new List<Component>();   // non-allocating GetComponents buffer
         private static PlayMakerFSM _inCar;             // Player [InCar]: state InCar / OnFoot, var Car = the car the player sits in
         private static HutongGames.PlayMaker.FsmGameObject _inCarVar;
         private static Transform _inCarOwner;
         private static Vector3 _lastPos, _vel;
         private static float _lastStamp = -1f;
 
-        internal static void Reset() { _player = null; _playerCar = null; _playerCarDrive = null; _inCar = null; _inCarVar = null; _inCarOwner = null; _nextFind = 0f; _lastStamp = -1f; }
+        internal static void Reset() { _player = null; _playerCar = null; _playerCarRb = null; _playerCarDrive = null; _inCar = null; _inCarVar = null; _inCarOwner = null; _nextFind = 0f; _lastStamp = -1f; _targetStamp = -1f; }
 
         internal static Transform Player
         {
@@ -601,24 +623,29 @@ namespace Apocapatrol
             get
             {
                 var p = Player;
-                if (p == null) { _playerCar = null; _playerCarDrive = null; return null; }
+                if (p == null) return SetCar(null);
                 if (InCarFsm(p) && _inCar.Fsm.Initialized)
                 {
-                    if (_inCar.ActiveStateName != "InCar") { _playerCar = null; _playerCarDrive = null; return null; }
+                    if (_inCar.ActiveStateName != "InCar") return SetCar(null);
                     if (_inCarVar == null) _inCarVar = _inCar.FsmVariables.GetFsmGameObject("Car");
                     var car = _inCarVar != null ? _inCarVar.Value : null;
-                    if (car != null)
-                    {
-                        if (car != _playerCar) { _playerCar = car; _playerCarDrive = Patrol.FindFsm(car, "DriveTrigger", "Drive"); }
-                        return _playerCar;
-                    }
+                    if (car != null) return SetCar(car);
                 }
                 if (_playerCar != null && _playerCarDrive != null && _playerCarDrive.Fsm.Initialized && _playerCarDrive.ActiveStateName == "inCar") return _playerCar;
-                _playerCar = null; _playerCarDrive = null;
                 for (var a = p.parent; a != null; a = a.parent)
-                    if (HasVehicleController(a)) { _playerCar = a.gameObject; _playerCarDrive = Patrol.FindFsm(_playerCar, "DriveTrigger", "Drive"); return _playerCar; }
-                return null;
+                    if (HasVehicleController(a)) return SetCar(a.gameObject);
+                return SetCar(null);
             }
+        }
+
+        // the car's Drive FSM and Rigidbody are looked up once per car change, not per caller
+        private static GameObject SetCar(GameObject car)
+        {
+            if (car == _playerCar) return _playerCar;
+            _playerCar = car;
+            _playerCarDrive = car != null ? Patrol.FindFsm(car, "DriveTrigger", "Drive") : null;
+            _playerCarRb = car != null ? car.GetComponent<Rigidbody>() : null;
+            return _playerCar;
         }
 
         private static bool InCarFsm(Transform p)
@@ -633,19 +660,36 @@ namespace Apocapatrol
 
         internal static bool HasVehicleController(Transform t)
         {
-            foreach (var c in t.GetComponents<Component>())
+            _components.Clear();
+            t.GetComponents(_components);
+            for (int i = 0; i < _components.Count; i++)
+            {
+                var c = _components[i];
                 if (c != null && c.GetType().Name == "VehicleController") return true;
+            }
             return false;
         }
 
         // Position and velocity of what an AI car should ram: the player's car while driving, the player on foot otherwise.
+        // Evaluated once per physics step however many pilots ask.
         internal static bool Target(out Vector3 pos, out Vector3 vel, out GameObject car)
+        {
+            if (_targetStamp != Time.fixedTime)
+            {
+                _targetStamp = Time.fixedTime;
+                _targetOk = TargetNow(out _targetPos, out _targetVel, out _targetCar);
+            }
+            pos = _targetPos; vel = _targetVel; car = _targetCar;
+            return _targetOk;
+        }
+
+        private static bool TargetNow(out Vector3 pos, out Vector3 vel, out GameObject car)
         {
             car = PlayerCar;
             var p = Player;
             if (car != null)
             {
-                var rb = car.GetComponent<Rigidbody>();
+                var rb = _playerCarRb;
                 pos = rb != null ? rb.worldCenterOfMass : car.transform.position;
                 vel = rb != null ? rb.velocity : Vector3.zero;
                 return true;

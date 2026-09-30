@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Linq;
+using HutongGames.PlayMaker;
 using UnityEngine;
 
 namespace Apocapatrol
@@ -35,7 +36,12 @@ namespace Apocapatrol
         private float _dryFor;                // seconds the tank has been empty while the car stands
         private bool _outOfFuel;
         private float _nextGuard;             // the AI-mute guard runs a few times a second, not every frame
+        private float _nextEngineCheck;       // engine polling while waiting to drive off (a held convoy car asked NWH every frame)
         private PlayMakerFSM _handbrake, _tank;   // cached: handbrake [Handbrake], Fuel [LiquidAmount]
+        private FsmFloat _healthVar;          // the driver's Health variable (looked up by name every frame before)
+        private PatrolMarker _marker;         // the car's marker (attached after the crew on a fresh build: resolved lazily)
+
+        private PatrolMarker Marker { get { if (_marker == null && _car != null) _marker = _car.GetComponent<PatrolMarker>(); return _marker; } }
 
         // A car built for a convoy waits for Convoy to release the whole group at once (so the group departs together and
         // the builds do not pile up on one frame); the driver sits with the engine running until then.
@@ -53,6 +59,7 @@ namespace Apocapatrol
             _car = car; _driver = driver;
             _rb = car.GetComponent<Rigidbody>();
             _health = driver != null ? driver.GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == "Health") : null;
+            _healthVar = null;
             _drive = Patrol.FindFsm(car, "DriveTrigger", "Drive");
             _handbrake = Patrol.FindFsm(car, "handbrake", "Handbrake");
             var tank = Patrol.FindChild(car.transform, "Fuel");
@@ -166,14 +173,15 @@ namespace Apocapatrol
             MuteAi(_driverFsms, _driver.GetComponent<PassengerGuard>() != null ? PassengerGuard.CombatFsms : null);
         }
 
-        private static bool Alive(GameObject who, PlayMakerFSM health)
+        // healthVar: the FSM's Health variable, resolved once by the caller and kept (GetFsmFloat is a name search every call)
+        private static bool Alive(GameObject who, PlayMakerFSM health, ref FsmFloat healthVar)
         {
             if (who == null) return false;                           // Health FSM destroyed it (carcass spawned)
             if (who.transform.parent == null) return false;          // out of the seat somehow
             if (health != null && health.Fsm.Initialized)
             {
-                var h = health.FsmVariables.GetFsmFloat("Health");
-                if (h != null && h.Value <= 0f) return false;
+                if (healthVar == null) healthVar = health.FsmVariables.GetFsmFloat("Health");
+                if (healthVar != null && healthVar.Value <= 0f) return false;
             }
             return true;
         }
@@ -185,9 +193,14 @@ namespace Apocapatrol
             if (Time.time >= _nextIgnore)
             {
                 _nextIgnore = Time.time + 2f;
-                if (!_dead && _driver != null) Patrol.IgnoreCollisionsIfChanged(_driver, _car);
-                var marker = _car.GetComponent<PatrolMarker>();
-                if (marker != null && marker.Passenger != null) Patrol.IgnoreCollisionsIfChanged(marker.Passenger, _car);
+                var marker = Marker;
+                var pax = marker != null ? marker.Passenger : null;
+                if ((!_dead && _driver != null) || pax != null)
+                {
+                    var carCols = _car.GetComponentsInChildren<Collider>(true);   // once for both occupants
+                    if (!_dead && _driver != null) Patrol.IgnoreCollisionsIfChanged(_driver, _car, carCols);
+                    if (pax != null) Patrol.IgnoreCollisionsIfChanged(pax, _car, carCols);
+                }
             }
             if (_dead && PassengerReacts()) return;
             if (_done) return;
@@ -198,8 +211,9 @@ namespace Apocapatrol
                 if (Time.time >= _nextGuard) { _nextGuard = Time.time + 0.5f; MuteAi(); }
                 _seated += Time.deltaTime;
                 float delay = _delayOverride >= 0f ? _delayOverride : 0f;
-                if (!_driving && !_outOfFuel && _seated >= delay)
+                if (!_driving && !_outOfFuel && _seated >= delay && Time.time >= _nextEngineCheck)
                 {
+                    _nextEngineCheck = Time.time + 0.25f;
                     bool running = Nwh.EngineRunning(_car);
                     if (running && !Hold) StartDriving();
                     else if (!running && _seated >= delay + 8f && !_revived) { Plugin.Verbose("Crew: engine of " + _car.name + " never started; reviving"); Revive(); }
@@ -267,7 +281,9 @@ namespace Apocapatrol
             Nwh.SetInput(_car, _stuck ? Plugin.AiThrottle.Value : 0f, 0f, 0f);
         }
 
-        private bool DriverAlive() { return Alive(_driver, _health); }
+        private bool DriverAlive() { return Alive(_driver, _health, ref _healthVar); }
+
+        private static bool PassengerAlive(PatrolMarker marker, GameObject pax) { return marker != null && Alive(pax, marker.PassengerHealthFsm, ref marker.PassengerHealthVar); }
 
         // ------------------------------------------------------------ the surviving passenger
 
@@ -276,9 +292,9 @@ namespace Apocapatrol
         // the car first, the passenger always gets out. Returns true while it handled the frame.
         private bool PassengerReacts()
         {
-            var marker = _car.GetComponent<PatrolMarker>();
+            var marker = Marker;
             var pax = marker != null ? marker.Passenger : null;
-            if (pax == null || !Alive(pax, marker.PassengerHealthFsm)) return false;
+            if (pax == null || !PassengerAlive(marker, pax)) return false;
             _deadFor += Time.deltaTime;
             if (!_paxDecided)
             {
@@ -329,14 +345,14 @@ namespace Apocapatrol
         {
             if (_dead || _done) return false;
             if (UnityEngine.Random.Range(0f, 100f) >= Plugin.StuckBailChance.Value) return false;
-            var marker = _car.GetComponent<PatrolMarker>();
+            var marker = Marker;
             Plugin.Verbose("Crew: stuck for good, the crew bails out (" + Plugin.StuckBailChance.Value + " % roll)");
             if (_pilot != null) { _pilot.Detach(); _pilot = null; }
             Nwh.SetInput(_car, 0f, 0f, 0f);
             if (_ctl != null && _ctl.Taken) _ctl.Release();
             SeatLocked(false);
             var pax = marker != null ? marker.Passenger : null;
-            if (pax != null && Alive(pax, marker.PassengerHealthFsm)) Patrol.BailOut(_car, pax, marker);
+            if (pax != null && PassengerAlive(marker, pax)) Patrol.BailOut(_car, pax, marker);
             if (_driver != null && DriverAlive())
             {
                 if (marker != null) marker.DriverLeft();

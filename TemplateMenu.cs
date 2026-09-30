@@ -16,6 +16,7 @@ namespace Apocapatrol
         private CursorLockMode _prevLock;
         private bool _prevVisible;
         private Rect _rect;
+        private Patrol _patrol;   // sibling on the runner (was a GetComponent every frame)
 
         // Apocasetter, if present
         private static bool _resolved, _hasSetter;
@@ -48,13 +49,14 @@ namespace Apocapatrol
 
         private void Update()
         {
-            var patrol = GetComponent<Patrol>();
             if (_open)
             {
                 if (Plugin.Pressed(Plugin.MenuKey.Value) || Plugin.Pressed(UnityEngine.InputSystem.Key.Escape)) Close();
                 return;
             }
-            if (patrol == null || !patrol.InGame()) return;
+            if (Plugin.MenuKey.Value == UnityEngine.InputSystem.Key.None) return;
+            if (_patrol == null) _patrol = GetComponent<Patrol>();
+            if (_patrol == null || !_patrol.InGame()) return;
             if (Plugin.Pressed(Plugin.MenuKey.Value)) Open();
         }
 
@@ -145,8 +147,8 @@ namespace Apocapatrol
             if (chosen != null)
             {
                 Close();                          // the build coroutine waits on scaled time; the blocker sets timeScale 0
-                var patrol = GetComponent<Patrol>();
-                if (patrol != null) patrol.Spawn(chosen);
+                if (_patrol == null) _patrol = GetComponent<Patrol>();
+                if (_patrol != null) _patrol.Spawn(chosen);
             }
             else if (debugSpawn != 0 && convoy != null)
             {
