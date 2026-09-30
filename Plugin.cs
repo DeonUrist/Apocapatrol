@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.7.1";
+        public const string VERSION = "1.8.0";
 
         internal static ManualLogSource Log;
 
@@ -99,6 +99,45 @@ namespace Apocapatrol
 
         private static GameObject _runner;
 
+        // true = every setting in the .cfg and in Apocasetter again (see the list in Awake); false = only [Scaling], [Combat], [Debug]
+        private const bool ExposeAllSettings = false;
+
+        private static ConfigFile HiddenConfig()
+        {
+            // never written: SaveOnConfigSet off and no Save() call - the entries only carry their default values
+            return new ConfigFile(Path.Combine(Paths.CachePath, "Apocapatrol.hidden.cfg"), false) { SaveOnConfigSet = false };
+        }
+
+        // 1.8.0 moved four settings into [Scaling]: carry a player's old values over (from the orphaned lines of the old sections)
+        // before PurgeStaleEntries drops those lines. Only when the new line is not in the file yet.
+        private void MigrateMovedSettings()
+        {
+            try
+            {
+                var prop = typeof(ConfigFile).GetProperty("OrphanedEntries", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                var orphans = prop != null ? prop.GetValue(Config, null) as Dictionary<ConfigDefinition, string> : null;
+                if (orphans == null || orphans.Count == 0) return;
+                var moves = new List<KeyValuePair<ConfigDefinition, ConfigEntryBase>>
+                {
+                    new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("General", "PatrolSizePercent"), PatrolSizePercent),
+                    new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("General", "AudioVoices"), AudioVoices),
+                    new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Self-destruct", "SelfDestructingCars"), SelfDestruct),
+                    new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Loot", "Multiplier"), LootMultiplier),
+                };
+                int n = 0;
+                foreach (var mv in moves)
+                {
+                    string old;
+                    if (mv.Value == null || !orphans.TryGetValue(mv.Key, out old)) continue;
+                    if (!Equals(mv.Value.BoxedValue, mv.Value.DefaultValue)) continue;   // the player already set the new one
+                    mv.Value.SetSerializedValue(old);
+                    n++;
+                }
+                if (n > 0) Log.LogInfo("Config: carried " + n + " setting(s) over to [Scaling]");
+            }
+            catch (Exception e) { Log.LogWarning("Config migration: " + e.Message); }
+        }
+
         private void Awake()
         {
             Log = Logger;
@@ -109,162 +148,191 @@ namespace Apocapatrol
                 "Show this mod in the Apocasetter Mods menu.\n" +
                 "To expose seat offsets, shared pose settings and all per-human controls, uncomment the next line and restart:\n" +
                 "PoseConfiguration = true");
-            PatrolSizePercent = Config.Bind("General", "PatrolSizePercent", 100, new ConfigDescription(
+
+            // ---- the settings players see (Denis, 1.8.0): [Scaling], [Combat], [Debug]. Everything else is fixed at the defaults below.
+            PatrolSizePercent = Config.Bind("Scaling", "PatrolSizePercent", 100, new ConfigDescription(
                 "Patrol size: how many cars every enemy spawn brings, in % of the full group (100 = as designed: 3 cars, a 5-car super group, " +
                 "a convoy of a truck + 2 junkers + 3-5 small cars; groups are smaller than that only below 100 % heat, never bigger). " +
                 "Lower it on a weak PC - fewer cars means fewer crews, physics bodies and AI drivers at once. A spawn always brings at least " +
                 "one car; a convoy always brings its truck first",
                 new AcceptableValueList<int>(25, 50, 100, 125, 150)));
-
-            AudioVoices = Config.Bind("General", "AudioVoices", 64, new ConfigDescription(
+            AudioVoices = Config.Bind("Scaling", "AudioVoices", 64, new ConfigDescription(
                 "How many sounds the game can play at once (Unity's real voices; the game ships with 32). A firefight with several raider cars needs " +
                 "more: every shot and every hit is a sound, and beyond the limit sounds - the player's own shots too - cut out. 64 is a good value; " +
                 "0 leaves the game's own setting. Applied at game start (restart the game after a change)",
                 new AcceptableValueList<int>(0, 32, 48, 64, 96, 128)));
-            ApplyAudioVoices();
+            SelfDestruct = Config.Bind("Scaling", "SelfDestruct", true,
+                "A raider car that is fully vacated (crew dead, bailed out, or the last passenger got out beside a dead driver) explodes: the frame " +
+                "goes black (trucks stay a lootable wreck), every part pops off with 0 condition and the dead chassis cannot be entered, " +
+                "fuelled or fitted with parts any more; it is removed once you are 1000 m away. Off = vacated cars stay as they are now. " +
+                "A car you have sat in never explodes");
+            LootMultiplier = Config.Bind("Scaling", "LootMultiplier", 1f, new ConfigDescription(
+                "Scales the amount of loot in a truck: 0 = nothing, 1 = the built-in amounts (Food dogfood x6; Water / Gasoline / Diesel cans x4, " +
+                "50 % a barrel too; Medicine bandages x4 + first aid x2; Weapons 0-3 guns + 3-8 ammo boxes; Drugs alcohol x2 + weed x3 + weed plant x1; " +
+                "Mechanic 3 repair boxes + 1 big oil can; Corpses 3-5 dead Scraffa; Rats 6-8 dead rats), 3 = 300 %. The 50 % barrels are not scaled",
+                new AcceptableValueRange<float>(0f, 3f)));
 
             RangedCombat = Config.Bind("Combat", "RangedCombat", true,
                 "Ranged humans (Boltjaw/Flexa/Lugnut/Scrud/Sprokka) in a car use their vanilla targeting and ranged attack: the passenger whenever a target " +
                 "is in the fire arc, the driver in bursts. Off = everybody just rides along");
             ShootDistance = Config.Bind("Combat", "ShootDistance", 40f, new ConfigDescription(
                 "Occupants only shoot at a target closer than this, m", new AcceptableValueRange<float>(1f, 200f)));
-            FireArc = Config.Bind("Combat", "FireArcHalfAngle", 100f, new ConfigDescription(
-                "Occupants may fire this many degrees left or right of the car's forward direction", new AcceptableValueRange<float>(0f, 180f)));
-            MaxAimPitch = Config.Bind("Combat", "MaxAimPitch", 35f, new ConfigDescription(
-                "Maximum upper-body aim angle up or down (degrees)", new AcceptableValueRange<float>(0f, 80f)));
-            AimTurnSpeed = Config.Bind("Combat", "AimTurnSpeed", 180f, new ConfigDescription(
-                "How quickly an occupant turns its upper body toward or away from a target (degrees/second)", new AcceptableValueRange<float>(1f, 720f)));
-            FireBurstSeconds = Config.Bind("Combat", "FireBurstSeconds", 3f, new ConfigDescription(
-                "How long one of the driver's bursts lasts (shooting pose, vanilla Attack inside the fire arc), s", new AcceptableValueRange<float>(0.5f, 30f)));
-            FireIntervalMin = Config.Bind("Combat", "FireIntervalMin", 8f, new ConfigDescription(
-                "Shortest pause between two bursts of the driver, s", new AcceptableValueRange<float>(0f, 120f)));
-            FireIntervalMax = Config.Bind("Combat", "FireIntervalMax", 20f, new ConfigDescription(
-                "Longest pause between two bursts of the driver, s", new AcceptableValueRange<float>(0f, 300f)));
             RamDamage = Config.Bind("Combat", "RamDamage", true,
                 "An AI car that hits you (on foot or in your car) hurts you. The game's own bumper damage only works against creatures, not the player");
-            RamDamageMultiplier = Config.Bind("Combat", "RamDamageMultiplier", 1f, new ConfigDescription(
-                "Ram damage scale: at 1 a full-speed hit takes 30 health with a small car, 50 with a Junker, 70 with a truck (RamDamageByBody)",
-                new AcceptableValueRange<float>(0f, 3f)));
-            RamDamageByBody = Config.Bind("Combat", "RamDamageByBody", "Junker=50, Rust*=70, Scrapwagon=70, PigPen=50",
-                "Full-speed damage per car body, 'Body=damage' pairs; * = prefix. Bodies not listed take " + Ram.DefaultDamage + ". Applied before the multiplier");
-            RamFullSpeedKmh = Config.Bind("Combat", "RamFullSpeedKmh", 30f, new ConfigDescription(
-                "Impact speed (km/h, relative) for the full damage. At half that speed the hit does half damage; below half it does nothing",
-                new AcceptableValueRange<float>(5f, 200f)));
-            RamPushStrength = Config.Bind("Combat", "RamPushStrength", 1f, new ConfigDescription(
-                "A damaging hit also shoves you (on foot) in the car's direction: 1 = about the impact speed plus a hop; 0 = off",
-                new AcceptableValueRange<float>(0f, 4f)));
             RamDamageInCar = Config.Bind("Combat", "RamDamageInCar", false,
                 "Ram damage also while you sit in your own car (the game's own CrashDamage still applies by your speed). Off = only on foot");
-            RamInCarFactor = Config.Bind("Combat", "RamInCarFactor", 1f, new ConfigDescription(
+
+            MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.F8, "Open the template spawner: a list of the park, click a car to build it in front of you. None = off");
+            VerboseLog = Config.Bind("Debug", "VerboseLog", false, "Log what the mod does: spawns, builds, crews, the AI's state changes, ram hits. Off = only the load line and warnings, nothing that gives a spawn away");
+            AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances");
+
+            // ---- hidden settings: bound to an in-memory ConfigFile that is never saved, so they keep their default values and do not
+            // appear in the .cfg or the Apocasetter menu. To bring ALL of them back (with their old sections: Combat, Driving,
+            // Self-destruct, AI, Loot, Convoy spawner, Cleanup, Debug), set ExposeAllSettings = true and rebuild. Hidden in 1.8.0:
+            //   [Combat] FireArcHalfAngle 100, MaxAimPitch 35, AimTurnSpeed 180, FireBurstSeconds 3, FireIntervalMin 8, FireIntervalMax 20,
+            //            RamDamageMultiplier 1, RamDamageByBody "Junker=50, Rust*=70, Scrapwagon=70, PigPen=50", RamFullSpeedKmh 30,
+            //            RamPushStrength 1, RamInCarFactor 1
+            //   [Driving] StuckPedalChance 5, StuckPedalTakeoverSeconds 4, BailChance 25, StuckBailChance 50
+            //   [Self-destruct] CarPartsLootFromExplodedCars 12
+            //   [AI] Throttle 1, DriveByOffset 5, LeadTime 1, CommitSeconds 0.5, SteerRate 1.5, SteerAngle 30, MaxSteerAtSpeed 0.35,
+            //        TurnSafeSpeed 18, RamDistance 15, PassWidth 12, RunOutMeters 30, RunOutMaxSeconds 4, ReverseSeconds 2,
+            //        ReverseThrottle 0.6, StuckSeconds 2, RecoverWindow 12, MaxRecovers 4, WaitSeconds 4, FeelerRange 10,
+            //        FeelerSpeedFactor 0.6, FrontOffset 2, MaxSlopeDeg 35, AvoidGain 1.2, IgnoreMassBelow 40, GiveUpDistance 700,
+            //        InvertSteering false
+            //   [Loot] FoodChance 18, WaterChance 14, GasolineChance 11, DieselChance 11, MedicineChance 11, WeaponsChance 11,
+            //          DrugsChance 7, MechanicChance 7, CorpsesChance 7, RatsChance 3, MinPartHealth 2, MaxPartHealth 35,
+            //          MinPartsFill 15, MaxPartsFill 60
+            //   [Convoy spawner] Enabled true, MaxHeat 3, HeatIntervalKm 10, SpawnDistance 350, JustCarsToConvoyRatio 0.8,
+            //          MinConvoyCooldown 5, MaxConvoyCooldown 60, BasicCars 0 km / 0 bosses / 45, AdvancedCars 30 / 1 / 35,
+            //          SuperAdvancedCars 50 / 3 / 20, BasicConvoy 5 / 0 / 70, AdvancedConvoy 20 / 3 / 30 (DistanceKm / BossesKilled / Chance)
+            //   [Cleanup] Enabled true, RemoveAfterMinutes 10 (was 40), MaxCars 30, MinDistance 800
+            //   [Debug] ExitSpeedKmh 30
+            var H = ExposeAllSettings ? Config : HiddenConfig();
+                        
+            
+                                    FireArc = H.Bind("Combat", "FireArcHalfAngle", 100f, new ConfigDescription(
+                "Occupants may fire this many degrees left or right of the car's forward direction", new AcceptableValueRange<float>(0f, 180f)));
+            MaxAimPitch = H.Bind("Combat", "MaxAimPitch", 35f, new ConfigDescription(
+                "Maximum upper-body aim angle up or down (degrees)", new AcceptableValueRange<float>(0f, 80f)));
+            AimTurnSpeed = H.Bind("Combat", "AimTurnSpeed", 180f, new ConfigDescription(
+                "How quickly an occupant turns its upper body toward or away from a target (degrees/second)", new AcceptableValueRange<float>(1f, 720f)));
+            FireBurstSeconds = H.Bind("Combat", "FireBurstSeconds", 3f, new ConfigDescription(
+                "How long one of the driver's bursts lasts (shooting pose, vanilla Attack inside the fire arc), s", new AcceptableValueRange<float>(0.5f, 30f)));
+            FireIntervalMin = H.Bind("Combat", "FireIntervalMin", 8f, new ConfigDescription(
+                "Shortest pause between two bursts of the driver, s", new AcceptableValueRange<float>(0f, 120f)));
+            FireIntervalMax = H.Bind("Combat", "FireIntervalMax", 20f, new ConfigDescription(
+                "Longest pause between two bursts of the driver, s", new AcceptableValueRange<float>(0f, 300f)));
+                        RamDamageMultiplier = H.Bind("Combat", "RamDamageMultiplier", 1f, new ConfigDescription(
+                "Ram damage scale: at 1 a full-speed hit takes 30 health with a small car, 50 with a Junker, 70 with a truck (RamDamageByBody)",
+                new AcceptableValueRange<float>(0f, 3f)));
+            RamDamageByBody = H.Bind("Combat", "RamDamageByBody", "Junker=50, Rust*=70, Scrapwagon=70, PigPen=50",
+                "Full-speed damage per car body, 'Body=damage' pairs; * = prefix. Bodies not listed take " + Ram.DefaultDamage + ". Applied before the multiplier");
+            RamFullSpeedKmh = H.Bind("Combat", "RamFullSpeedKmh", 30f, new ConfigDescription(
+                "Impact speed (km/h, relative) for the full damage. At half that speed the hit does half damage; below half it does nothing",
+                new AcceptableValueRange<float>(5f, 200f)));
+            RamPushStrength = H.Bind("Combat", "RamPushStrength", 1f, new ConfigDescription(
+                "A damaging hit also shoves you (on foot) in the car's direction: 1 = about the impact speed plus a hop; 0 = off",
+                new AcceptableValueRange<float>(0f, 4f)));
+                        RamInCarFactor = H.Bind("Combat", "RamInCarFactor", 1f, new ConfigDescription(
                 "With RamDamageInCar: damage factor while you sit in your own car (1 = same as on foot)", new AcceptableValueRange<float>(0f, 1f)));
 
-            StuckPedalChance = Config.Bind("Driving", "StuckPedalChance", 5f, new ConfigDescription(
+            StuckPedalChance = H.Bind("Driving", "StuckPedalChance", 5f, new ConfigDescription(
                 "% chance that a killed driver's gas pedal stays stuck; otherwise the gas is released and the car rolls to a stop",
                 new AcceptableValueRange<float>(0f, 100f)));
-            StuckPedalTakeoverSeconds = Config.Bind("Driving", "StuckPedalTakeoverSeconds", 4f, new ConfigDescription(
+            StuckPedalTakeoverSeconds = H.Bind("Driving", "StuckPedalTakeoverSeconds", 4f, new ConfigDescription(
                 "With a dead driver's foot stuck on the gas, a live passenger kicks it off after this long so the car can stop, s",
                 new AcceptableValueRange<float>(0f, 120f)));
-            BailChance = Config.Bind("Driving", "BailChance", 25f, new ConfigDescription(
+            BailChance = H.Bind("Driving", "BailChance", 25f, new ConfigDescription(
                 "% chance that a passenger who outlives the driver gets out and fights on foot once the car stands still; otherwise it takes the wheel. " +
                 "If the player took the car first it always gets out", new AcceptableValueRange<float>(0f, 100f)));
-            StuckBailChance = Config.Bind("Driving", "StuckBailChance", 50f, new ConfigDescription(
+            StuckBailChance = H.Bind("Driving", "StuckBailChance", 50f, new ConfigDescription(
                 "% chance that, when the driving AI gives up on a stuck car (after [AI] MaxRecovers), the whole crew gets out and fights on foot " +
                 "instead of the car waiting WaitSeconds and trying again", new AcceptableValueRange<float>(0f, 100f)));
 
-            SelfDestruct = Config.Bind("Self-destruct", "SelfDestructingCars", true,
-                "A raider car that is fully vacated (crew dead, bailed out, or the last passenger got out beside a dead driver) explodes: the frame " +
-                "goes black, every part pops off with 0 condition (see CarPartsLootFromExplodedCars) and the dead chassis cannot be entered, " +
-                "fuelled or fitted with parts any more; it is removed once you are 1000 m away. Off = vacated cars stay as they are now. " +
-                "A car you have sat in never explodes");
-            ExplodedLootPercent = Config.Bind("Self-destruct", "CarPartsLootFromExplodedCars", 12f, new ConfigDescription(
+                        ExplodedLootPercent = H.Bind("Self-destruct", "CarPartsLootFromExplodedCars", 12f, new ConfigDescription(
                 "% of the popped-off parts that keep their condition instead of dropping to 0. Each part rolls 0-100 weighted toward the low " +
                 "numbers and keeps its condition when the roll is at or below this value (12 = about one part in five, 50 = about 70 %, 100 = all)",
                 new AcceptableValueRange<float>(0f, 100f)));
 
-            AiThrottle = Config.Bind("AI", "Throttle", 1f, new ConfigDescription(
+            AiThrottle = H.Bind("AI", "Throttle", 1f, new ConfigDescription(
                 "Maximum throttle the driving AI uses (0..1); also the throttle of a stuck pedal", new AcceptableValueRange<float>(0.05f, 1f)));
-            AiDriveByOffset = Config.Bind("AI", "DriveByOffset", 5f, new ConfigDescription(
+            AiDriveByOffset = H.Bind("AI", "DriveByOffset", 5f, new ConfigDescription(
                 "When the target may not be rammed (the template's ramsTargets), the car aims this far beside it and drives past instead, m",
                 new AcceptableValueRange<float>(1f, 20f)));
-            AiLeadTime = Config.Bind("AI", "LeadTime", 1f, new ConfigDescription(
+            AiLeadTime = H.Bind("AI", "LeadTime", 1f, new ConfigDescription(
                 "Aim this many seconds ahead of the target's movement (intercept), s", new AcceptableValueRange<float>(0f, 4f)));
-            AiCommitSeconds = Config.Bind("AI", "CommitSeconds", 0.5f, new ConfigDescription(
+            AiCommitSeconds = H.Bind("AI", "CommitSeconds", 0.5f, new ConfigDescription(
                 "The aim point is re-taken only this often, so the car commits to a heading instead of twitching after the target, s",
                 new AcceptableValueRange<float>(0.05f, 3f)));
-            AiSteerRate = Config.Bind("AI", "SteerRate", 1.5f, new ConfigDescription(
+            AiSteerRate = H.Bind("AI", "SteerRate", 1.5f, new ConfigDescription(
                 "How fast the wheel turns: full-lock units per second (1.5 = straight to full lock in 0.67 s). Lower = lazier, wider turns",
                 new AcceptableValueRange<float>(0.2f, 10f)));
-            AiSteerAngle = Config.Bind("AI", "SteerAngle", 30f, new ConfigDescription(
+            AiSteerAngle = H.Bind("AI", "SteerAngle", 30f, new ConfigDescription(
                 "Angle to the aim point at which the driver asks for full lock, degrees (smaller = sharper corrections)",
                 new AcceptableValueRange<float>(5f, 90f)));
-            AiMaxSteerAtSpeed = Config.Bind("AI", "MaxSteerAtSpeed", 0.35f, new ConfigDescription(
+            AiMaxSteerAtSpeed = H.Bind("AI", "MaxSteerAtSpeed", 0.35f, new ConfigDescription(
                 "Steering limit at 72 km/h and above (0..1); full lock is allowed below 18 km/h, blended in between. Keeps the car on its wheels",
                 new AcceptableValueRange<float>(0.05f, 1f)));
-            AiTurnSafeSpeed = Config.Bind("AI", "TurnSafeSpeed", 18f, new ConfigDescription(
+            AiTurnSafeSpeed = H.Bind("AI", "TurnSafeSpeed", 18f, new ConfigDescription(
                 "Above this speed (m/s) the driver lifts off and brakes lightly when the target is more than 40 degrees off the nose",
                 new AcceptableValueRange<float>(3f, 40f)));
-            AiRamDistance = Config.Bind("AI", "RamDistance", 15f, new ConfigDescription(
+            AiRamDistance = H.Bind("AI", "RamDistance", 15f, new ConfigDescription(
                 "Within this distance of the target (m), obstacle avoidance is switched off: go straight for the ram",
                 new AcceptableValueRange<float>(0f, 50f)));
-            AiPassWidth = Config.Bind("AI", "PassWidth", 12f, new ConfigDescription(
+            AiPassWidth = H.Bind("AI", "PassWidth", 12f, new ConfigDescription(
                 "The target counts as passed when it is behind the car and within this many metres of the car's track",
                 new AcceptableValueRange<float>(2f, 40f)));
-            AiRunOutMeters = Config.Bind("AI", "RunOutMeters", 30f, new ConfigDescription(
+            AiRunOutMeters = H.Bind("AI", "RunOutMeters", 30f, new ConfigDescription(
                 "After passing or ramming the target the car keeps going this far before turning around, m",
                 new AcceptableValueRange<float>(0f, 200f)));
-            AiRunOutMaxSeconds = Config.Bind("AI", "RunOutMaxSeconds", 4f, new ConfigDescription(
+            AiRunOutMaxSeconds = H.Bind("AI", "RunOutMaxSeconds", 4f, new ConfigDescription(
                 "... or at most this long, s", new AcceptableValueRange<float>(0.5f, 20f)));
-            AiReverseSeconds = Config.Bind("AI", "ReverseSeconds", 2f, new ConfigDescription(
+            AiReverseSeconds = H.Bind("AI", "ReverseSeconds", 2f, new ConfigDescription(
                 "How long the car reverses after hitting an obstacle or getting stuck, s (grows with repeated attempts)",
                 new AcceptableValueRange<float>(0.5f, 10f)));
-            AiReverseThrottle = Config.Bind("AI", "ReverseThrottle", 0.6f, new ConfigDescription(
+            AiReverseThrottle = H.Bind("AI", "ReverseThrottle", 0.6f, new ConfigDescription(
                 "Throttle used while reversing", new AcceptableValueRange<float>(0.1f, 1f)));
-            AiStuckSeconds = Config.Bind("AI", "StuckSeconds", 2f, new ConfigDescription(
+            AiStuckSeconds = H.Bind("AI", "StuckSeconds", 2f, new ConfigDescription(
                 "Not moving for this long while trying to drive forward = stuck, reverse out", new AcceptableValueRange<float>(0.5f, 10f)));
-            AiRecoverWindow = Config.Bind("AI", "RecoverWindow", 12f, new ConfigDescription(
+            AiRecoverWindow = H.Bind("AI", "RecoverWindow", 12f, new ConfigDescription(
                 "Recoveries closer together than this count as repeated attempts, s", new AcceptableValueRange<float>(1f, 60f)));
-            AiMaxRecovers = Config.Bind("AI", "MaxRecovers", 4f, new ConfigDescription(
+            AiMaxRecovers = H.Bind("AI", "MaxRecovers", 4f, new ConfigDescription(
                 "After this many repeated recoveries the car gives up: the crew bails ([Driving] StuckBailChance) or the car waits WaitSeconds",
                 new AcceptableValueRange<float>(1f, 20f)));
-            AiWaitSeconds = Config.Bind("AI", "WaitSeconds", 4f, new ConfigDescription(
+            AiWaitSeconds = H.Bind("AI", "WaitSeconds", 4f, new ConfigDescription(
                 "How long a car that gave up sits still before trying again, s", new AcceptableValueRange<float>(1f, 60f)));
-            AiFeelerRange = Config.Bind("AI", "FeelerRange", 10f, new ConfigDescription(
+            AiFeelerRange = H.Bind("AI", "FeelerRange", 10f, new ConfigDescription(
                 "Base length of the centre obstacle feeler ray, m (side rays are shorter)", new AcceptableValueRange<float>(2f, 40f)));
-            AiFeelerSpeedFactor = Config.Bind("AI", "FeelerSpeedFactor", 0.6f, new ConfigDescription(
+            AiFeelerSpeedFactor = H.Bind("AI", "FeelerSpeedFactor", 0.6f, new ConfigDescription(
                 "Extra feeler length per m/s of speed", new AcceptableValueRange<float>(0f, 2f)));
-            AiFrontOffset = Config.Bind("AI", "FrontOffset", 2f, new ConfigDescription(
+            AiFrontOffset = H.Bind("AI", "FrontOffset", 2f, new ConfigDescription(
                 "Feelers start this far in front of the car's centre of mass, m (should be just outside the bumper)",
                 new AcceptableValueRange<float>(0f, 5f)));
-            AiMaxSlopeDeg = Config.Bind("AI", "MaxSlopeDeg", 35f, new ConfigDescription(
+            AiMaxSlopeDeg = H.Bind("AI", "MaxSlopeDeg", 35f, new ConfigDescription(
                 "Surfaces flatter than this are driven over, steeper ones are obstacles (rocks, walls), degrees",
                 new AcceptableValueRange<float>(10f, 80f)));
-            AiAvoidGain = Config.Bind("AI", "AvoidGain", 1.2f, new ConfigDescription(
+            AiAvoidGain = H.Bind("AI", "AvoidGain", 1.2f, new ConfigDescription(
                 "How hard the feelers steer away from obstacles", new AcceptableValueRange<float>(0f, 4f)));
-            AiIgnoreMassBelow = Config.Bind("AI", "IgnoreMassBelow", 40f, new ConfigDescription(
+            AiIgnoreMassBelow = H.Bind("AI", "IgnoreMassBelow", 40f, new ConfigDescription(
                 "Loose physics objects lighter than this (kg) are not obstacles; the car drives through them",
                 new AcceptableValueRange<float>(0f, 1000f)));
-            AiGiveUpDistance = Config.Bind("AI", "GiveUpDistance", 700f, new ConfigDescription(
+            AiGiveUpDistance = H.Bind("AI", "GiveUpDistance", 700f, new ConfigDescription(
                 "Beyond this distance from the player the car stops chasing and coasts until the player comes closer, m",
                 new AcceptableValueRange<float>(20f, 2000f)));
-            AiInvertSteering = Config.Bind("AI", "InvertSteering", false,
+            AiInvertSteering = H.Bind("AI", "InvertSteering", false,
                 "Flip the steering sign if the car turns away from the target instead of toward it");
 
-            LootMultiplier = Config.Bind("Loot", "Multiplier", 1f, new ConfigDescription(
-                "Scales the amount of loot in a truck: 0 = nothing, 1 = the built-in amounts (Food dogfood x6; Water / Gasoline / Diesel cans x4, " +
-                "50 % a barrel too; Medicine bandages x4 + first aid x2; Weapons 0-3 guns + 3-8 ammo boxes; Drugs alcohol x2 + weed x3 + weed plant x1; " +
-                "Mechanic 3 repair boxes + 1 big oil can; Corpses 3-5 dead Scraffa; Rats 6-8 dead rats), 3 = 300 %. The 50 % barrels are not scaled",
-                new AcceptableValueRange<float>(0f, 3f)));
-            foreach (var d in CarTemplate.LootDefaults)
-                LootChances[d[0]] = Config.Bind("Loot", d[0] + "Chance", float.Parse(d[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture), new ConfigDescription(
+                        foreach (var d in CarTemplate.LootDefaults)
+                LootChances[d[0]] = H.Bind("Loot", d[0] + "Chance", float.Parse(d[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture), new ConfigDescription(
                     "% chance that a loot truck carries " + d[0] + " (all XChance values should add up to 100)", new AcceptableValueRange<float>(0f, 100f)));
-            MinPartHealth = Config.Bind("Loot", "MinPartHealth", 2f, new ConfigDescription(
+            MinPartHealth = H.Bind("Loot", "MinPartHealth", 2f, new ConfigDescription(
                 "Lowest condition (%) of a spawned car's parts that have one (engine, radiator, wheels)", new AcceptableValueRange<float>(0f, 100f)));
-            MaxPartHealth = Config.Bind("Loot", "MaxPartHealth", 35f, new ConfigDescription(
+            MaxPartHealth = H.Bind("Loot", "MaxPartHealth", 35f, new ConfigDescription(
                 "Highest condition (%) of a spawned car's parts; the roll is weighted toward two thirds of the way from Min to Max",
                 new AcceptableValueRange<float>(0f, 100f)));
-            MinPartsFill = Config.Bind("Loot", "MinPartsFill", 15f, new ConfigDescription(
+            MinPartsFill = H.Bind("Loot", "MinPartsFill", 15f, new ConfigDescription(
                 "Lowest fill (% of capacity) of a spawned car's tank (gas/diesel), engine oil and radiator water", new AcceptableValueRange<float>(0f, 100f)));
-            MaxPartsFill = Config.Bind("Loot", "MaxPartsFill", 60f, new ConfigDescription(
+            MaxPartsFill = H.Bind("Loot", "MaxPartsFill", 60f, new ConfigDescription(
                 "Highest fill (%) of tank, oil and water; each rolled separately, weighted toward two thirds of the way from Min to Max",
                 new AcceptableValueRange<float>(0f, 100f)));
 
@@ -291,54 +359,53 @@ namespace Apocapatrol
             if (!exposePose) ArmPoseProfile.RemoveStoredConfiguration(Config);
 
             const string CS = "Convoy spawner";
-            ConvoyEnabled = Config.Bind(CS, "Enabled", true, "Enemy cars and convoys spawn on their own while you play (the Debug menu buttons work regardless)");
-            MaxHeat = Config.Bind(CS, "MaxHeat", 3f, new ConfigDescription(
+            ConvoyEnabled = H.Bind(CS, "Enabled", true, "Enemy cars and convoys spawn on their own while you play (the Debug menu buttons work regardless)");
+            MaxHeat = H.Bind(CS, "MaxHeat", 3f, new ConfigDescription(
                 "Upper limit of the heat (3 = 300 %). Below 100 % the heat is how complete a group is; above 100 % it only raises the chances of " +
                 "the tougher spawn types (advanced / super advanced cars, the advanced convoy) and shortens the cooldown a little - group sizes " +
                 "stay at their 100 % values (x PatrolSizePercent)", new AcceptableValueRange<float>(0f, 5f)));
-            HeatIntervalKm = Config.Bind(CS, "HeatIntervalKm", 10f, new ConfigDescription(
+            HeatIntervalKm = H.Bind(CS, "HeatIntervalKm", 10f, new ConfigDescription(
                 "Every this many km of the game's Distance Travelled add 25 % heat (linear: 10 = 100 % at 40 km)", new AcceptableValueRange<float>(1f, 200f)));
-            ConvoySpawnDistance = Config.Bind(CS, "SpawnDistance", 350f, new ConfigDescription(
+            ConvoySpawnDistance = H.Bind(CS, "SpawnDistance", 350f, new ConfigDescription(
                 "How far away a spawn appears (m): ahead of your car, up to 45 degrees left or right; behind you when on foot", new AcceptableValueRange<float>(50f, 1000f)));
-            JustCarsToConvoyRatio = Config.Bind(CS, "JustCarsToConvoyRatio", 0.8f, new ConfigDescription(
+            JustCarsToConvoyRatio = H.Bind(CS, "JustCarsToConvoyRatio", 0.8f, new ConfigDescription(
                 "When a convoy is allowed, how likely plain enemy cars spawn instead of it (0 = always the convoy, 1 = never)", new AcceptableValueRange<float>(0f, 1f)));
-            MinConvoyCooldown = Config.Bind(CS, "MinConvoyCooldown", 5f, new ConfigDescription(
+            MinConvoyCooldown = H.Bind(CS, "MinConvoyCooldown", 5f, new ConfigDescription(
                 "Shortest time between two spawns (minutes; 0 = can follow immediately)", new AcceptableValueRange<float>(0f, 120f)));
-            MaxConvoyCooldown = Config.Bind(CS, "MaxConvoyCooldown", 60f, new ConfigDescription(
+            MaxConvoyCooldown = H.Bind(CS, "MaxConvoyCooldown", 60f, new ConfigDescription(
                 "Longest time between two spawns (minutes; 0 = automatic spawning off)", new AcceptableValueRange<float>(0f, 240f)));
 
-            BasicCarsKm = Config.Bind(CS, "BasicCarsDistanceKm", 0f, new ConfigDescription("Basic enemy cars (3 small cars at 100 % heat) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            BasicCarsBosses = Config.Bind(CS, "BasicCarsBossesKilled", 0, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            BasicCarsChance = Config.Bind(CS, "BasicCarsChance", 45f, new ConfigDescription("Weight of basic enemy cars among the allowed car spawns (%)", new AcceptableValueRange<float>(0f, 100f)));
-            AdvancedCarsKm = Config.Bind(CS, "AdvancedCarsDistanceKm", 30f, new ConfigDescription("Advanced enemy cars (3 cars, at least 1 advanced, maybe a junker) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            AdvancedCarsBosses = Config.Bind(CS, "AdvancedCarsBossesKilled", 1, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            AdvancedCarsChance = Config.Bind(CS, "AdvancedCarsChance", 35f, new ConfigDescription("Weight of advanced enemy cars (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
-            SuperCarsKm = Config.Bind(CS, "SuperAdvancedCarsDistanceKm", 50f, new ConfigDescription("Super advanced enemy cars (5 cars, half junkers, at least 2 advanced) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            SuperCarsBosses = Config.Bind(CS, "SuperAdvancedCarsBossesKilled", 3, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            SuperCarsChance = Config.Bind(CS, "SuperAdvancedCarsChance", 20f, new ConfigDescription("Weight of super advanced enemy cars (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
-            BasicConvoyKm = Config.Bind(CS, "BasicConvoyDistanceKm", 5f, new ConfigDescription("Basic convoy (a basic truck + 2 junkers + 3-5 small cars) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            BasicConvoyBosses = Config.Bind(CS, "BasicConvoyBossesKilled", 0, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            BasicConvoyChance = Config.Bind(CS, "BasicConvoyChance", 70f, new ConfigDescription("Weight of the basic convoy among the allowed convoys (%)", new AcceptableValueRange<float>(0f, 100f)));
-            AdvancedConvoyKm = Config.Bind(CS, "AdvancedConvoyDistanceKm", 20f, new ConfigDescription("Advanced convoy (an advanced truck + the same escort, at least 2 advanced) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            AdvancedConvoyBosses = Config.Bind(CS, "AdvancedConvoyBossesKilled", 3, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            AdvancedConvoyChance = Config.Bind(CS, "AdvancedConvoyChance", 30f, new ConfigDescription("Weight of the advanced convoy (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
+            BasicCarsKm = H.Bind(CS, "BasicCarsDistanceKm", 0f, new ConfigDescription("Basic enemy cars (3 small cars at 100 % heat) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            BasicCarsBosses = H.Bind(CS, "BasicCarsBossesKilled", 0, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            BasicCarsChance = H.Bind(CS, "BasicCarsChance", 45f, new ConfigDescription("Weight of basic enemy cars among the allowed car spawns (%)", new AcceptableValueRange<float>(0f, 100f)));
+            AdvancedCarsKm = H.Bind(CS, "AdvancedCarsDistanceKm", 30f, new ConfigDescription("Advanced enemy cars (3 cars, at least 1 advanced, maybe a junker) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            AdvancedCarsBosses = H.Bind(CS, "AdvancedCarsBossesKilled", 1, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            AdvancedCarsChance = H.Bind(CS, "AdvancedCarsChance", 35f, new ConfigDescription("Weight of advanced enemy cars (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
+            SuperCarsKm = H.Bind(CS, "SuperAdvancedCarsDistanceKm", 50f, new ConfigDescription("Super advanced enemy cars (5 cars, half junkers, at least 2 advanced) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            SuperCarsBosses = H.Bind(CS, "SuperAdvancedCarsBossesKilled", 3, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            SuperCarsChance = H.Bind(CS, "SuperAdvancedCarsChance", 20f, new ConfigDescription("Weight of super advanced enemy cars (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
+            BasicConvoyKm = H.Bind(CS, "BasicConvoyDistanceKm", 5f, new ConfigDescription("Basic convoy (a basic truck + 2 junkers + 3-5 small cars) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            BasicConvoyBosses = H.Bind(CS, "BasicConvoyBossesKilled", 0, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            BasicConvoyChance = H.Bind(CS, "BasicConvoyChance", 70f, new ConfigDescription("Weight of the basic convoy among the allowed convoys (%)", new AcceptableValueRange<float>(0f, 100f)));
+            AdvancedConvoyKm = H.Bind(CS, "AdvancedConvoyDistanceKm", 20f, new ConfigDescription("Advanced convoy (an advanced truck + the same escort, at least 2 advanced) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            AdvancedConvoyBosses = H.Bind(CS, "AdvancedConvoyBossesKilled", 3, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            AdvancedConvoyChance = H.Bind(CS, "AdvancedConvoyChance", 30f, new ConfigDescription("Weight of the advanced convoy (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
 
-            CleanupEnabled = Config.Bind("Cleanup", "Enabled", true,
+            CleanupEnabled = H.Bind("Cleanup", "Enabled", true,
                 "Remove raider cars you left behind. A car you have ever sat in is never removed (the game itself only deletes cars beyond 5 km)");
-            CleanupMinutes = Config.Bind("Cleanup", "RemoveAfterMinutes", 40f, new ConfigDescription(
+            CleanupMinutes = H.Bind("Cleanup", "RemoveAfterMinutes", 10f, new ConfigDescription(
                 "A raider car farther than MinDistance for this long is removed with its crew and cargo (0 = never by time)", new AcceptableValueRange<float>(0f, 600f)));
-            CleanupMaxCars = Config.Bind("Cleanup", "MaxCars", 30, new ConfigDescription(
+            CleanupMaxCars = H.Bind("Cleanup", "MaxCars", 30, new ConfigDescription(
                 "With more raider cars than this in the world, the farthest ones beyond MinDistance are removed first (0 = no limit)", new AcceptableValueRange<int>(0, 200)));
-            CleanupDistance = Config.Bind("Cleanup", "MinDistance", 800f, new ConfigDescription(
+            CleanupDistance = H.Bind("Cleanup", "MinDistance", 800f, new ConfigDescription(
                 "Cars closer than this are never removed (m)", new AcceptableValueRange<float>(100f, 5000f)));
 
-            MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.F8, "Open the template spawner: a list of the park, click a car to build it in front of you. None = off");
-            VerboseLog = Config.Bind("Debug", "VerboseLog", false, "Log what the mod does: spawns, builds, crews, the AI's state changes, ram hits. Off = only the load line and warnings, nothing that gives a spawn away");
-            ExitSpeedKmh = Config.Bind("Debug", "ExitSpeedKmh", 30f, new ConfigDescription(
+                                    ExitSpeedKmh = H.Bind("Debug", "ExitSpeedKmh", 30f, new ConfigDescription(
                 "You can leave your car below this speed (km/h). The game's own limit is 6 m/s = 21.6 km/h, too low to get out of a car a truck keeps shoving",
                 new AcceptableValueRange<float>(5f, 200f)));
-            AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances");
-
+            
+            MigrateMovedSettings();
+            ApplyAudioVoices();   // after the migration: an old [General] AudioVoices counts
             PurgeStaleEntries();
 
             SceneManager.sceneLoaded += (s, m) => { EnsureRunner(); Patrol.ResetForScene(); PlayerRef.Reset(); PatrolPersistence.ResetForScene(); Convoy.ResetForScene(); };

@@ -1,4 +1,4 @@
-# Apocapatrol 1.7.1
+# Apocapatrol 1.8.0
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -91,7 +91,7 @@ convoy always brings its truck first.
 ## Cleanup
 
 Raider cars you leave behind don't pile up in your world or your save. A raider car that stays more than 800 m away from you for
-40 minutes disappears together with its crew and cargo, and if more than 30 raider cars are around, the farthest ones go first. A car
+10 minutes disappears together with its crew and cargo, and if more than 30 raider cars are around, the farthest ones go first. A car
 you've sat in counts as yours and is never removed, whether it's loot you took or a car you drove.
 
 ## Self-destructing cars
@@ -100,10 +100,9 @@ While a raider drives, you can't take the car apart: the wrench does nothing on 
 
 Once a raider car is fully vacated - the crew is dead, they bailed out, or the last passenger climbed out beside a dead driver - the car
 blows up with the exploder zombie's fireball and bang (just the show: it doesn't hurt you): the frame turns black, and every part pops off. Most popped parts are wrecked (0 condition); about one in five keeps its
-condition and is worth picking up (**CarPartsLootFromExplodedCars**, 12 % by default - the roll favours low numbers, so 12 gives a bit more
-than 12 %). What's left is a dead chassis: you can't get in, fuel it or fit parts to it, and it disappears once
+condition and is worth picking up. What's left is a dead chassis: you can't get in, fuel it or fit parts to it, and it disappears once
 you're 1000 m away. Trucks are different: they don't turn black, their wheels stay on (with the same condition roll), they stay
-parked where they stopped, their rear doors still open, and the cargo stays in the bed for you to loot. A car you've sat in never explodes. Turn **SelfDestructingCars** off and vacated cars stay as they were before: driveable,
+parked where they stopped, their rear doors still open, and the cargo stays in the bed for you to loot. A car you've sat in never explodes. Turn **SelfDestruct** off and vacated cars stay as they were before: driveable,
 strippable, cleaned up by the rules below.
 
 ## Paint jobs
@@ -141,25 +140,26 @@ and carry on. The timer until the next convoy is saved too.
 
 ## Settings
 
-Every setting can be changed in game through the Apocasetter Mods menu if you have it, or in
-`BepInEx\config\com.denis.apocalypter.apocapatrol.cfg`.
+A short list, changeable in game through the Apocasetter Mods menu if you have it, or in
+`BepInEx\config\com.denis.apocalypter.apocapatrol.cfg`. Everything else is tuned in and fixed.
 
-- **General**: the patrol size (100 %), see above, and **AudioVoices** (64): how many sounds the game may play at once. The game ships
-  with 32, which a firefight with several raider cars overflows - shots and hits then cut out, your own included. Applied when the game
-  starts; 0 keeps the game's setting.
-- **Combat**: whether gunmen shoot, how far (40 m) and how wide around the car's front they can fire, how long and how often the driver's
-  bursts come, ram damage on/off, its strength (0–3×) and the full-damage speed, damage per car type, the knock-back strength, and ram
-  damage while you're in your car.
-- **Driving**: the chances of a jammed gas pedal (5 %), of the passenger bailing out instead of taking the wheel (25 %), and of the crew
-  leaving a stuck car (50 %).
-- **Self-destruct**: self-destructing cars on/off, and the share of popped parts that keep their condition (12 %).
-- **AI**: how the raiders drive, including throttle, steering, how far they run out after a pass, obstacle avoidance and the give-up distance.
-- **Loot**: the chance of each cargo, a loot multiplier (0–3×), and the ranges for part condition and fuel/oil/water levels.
-- **Convoy spawner**: on/off, maximum heat, km per heat step, spawn distance (350 m), the cars-versus-convoy ratio, the minimum and maximum
-  time between spawns, and the distance, boss kills and chance for each group.
-- **Cleanup**: on/off, how long a car must be left behind before it's removed (40 min), the most raider cars at once (30), and the distance
-  inside which nothing is ever removed (800 m).
-- **Debug**: the key for the F8 spawner menu, detailed logging, an on-screen AI readout, and the speed at which you can leave a car (30 km/h).
+**Scaling**
+- **PatrolSizePercent** (100 %): how many cars every spawn brings, 25–150 %. Lower it on a weak PC.
+- **AudioVoices** (64): how many sounds the game may play at once. The game ships with 32, which a firefight with several raider cars
+  overflows - shots and hits then cut out, your own included. Applied when the game starts; 0 keeps the game's setting.
+- **SelfDestruct** (on): vacated raider cars blow up (see above).
+- **LootMultiplier** (1): how much loot trucks carry, 0–3×.
+
+**Combat**
+- **RangedCombat** (on): gunmen in the cars shoot at you.
+- **ShootDistance** (40 m): how close you have to be before they open fire.
+- **RamDamage** (on): a raider car that hits you on foot hurts you.
+- **RamDamageInCar** (off): ...and also while you sit in your own car.
+
+**Debug**
+- **TemplateSpawnerKey** (F8): opens the spawner menu.
+- **VerboseLog** (off): detailed logging.
+- **AiOverlay** (off): an on-screen readout per raider car.
 
 ## F8 menu
 
