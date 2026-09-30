@@ -7,8 +7,8 @@ using UnityEngine;
 namespace Apocapatrol
 {
     // Self-destructing cars ([Self-destruct] SelfDestructingCars): once a raider car is fully vacated - the crew is dead, bailed out,
-    // or the last passenger got out beside a dead driver - it "explodes": the frame goes almost black, the exploder zombie's blast
-    // sound plays at the car, and every part pops off its hinge with condition 0 (CarPartsLootFromExplodedCars % of them keep theirs).
+    // or the last passenger got out beside a dead driver - it "explodes": the frame goes almost black, the exploder zombie's harmless blast (fireball + bang)
+    // goes off at the car, and every part pops off its hinge with condition 0 (CarPartsLootFromExplodedCars % of them keep theirs).
     // What is left is a dead chassis: nothing to enter, attach, adjust or fuel, and the Cleanup removes it beyond 1000 m.
     //
     // Popping a part is what the wrench does: re-tag it vehPartRemoved on layer 9 (the part's own de_Attach state); the part's
@@ -17,9 +17,12 @@ namespace Apocapatrol
     {
         internal const float RemoveDistance = 1000f;          // a dead chassis is removed beyond this (the game only deletes cars at 5 km)
         private const float Delay = 1f;                        // after the vacate, so the last carcass has left the seat
-        private const string SfxPrefab = "Explosion_BlastZombie";
+        private const string BlastPrefab = "Explosion_BlastZombie";   // what the exploder zombie's Health FSM spawns when it dies
         private static readonly Color Charred = new Color(0.06f, 0.06f, 0.06f, 1f);
-        private static AudioClip _sfx; private static bool _sfxLooked;
+        private static GameObject _blast; private static bool _blastLooked;
+        // the blast prefab's harmful half: ExplosionRadius grows its trigger sphere, ExplosionDamage sends distance-scaled Damage to every
+        // Bodypart its Range/LOS sensors detect. Switched off right after Instantiate, before they Start.
+        private static readonly string[] HarmfulFsms = { "ExplosionRadius", "ExplosionDamage" };
 
         // Called by the Crew when the car is vacated. Re-checks after a short delay: a car the player took or sits in is never blown up.
         internal static void Schedule(Crew crew, GameObject car, PatrolMarker marker, string why)
@@ -41,7 +44,7 @@ namespace Apocapatrol
             Nwh.SetInput(car, 0f, 0f, 0f);
 
             Darken(car);
-            Sfx(car);
+            Blast(car);
 
             var parts = Parts(car);
             int kept = 0;
@@ -177,20 +180,34 @@ namespace Apocapatrol
             Plugin.Verbose("Explode: " + n + " material(s) charred");
         }
 
-        // The exploder zombie's blast, sound only (its prefab also carries an ExplosionDamage FSM; we never instantiate it)
-        private static void Sfx(GameObject car)
+        // The exploder zombie's blast without its damage: the game's own Explosion_BlastZombie prefab (AudioSource explosion_03, 0.7, 100 m,
+        // play-on-awake; `Explosion` FSM: ParticleSystemPlay BigExplosion with children (fireball, smoke, debris, embers, light, shockwave) +
+        // AudioPlay + a physics Explosion (force 3000, radius 5, which also helps throw the parts) + Wait 2 s + DestroySelf). Its damage FSMs,
+        // sensors and trigger collider are disabled before they Start; it is not registered, so the game never saves it.
+        private static void Blast(GameObject car)
         {
-            if (!_sfxLooked)
+            if (!_blastLooked)
             {
-                _sfxLooked = true;
-                var prefab = Prefabs.FindAny(SfxPrefab);
-                var src = prefab != null ? prefab.GetComponent<AudioSource>() : null;
-                _sfx = src != null ? src.clip : null;
-                if (_sfx == null) Plugin.Log.LogWarning("Explode: no blast sound on " + SfxPrefab);
+                _blastLooked = true;
+                _blast = Prefabs.FindAny(BlastPrefab);
+                if (_blast == null) Plugin.Log.LogWarning("Explode: " + BlastPrefab + " prefab not found; no blast effect");
             }
-            if (_sfx == null) return;
+            if (_blast == null) return;
             var rb = car.GetComponent<Rigidbody>();
-            AudioSource.PlayClipAtPoint(_sfx, rb != null ? rb.worldCenterOfMass : car.transform.position + Vector3.up, 1f);
+            var at = (rb != null ? rb.worldCenterOfMass : car.transform.position) + Vector3.up * 0.3f;
+            var fx = UnityEngine.Object.Instantiate(_blast, at, Quaternion.identity);
+            int off = 0;
+            foreach (var f in fx.GetComponentsInChildren<PlayMakerFSM>(true))
+                if (Array.IndexOf(HarmfulFsms, f.FsmName) >= 0) { f.enabled = false; off++; }
+            foreach (var b in fx.GetComponentsInChildren<Behaviour>(true))
+            {
+                string n = b.GetType().Name;
+                if (n == "RangeSensor" || n == "LOSSensor" || n.EndsWith("Sensor", StringComparison.Ordinal)) { b.enabled = false; off++; }
+            }
+            foreach (var c in fx.GetComponentsInChildren<Collider>(true)) c.enabled = false;
+            fx.SetActive(true);
+            UnityEngine.Object.Destroy(fx, 8f);   // its own FSM destroys it after 2 s; this is only the safety net
+            Plugin.Verbose("Explode: blast effect at " + at + " (" + off + " harmful component(s) off)");
         }
 
         // A dead chassis: every FSM on it off (no F prompt, no attach/adjust/fuel/handbrake, no CarAttack), the vehicle controller off.
