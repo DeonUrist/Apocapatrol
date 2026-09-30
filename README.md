@@ -1,4 +1,4 @@
-# Apocapatrol 1.7.0
+# Apocapatrol 1.7.1
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -72,8 +72,8 @@ starting area and kill more bosses.
 | Group | Appears from | What comes |
 |---|---|---|
 | Basic enemy cars | the start | 3 small cars |
-| Basic convoy | 5 km | a truck, 2 junkers and 3–5 small cars, sometimes one advanced car among them |
-| Advanced convoy | 20 km and 3 bosses | an advanced truck with the same escort, half of it advanced |
+| Basic convoy | 5 km | a loot truck, 2 junkers and 3–5 small cars, sometimes one advanced car among them |
+| Advanced convoy | 20 km and 3 bosses | an advanced loot truck with the same escort, half of it advanced |
 | Advanced enemy cars | 30 km and 1 boss | 3 cars, at least one advanced, maybe a junker |
 | Super advanced enemy cars | 50 km and 3 bosses | 5 cars, many of them junkers, at least two advanced |
 

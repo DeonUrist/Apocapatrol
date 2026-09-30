@@ -207,7 +207,12 @@ namespace Apocapatrol
         // small = not a junker, not a truck
         private static CarTemplate Small(bool advanced) { return Pick(t => !IsTruckTpl(t) && !IsJunkerTpl(t) && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }
         private static CarTemplate Junker(bool advanced) { return Pick(t => IsJunkerTpl(t) && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }
-        private static CarTemplate Truck(bool advanced) { return Pick(t => IsTruckTpl(t) && (advanced ? IsAdvancedTpl(t) : !IsAdvancedTpl(t))); }
+        // a convoy's truck is always a loot truck (a template with cargo); a plain truck only if the park had no loot truck of that tier
+        private static CarTemplate Truck(bool advanced)
+        {
+            return Pick(t => IsTruckTpl(t) && t.Cargo.Length > 0 && (advanced ? IsAdvancedTpl(t) : !IsAdvancedTpl(t)))
+                ?? Pick(t => IsTruckTpl(t) && (advanced ? IsAdvancedTpl(t) : !IsAdvancedTpl(t)));
+        }
 
         // base count x heat (capped at 100 %: the group grows with the heat until it is complete, never beyond - heat above 100 %
         // only makes the tougher groups likelier and the clock shorter) x [General] PatrolSizePercent, never below min
