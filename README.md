@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.25.0)
+# Apocapatrol (prototype 0.25.1)
 
 BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
 car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
@@ -8,7 +8,8 @@ Config (all live in the Apocasetter Mods menu): `[Combat]` RangedCombat (one swi
 MaxAimPitch, AimTurnSpeed, FireBurstSeconds, FireIntervalMin/Max, RamDamage, RamDamageMultiplier, RamDamageByBody, RamFullSpeedKmh, RamPushStrength,
 RamDamageInCar, RamInCarFactor · `[Driving]` StuckPedalChance, StuckPedalTakeoverSeconds, BailChance, StuckBailChance ·
 `[AI]` the driving AI's tuning · `[Loot]` loot type chances, the loot multiplier and the part condition range · `[Convoy spawner]` (see below) ·
-`[Debug]` TemplateSpawnerKey, VerboseLog, AiOverlay. What used to be settings and is
+`[Debug]` TemplateSpawnerKey, VerboseLog, AiOverlay, ExitSpeedKmh (you can leave your car below this speed; the game's own limit is
+6 m/s = 21.6 km/h, which a truck shoving your car never lets you get under - default 30). What used to be settings and is
 now fixed: spawn distance 8 m, takeover delay 2 s, carcass eject 0.3 m at 4 m/s, bail-out distance 0.5 m; stale settings from earlier versions are
 removed from the .cfg on load (the hidden `PoseConfiguration` switch is kept).
 

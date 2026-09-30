@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.25.0";
+        public const string VERSION = "0.25.1";
 
         internal static ManualLogSource Log;
 
@@ -63,6 +63,7 @@ namespace Apocapatrol
             AiIgnoreMassBelow, AiGiveUpDistance;
         // [Debug]
         internal static ConfigEntry<bool> VerboseLog;
+        internal static ConfigEntry<float> ExitSpeedKmh;
         // [Convoy spawner]
         internal static ConfigEntry<bool> ConvoyEnabled;
         internal static ConfigEntry<float> MaxHeat, HeatIntervalKm, ConvoySpawnDistance, JustCarsToConvoyRatio, MinConvoyCooldown, MaxConvoyCooldown;
@@ -287,6 +288,9 @@ namespace Apocapatrol
 
             MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.F8, "Open the template spawner: a list of the park, click a car to build it in front of you. None = off");
             VerboseLog = Config.Bind("Debug", "VerboseLog", true, "Log every build step (prefab lookups, hinge states, engine state) and the AI's state changes");
+            ExitSpeedKmh = Config.Bind("Debug", "ExitSpeedKmh", 30f, new ConfigDescription(
+                "You can leave your car below this speed (km/h). The game's own limit is 6 m/s = 21.6 km/h, too low to get out of a car a truck keeps shoving",
+                new AcceptableValueRange<float>(5f, 200f)));
             AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances");
 
             PurgeStaleEntries();

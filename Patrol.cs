@@ -22,6 +22,7 @@ namespace Apocapatrol
             PatrolPersistence.Tick(this);
             if (!InGame()) return;
             Ram.Tick();
+            ExitSpeed.Tick();
         }
 
         // builds a template (from the F8 menu); one at a time
@@ -817,6 +818,50 @@ namespace Apocapatrol
             _taken.Clear();
             if (_car != null) Nwh.AutoInput(_car, _autoWas);
             Plugin.Verbose("Input control released");
+        }
+    }
+
+    // =============================================================== exit speed
+    // The game lets the player leave a car only below 6 m/s: PlayerCamera [DriveUse] compares the car's speed against a literal 6 in
+    // its inCar / over 2 / TooFast states (FloatCompare float2). A truck shoving the player's car keeps it above that for good, so the
+    // literal is replaced by [Debug] ExitSpeedKmh (converted to m/s); re-checked every few seconds (live config edits, new Player object).
+    internal static class ExitSpeed
+    {
+        private static PlayMakerFSM _fsm;
+        private static float _next, _applied = -1f;
+        private static readonly List<FsmFloat> _limits = new List<FsmFloat>();
+
+        internal static void Tick()
+        {
+            if (Time.unscaledTime < _next) return;
+            _next = Time.unscaledTime + 5f;
+            float want = Mathf.Max(1f, Plugin.ExitSpeedKmh.Value) / 3.6f;
+            if (_fsm == null || _fsm.gameObject == null)
+            {
+                _fsm = null; _limits.Clear(); _applied = -1f;
+                var player = PlayerRef.Player;
+                var cam = player != null ? Patrol.FindChild(player, "PlayerCamera") : null;
+                if (cam == null) return;
+                foreach (var f in cam.GetComponents<PlayMakerFSM>()) if (f.FsmName == "DriveUse") { _fsm = f; break; }
+                if (_fsm == null) return;
+                try
+                {
+                    foreach (var st in _fsm.FsmStates)
+                        foreach (var a in st.Actions)
+                        {
+                            if (a == null || a.GetType().Name != "FloatCompare") continue;
+                            var fld = a.GetType().GetField("float2", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                            var v = fld != null ? fld.GetValue(a) as FsmFloat : null;
+                            if (v != null && !v.UseVariable && Mathf.Abs(v.Value - 6f) < 0.01f) _limits.Add(v);   // the vanilla literal
+                        }
+                }
+                catch (Exception e) { Plugin.Log.LogWarning("ExitSpeed: " + e.Message); }
+                if (_limits.Count == 0) { Plugin.Log.LogWarning("ExitSpeed: no 6 m/s compare found in PlayerCamera [DriveUse]"); return; }
+            }
+            if (Mathf.Abs(_applied - want) < 0.001f) return;
+            foreach (var v in _limits) v.Value = want;
+            _applied = want;
+            Plugin.Log.LogInfo("Exit speed limit set to " + Plugin.ExitSpeedKmh.Value.ToString("0") + " km/h (" + _limits.Count + " compare(s) in PlayerCamera [DriveUse])");
         }
     }
 
