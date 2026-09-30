@@ -327,7 +327,7 @@ namespace Apocapatrol
             return mk != null && mk.Passenger != null && PassengerAlive(mk, mk.Passenger);
         }
 
-        private const float PassengerActAfter = 6f;   // a passenger acts at the latest this long after the driver's death, rolling or not
+        private const float PassengerActAfter = 4f;   // a surviving passenger acts this long after the driver's death, whatever the car does
 
         private bool DriverAlive() { return Alive(_driver, _health, ref _healthVar); }
 
@@ -360,15 +360,15 @@ namespace Apocapatrol
             }
             bool playerIn = PlayerInside();
             if (playerIn) _paxBails = true;
-            if (_stuck && _deadFor >= Plugin.StuckPedalTakeoverSeconds.Value)
+            // one check: PassengerActAfter s after the driver's death the passenger acts - whatever the car does (gas stuck, rolling,
+            // pushed by another car). Until then the roll-out / stuck-pedal logic runs as usual.
+            if (_deadFor < PassengerActAfter && !playerIn) return false;
+            if (_stuck)
             {
                 _stuck = false; _rolling = 0f;
                 Nwh.SetInput(_car, 0f, 0f, 0f);
                 Plugin.Verbose("Crew: passenger kicked the dead driver's foot off the pedal");
             }
-            float speed = _rb != null ? _rb.velocity.magnitude : 0f;
-            if (speed > 1f && !playerIn && _deadFor < PassengerActAfter) return false;   // still rolling (braking): let the roll-out logic run
-            if (_stuck) return false;
             if (_paxBails)
             {
                 Patrol.BailOut(_car, pax, marker);
