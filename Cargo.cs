@@ -13,7 +13,8 @@ namespace Apocapatrol
     {
         private class Slot { public GameObject Prefab; public int Count; }
 
-        // "prefab:count;prefab:min-max;..." (prefab names or in-game item names)
+        // "prefab:count;prefab:min-max;..." (prefab names or in-game item names). Extras: "a|b|c:3" = each of the 3 a random one of
+        // a, b, c; "prefab:1@50" = this entry only with a 50 % chance (and not scaled by the loot multiplier - a barrel is a barrel).
         private static List<Slot> Parse(string spec)
         {
             var slots = new List<Slot>();
@@ -22,6 +23,12 @@ namespace Apocapatrol
             {
                 string part = raw.Trim();
                 if (part.Length == 0) continue;
+                float chance = 100f;
+                int at = part.LastIndexOf('@');
+                if (at > 0 && float.TryParse(part.Substring(at + 1).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out chance))
+                    part = part.Substring(0, at).Trim();
+                else chance = 100f;
+                if (chance < 100f && UnityEngine.Random.value * 100f >= chance) continue;
                 int colon = part.LastIndexOf(':');
                 string name = colon >= 0 ? part.Substring(0, colon).Trim() : part;
                 string countText = colon >= 0 ? part.Substring(colon + 1).Trim() : "1";
@@ -34,10 +41,19 @@ namespace Apocapatrol
                         count = UnityEngine.Random.Range(Mathf.Min(lo, hi), Mathf.Max(lo, hi) + 1);
                 }
                 else int.TryParse(countText, out count);
-                var prefab = Prefabs.FindAny(name);
-                if (prefab == null) { Plugin.Log.LogWarning("Cargo: item prefab not found: " + name); continue; }
-                count = Scaled(count);
-                if (count > 0) slots.Add(new Slot { Prefab = prefab, Count = Mathf.Min(count, 200) });
+                var choices = new List<GameObject>();
+                foreach (var alt in name.Split('|'))
+                {
+                    string n = alt.Trim();
+                    if (n.Length == 0) continue;
+                    var pf = Prefabs.FindAny(n);
+                    if (pf == null) Plugin.Log.LogWarning("Cargo: item prefab not found: " + n); else choices.Add(pf);
+                }
+                if (choices.Count == 0) continue;
+                if (chance >= 100f) count = Scaled(count);
+                count = Mathf.Min(count, 200);
+                if (choices.Count == 1) { if (count > 0) slots.Add(new Slot { Prefab = choices[0], Count = count }); }
+                else for (int i = 0; i < count; i++) slots.Add(new Slot { Prefab = choices[UnityEngine.Random.Range(0, choices.Count)], Count = 1 });
             }
             return slots;
         }

@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.23.0";
+        public const string VERSION = "0.23.1";
 
         internal static ManualLogSource Log;
 
@@ -209,8 +209,9 @@ namespace Apocapatrol
                 "Flip the steering sign if the car turns away from the target instead of toward it");
 
             LootMultiplier = Config.Bind("Loot", "Multiplier", 1f, new ConfigDescription(
-                "Scales the amount of loot in a truck: 0 = nothing, 1 = the built-in amounts (Food dogfood x6, Gasoline cans x4, Water cans x4, " +
-                "Medicine bandages x4 + first aid x2, Drugs alcohol x2 + weed x3 + weed plant x1, Weapons 0-3 guns + 3-8 ammo boxes), 3 = 300 %",
+                "Scales the amount of loot in a truck: 0 = nothing, 1 = the built-in amounts (Food dogfood x6; Water / Gasoline / Diesel cans x4, " +
+                "50 % a barrel too; Medicine bandages x4 + first aid x2; Weapons 0-3 guns + 3-8 ammo boxes; Drugs alcohol x2 + weed x3 + weed plant x1; " +
+                "Mechanic 3 repair boxes + 1 big oil can; Corpses 3-5 dead Scraffa; Rats 6-8 dead rats), 3 = 300 %. The 50 % barrels are not scaled",
                 new AcceptableValueRange<float>(0f, 3f)));
             foreach (var d in CarTemplate.LootDefaults)
                 LootChances[d[0]] = Config.Bind("Loot", d[0] + "Chance", float.Parse(d[2]), new ConfigDescription(

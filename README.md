@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.23.0)
+# Apocapatrol (prototype 0.23.1)
 
 BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
 car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
@@ -34,11 +34,15 @@ stacks on the trucks. A convoy spawner will draw from the park.
 Every vehicle has `parts/PhysicsLock` with one or more BoxColliders on layer 18: lock zones. Vanilla items carry a `LockPhysics` FSM that raycasts
 up and down on that layer from 10 m away and, when both rays hit (the item is inside a zone or just above it), parents the item to the zone and
 destroys its Rigidbody - that is how cargo rides along until the player grabs it (`GrabItem` sends `LockPhysics_OFF` and the Rigidbody comes back).
-**Rustcargo_Loot** (Rustcargo_Basic with a loaded bed) rolls its load by the `[Loot] XChance` weights (Food 25, Gasoline 15, Water 20, Medicine 15,
-Drugs 10, Weapons 15 - they should add up to 100) and fills the largest zone with that type's built-in items: Food dogfood_can ×6, Gasoline
-Gasoline_Can ×4, Water Water_Can_Plastic ×4, Medicine bandage_1 ×4 + first_aid_1 ×2, Drugs alcohol_canister ×2 + weed_bag ×3 + plant_weed ×1,
-Weapons 0-3 random guns (AKM/AKMS, Borz, M16A1, Redmark, Rochester, Slamberg, slamfire, pipe guns, crossbow, blastlance) + 3-8 ammo boxes of
-random calibres. `[Loot] Multiplier` (0-3, default 1) scales every amount: 0 = empty bed, 3 = 300 % (fractions are rounded by chance).
+**Rustcargo_Loot** (Rustcargo_Basic with a loaded bed) rolls its load by the `[Loot] XChance` weights (normalised; defaults Food 17.86,
+Water 14.29, Gasoline / Diesel / Medicine / Weapons 10.71, Drugs / Mechanic / Corpses 7.14, Rats 3.57 - i.e. 25 : 20 : 15 : 15 : 15 : 15 : 10 : 10 : 10 : 5)
+and fills the largest zone with that type's built-in items: Food dogfood_can ×6; Water Water_Can_Plastic ×4, Gasoline Gasoline_Can ×4, Diesel
+Diesel_Can ×4 - each of the three with a 50 % chance of a matching barrel on top; Medicine bandage_1 ×4 + first_aid_1 ×2; Weapons 0-3 random guns
+(AKM/AKMS, Borz, M16A1, Redmark, Rochester, Slamberg, slamfire, pipe guns, crossbow, blastlance) + 3-8 ammo boxes of random calibres; Drugs
+alcohol_canister ×2 + weed_bag ×3 + plant_weed ×1; Mechanic 3 repair boxes (small/medium/large at random) + MotorOil_Can_Big ×1; Corpses 3-5
+Scraffa_Dead; Rats 6-8 Rat_Dead. `[Loot] Multiplier` (0-3, default 1) scales every amount except the 50 % barrels: 0 = empty bed, 3 = 300 %
+(fractions are rounded by chance). Item spec syntax (Templates.cs LootDefaults): `prefab:count`, `prefab:min-max`, `a|b|c:n` (each one random),
+`prefab:n@50` (50 % chance, unscaled).
 **Rustcargo_Loot_Advanced** (the Advanced truck: armored wheels, 7L diesel, Sprokka driving) carries 1.5-2x the loot, rolled per spawn. The items are spawned with the vanilla recipe (registered, so the game saves them), scattered at random over the bed
 floor (rested on the actual floor collider, random yaw, cans and canisters lying on their side more often than not, stacked only when there is no
 free spot left), and locked at once.

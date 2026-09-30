@@ -67,13 +67,16 @@ namespace Apocapatrol
             if (player == null) return;
             PlayMakerFSM bodypart = null, health = null, movement = null;
             var effects = new List<PlayMakerFSM>();
+            bool god = false;
             foreach (var f in player.GetComponents<PlayMakerFSM>())
             {
                 if (f.FsmName == "Bodypart") bodypart = f;
                 else if (f.FsmName == "Health") health = f;
                 else if (f.FsmName == "Movement") movement = f;
                 else if (f.FsmName == "DamageEffectSound" || f.FsmName == "DamageEffectSound_InCar") effects.Add(f);
+                else if ((f.FsmName == "GODMODE" || f.FsmName == "GODMODEMovement") && f.enabled && f.Fsm.Initialized && f.ActiveStateName == "active") god = true;
             }
+            if (god) { Plugin.Verbose("Ram: " + car.name + " hit the player - god mode, no damage"); return; }
             if (kind == 1) Push(player, movement, car, carVel, rel);
             if (amount < 1f) { Plugin.Verbose("Ram: " + car.name + " hit the player at " + kmh.ToString("0") + " km/h - no damage (multiplier)"); return; }
             float before = -1f;
