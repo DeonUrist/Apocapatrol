@@ -29,7 +29,7 @@ Each car carries a driver and a passenger picked from the scrapyard gang: Boltja
 
 ## How they drive
 
-Raiders drive at you, not along roads. They aim for where you'll be, not where you are, ram you, overshoot, swing around in a wide
+Raiders drive at you, not randomly. They aim for where you'll be, not where you are, ram you, overshoot, swing around in a wide
 turn and come back for another pass. They steer around rocks, wrecks and buildings, back out when they hit a wall or get stuck, and
 stay clear of cliffs. Small cars go for you when you're on foot, while trucks will happily ram your car. If you get far enough away
 (700 m) they give up the chase until you come closer again. They'll also release a handbrake you pull on them.
