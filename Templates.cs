@@ -25,19 +25,20 @@ namespace Apocapatrol
         internal bool FillFuel = true, ReleaseHandbrake = true;
 
         // loot types: key, item spec ("prefab:count;prefab:min-max;..."; "@weapons" = rolled by Cargo.WeaponsSpec), default chance (%)
-        // (chances: the original 25/20/15/15/15/10 + Diesel 15, Mechanic 10, Corpses 10, Rats 5 = 140, normalised to 100)
+        // (chances: the original 25/20/15/15/15/10 + Diesel 15, Mechanic 10, Corpses 10, Rats 5 = 140, normalised to 100 and rounded to whole numbers:
+        //  18/14/11/11/11/11/7/7/7/3 = 100 — whole numbers so the default parses the same under every regional number format)
         internal static readonly string[][] LootDefaults =
         {
-            new[] { "Food", "dogfood_can:6", "17.86" },
-            new[] { "Water", "Water_Can_Plastic:4;Water_Barrel:1@50", "14.29" },
-            new[] { "Gasoline", "Gasoline_Can:4;Gasoline_Barrel:1@50", "10.71" },
-            new[] { "Diesel", "Diesel_Can:4;Diesel_Barrel:1@50", "10.71" },
-            new[] { "Medicine", "bandage_1:4;first_aid_1:2", "10.71" },
-            new[] { "Weapons", "@weapons", "10.71" },
-            new[] { "Drugs", "alcohol_canister:2;weed_bag:3;plant_weed:1", "7.14" },
-            new[] { "Mechanic", "Repairbox_Small|Repairbox_Medium|Repairbox_Large:3;MotorOil_Can_Big:1", "7.14" },
-            new[] { "Corpses", "Scraffa_Dead:3-5", "7.14" },
-            new[] { "Rats", "Rat_Dead:6-8", "3.57" },
+            new[] { "Food", "dogfood_can:6", "18" },
+            new[] { "Water", "Water_Can_Plastic:4;Water_Barrel:1@50", "14" },
+            new[] { "Gasoline", "Gasoline_Can:4;Gasoline_Barrel:1@50", "11" },
+            new[] { "Diesel", "Diesel_Can:4;Diesel_Barrel:1@50", "11" },
+            new[] { "Medicine", "bandage_1:4;first_aid_1:2", "11" },
+            new[] { "Weapons", "@weapons", "11" },
+            new[] { "Drugs", "alcohol_canister:2;weed_bag:3;plant_weed:1", "7" },
+            new[] { "Mechanic", "Repairbox_Small|Repairbox_Medium|Repairbox_Large:3;MotorOil_Can_Big:1", "7" },
+            new[] { "Corpses", "Scraffa_Dead:3-5", "7" },
+            new[] { "Rats", "Rat_Dead:6-8", "3" },
         };
 
         // front bumper rolls (Denis): small cars a third each nothing / bumper_8 / bumper_3; junkers nothing / junker_bumper_front / bumper_12;

@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.1.0";
+        public const string VERSION = "1.1.1";
 
         internal static ManualLogSource Log;
 
@@ -223,7 +223,7 @@ namespace Apocapatrol
                 "Mechanic 3 repair boxes + 1 big oil can; Corpses 3-5 dead Scraffa; Rats 6-8 dead rats), 3 = 300 %. The 50 % barrels are not scaled",
                 new AcceptableValueRange<float>(0f, 3f)));
             foreach (var d in CarTemplate.LootDefaults)
-                LootChances[d[0]] = Config.Bind("Loot", d[0] + "Chance", float.Parse(d[2]), new ConfigDescription(
+                LootChances[d[0]] = Config.Bind("Loot", d[0] + "Chance", float.Parse(d[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture), new ConfigDescription(
                     "% chance that a loot truck carries " + d[0] + " (all XChance values should add up to 100)", new AcceptableValueRange<float>(0f, 100f)));
             MinPartHealth = Config.Bind("Loot", "MinPartHealth", 2f, new ConfigDescription(
                 "Lowest condition (%) of a spawned car's parts that have one (engine, radiator, wheels)", new AcceptableValueRange<float>(0f, 100f)));
