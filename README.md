@@ -1,4 +1,4 @@
-# Apocapatrol 1.8.3
+# Apocapatrol 1.8.4
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -22,10 +22,11 @@ Each car carries a driver and a passenger picked from the scrapyard gang: Boltja
 - They sit in their seats in a proper seated pose and can be shot like any other enemy.
 - **Gunmen** (Boltjaw, Flexa, Lugnut, Scrud, Sprokka) shoot from the moving car at anything in front of it, up to 40 m away. A gunman at
   the wheel fires in short bursts between stretches of driving. Scraffa just rides along.
-- **Kill the driver** and the car rolls to a stop, unless his foot stays jammed on the gas (a small chance). The surviving passenger then
-  either takes the wheel and keeps coming, or jumps out and fights on foot.
+- **Kill the driver** and the car comes to a stop, unless his foot stays jammed on the gas (a small chance - the passenger kicks it off
+  after a few seconds). The surviving passenger brakes, then either takes the wheel and keeps coming, or jumps out and fights on foot.
 - While the driver lives you can't get into the car. Once it's empty, it's yours.
-- If a car gets stuck for good or runs out of fuel, the crew may climb out and come after you on foot, or stay put in the dead car.
+- If a car gets stuck a third time in a row, the crew climbs out and comes after you on foot. A car that runs out of fuel is left the
+  same way.
 
 ## How they drive
 

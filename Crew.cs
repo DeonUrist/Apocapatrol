@@ -315,8 +315,19 @@ namespace Apocapatrol
                 if (_pilot != null) _pilot.Step();
                 return;
             }
-            Nwh.SetInput(_car, _stuck ? Plugin.AiThrottle.Value : 0f, 0f, 0f);
+            // dead driver: a stuck pedal keeps the gas on; otherwise the car rolls out - braked hard when a live passenger is aboard,
+            // so it stops and the passenger takes the wheel or gets out instead of riding along in a coasting car
+            bool paxAboard = !_stuck && PaxAboard();
+            Nwh.SetInput(_car, _stuck ? Plugin.AiThrottle.Value : 0f, 0f, paxAboard ? 1f : 0f);
         }
+
+        private bool PaxAboard()
+        {
+            var mk = Marker;
+            return mk != null && mk.Passenger != null && PassengerAlive(mk, mk.Passenger);
+        }
+
+        private const float PassengerActAfter = 6f;   // a passenger acts at the latest this long after the driver's death, rolling or not
 
         private bool DriverAlive() { return Alive(_driver, _health, ref _healthVar); }
 
@@ -356,7 +367,7 @@ namespace Apocapatrol
                 Plugin.Verbose("Crew: passenger kicked the dead driver's foot off the pedal");
             }
             float speed = _rb != null ? _rb.velocity.magnitude : 0f;
-            if (speed > 1f && !playerIn) return false;                  // still rolling: let the roll-out logic run
+            if (speed > 1f && !playerIn && _deadFor < PassengerActAfter) return false;   // still rolling (braking): let the roll-out logic run
             if (_stuck) return false;
             if (_paxBails)
             {

@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.8.3";
+        public const string VERSION = "1.8.4";
 
         internal static ManualLogSource Log;
 
@@ -192,11 +192,11 @@ namespace Apocapatrol
             //   [Combat] FireArcHalfAngle 100, MaxAimPitch 35, AimTurnSpeed 180, FireBurstSeconds 3, FireIntervalMin 8, FireIntervalMax 20,
             //            RamDamageMultiplier 1, RamDamageByBody "Junker=50, Rust*=70, Scrapwagon=70, PigPen=50", RamFullSpeedKmh 30,
             //            RamPushStrength 1, RamInCarFactor 1
-            //   [Driving] StuckPedalChance 5, StuckPedalTakeoverSeconds 4, BailChance 25, StuckBailChance 50
+            //   [Driving] StuckPedalChance 5, StuckPedalTakeoverSeconds 4, BailChance 25, StuckBailChance 100 (was 50 before 1.8.4)
             //   [Self-destruct] CarPartsLootFromExplodedCars 12
             //   [AI] Throttle 1, DriveByOffset 5, LeadTime 1, CommitSeconds 0.5, SteerRate 1.5, SteerAngle 30, MaxSteerAtSpeed 0.35,
             //        TurnSafeSpeed 18, RamDistance 15, PassWidth 12, RunOutMeters 30, RunOutMaxSeconds 4, ReverseSeconds 2,
-            //        ReverseThrottle 0.6, StuckSeconds 2, RecoverWindow 12, MaxRecovers 4, WaitSeconds 4, FeelerRange 10,
+            //        ReverseThrottle 0.6, StuckSeconds 2, RecoverWindow 30 (was 12), MaxRecovers 2 (was 4), WaitSeconds 4, FeelerRange 10,
             //        FeelerSpeedFactor 0.6, FrontOffset 2, MaxSlopeDeg 35, AvoidGain 1.2, IgnoreMassBelow 40, GiveUpDistance 700,
             //        InvertSteering false
             //   [Loot] FoodChance 18, WaterChance 14, GasolineChance 11, DieselChance 11, MedicineChance 11, WeaponsChance 11,
@@ -245,7 +245,7 @@ namespace Apocapatrol
             BailChance = H.Bind("Driving", "BailChance", 25f, new ConfigDescription(
                 "% chance that a passenger who outlives the driver gets out and fights on foot once the car stands still; otherwise it takes the wheel. " +
                 "If the player took the car first it always gets out", new AcceptableValueRange<float>(0f, 100f)));
-            StuckBailChance = H.Bind("Driving", "StuckBailChance", 50f, new ConfigDescription(
+            StuckBailChance = H.Bind("Driving", "StuckBailChance", 100f, new ConfigDescription(
                 "% chance that, when the driving AI gives up on a stuck car (after [AI] MaxRecovers), the whole crew gets out and fights on foot " +
                 "instead of the car waiting WaitSeconds and trying again", new AcceptableValueRange<float>(0f, 100f)));
 
@@ -294,9 +294,9 @@ namespace Apocapatrol
                 "Throttle used while reversing", new AcceptableValueRange<float>(0.1f, 1f)));
             AiStuckSeconds = H.Bind("AI", "StuckSeconds", 2f, new ConfigDescription(
                 "Not moving for this long while trying to drive forward = stuck, reverse out", new AcceptableValueRange<float>(0.5f, 10f)));
-            AiRecoverWindow = H.Bind("AI", "RecoverWindow", 12f, new ConfigDescription(
+            AiRecoverWindow = H.Bind("AI", "RecoverWindow", 30f, new ConfigDescription(
                 "Recoveries closer together than this count as repeated attempts, s", new AcceptableValueRange<float>(1f, 60f)));
-            AiMaxRecovers = H.Bind("AI", "MaxRecovers", 4f, new ConfigDescription(
+            AiMaxRecovers = H.Bind("AI", "MaxRecovers", 2f, new ConfigDescription(
                 "After this many repeated recoveries the car gives up: the crew bails ([Driving] StuckBailChance) or the car waits WaitSeconds",
                 new AcceptableValueRange<float>(1f, 20f)));
             AiWaitSeconds = H.Bind("AI", "WaitSeconds", 4f, new ConfigDescription(
