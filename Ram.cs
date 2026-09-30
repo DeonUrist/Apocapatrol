@@ -25,7 +25,13 @@ namespace Apocapatrol
                     if (kind == 0) return;
                     var mk = GetComponent<PatrolMarker>();
                     var rb = GetComponent<Rigidbody>();
-                    Hit(gameObject, mk != null ? mk.BodyPrefab : null, kind, col.relativeVelocity.magnitude, col.collider, rb != null ? rb.velocity : Vector3.zero);
+                    var carVel = rb != null ? rb.velocity : Vector3.zero;
+                    // The impact speed is how fast THIS car moves into the contact point - not the relative speed, which is just as
+                    // high when the player runs or drives into a parked car. A standing car never hurts anyone.
+                    Vector3 toContact = col.contactCount > 0 ? col.GetContact(0).point - transform.position : (col.collider.transform.position - transform.position);
+                    toContact.y = 0f;
+                    float into = toContact.sqrMagnitude > 1e-4f ? Vector3.Dot(carVel, toContact.normalized) : 0f;
+                    Hit(gameObject, mk != null ? mk.BodyPrefab : null, kind, Mathf.Max(0f, into), col.collider, carVel);
                 }
                 catch (Exception e) { Plugin.Log.LogError("Ram: " + e); }
             }
@@ -39,7 +45,7 @@ namespace Apocapatrol
         private static float _resumeAt = -1f;
         private const float PushSeconds = 0.5f;
 
-        // kind: 1 = the player on foot, 2 = the player's car. rel = relative impact speed (m/s), carVel = the car's velocity (push direction).
+        // kind: 1 = the player on foot, 2 = the player's car. rel = the car's speed into the contact (m/s), carVel = its velocity (push direction).
         internal static void Hit(GameObject car, string body, int kind, float rel, Collider hit, Vector3 carVel)
         {
             if (!Plugin.RamDamage.Value || car == null || kind == 0) return;

@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.22.1)
+# Apocapatrol (prototype 0.22.2)
 
 BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
 car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
@@ -156,7 +156,8 @@ second and releases it if someone pulled it.
 ### Ram damage
 The game's own bumper damage (`CarAttack` FSM, a trigger that hurts what it touches) only works against creatures, and the player's car's
 `CrashDamage` FSM hurts the driver by the *player's own* speed - so an AI car ramming a standing player did nothing. With `[Combat] RamDamage`
-every AI car carries a collision sensor: a hit on you (on foot or on your car) at `RamFullSpeedKmh` (30, relative speed) or more deals
+every AI car carries a collision sensor: a hit on you (on foot or on your car) at `RamFullSpeedKmh` (30; the AI car's own speed into the
+point of contact - running or driving into a parked car does nothing) or more deals
 `RamDamageByBody` (`Junker=50, Rust*=70, Scrapwagon=70, PigPen=50`, everything else 30) × `RamDamageMultiplier` (0-3, default 1); at half that
 speed it deals half, in between it scales linearly, below half it does nothing. While you sit in your own car it only applies with
 `RamDamageInCar` (off by default - the game's own `CrashDamage` still hurts you by your speed), scaled by `RamInCarFactor`. A damaging hit on
