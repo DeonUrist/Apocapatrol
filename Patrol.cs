@@ -88,7 +88,10 @@ namespace Apocapatrol
                 yield return null;   // let the frame's FSMs start (hinges, getEngine, START ...)
 
                 int parts = 0;
-                parts += AttachAll(car, new[] { "hinge_wheel_FL", "hinge_wheel_FR", "hinge_wheel_RL", "hinge_wheel_RR" }, tpl.Wheel, "wheel");
+                parts += AttachAll(car, new[] { "hinge_wheel_FL", "hinge_wheel_FR" }, tpl.Wheel, "wheel");
+                parts += AttachAll(car, new[] { "hinge_wheel_RL", "hinge_wheel_RR" }, tpl.RearWheel.Length > 0 ? tpl.RearWheel : tpl.Wheel, "wheel");
+                string bumper = tpl.RollBumper();
+                if (bumper.Length > 0) { Plugin.Verbose("Front bumper roll: " + bumper); parts += AttachAll(car, new[] { "hinge_bumper_front" }, bumper, "bumper"); }
                 parts += AttachAll(car, new[] { "hinge_engine" }, tpl.Engine, "engine");
                 parts += AttachAll(car, new[] { "hinge_radiator" }, tpl.Radiator, "radiator");
                 parts += AttachAll(car, new[] { "hinge_steeringwheel" }, tpl.SteeringWheel, "steeringwheel");
@@ -160,7 +163,8 @@ namespace Apocapatrol
         private static int AttachAll(GameObject car, string[] hingeNames, string partQuery, string kind)
         {
             if (string.IsNullOrEmpty(partQuery)) return 0;
-            var prefab = Prefabs.Find(partQuery, kind);
+            // bumpers carry no ID FSM, so they are not in the item catalog: look them up as plain asset roots
+            var prefab = kind == "bumper" ? Prefabs.FindAny(partQuery) : Prefabs.Find(partQuery, kind);
             if (prefab == null) { Plugin.Log.LogWarning(kind + " prefab not found: " + partQuery); return 0; }
             int n = 0;
             foreach (var hn in hingeNames)

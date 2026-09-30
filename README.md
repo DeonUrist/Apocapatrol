@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.22.2)
+# Apocapatrol (prototype 0.23.0)
 
 BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
 car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
@@ -122,6 +122,12 @@ inside `FireArcHalfAngle`, spine aiming) but only in **bursts**: every `FireInte
 arc, it fires for `FireBurstSeconds`. Between bursts its Attack FSM is off and it sits in the generic driver pose (`[Pose]` ArmAngle / ElbowAngle /
 ArmCloser, hands on the wheel); the per-human `[Pose.<human>]` shooting profile and weapon offsets apply only while it fires. A passenger promoted
 to the wheel switches to this mode.
+
+### Looks of the spawned cars
+Every build rolls a front bumper: small cars (PipeRat/Poloska/TinyTyrant) a third each nothing / `bumper_8` / `bumper_3`; junkers a third each
+nothing / `junker_bumper_front` / `bumper_12`; trucks always one of `bumper_12`..`bumper_15`. Trucks run `truck_wheel_1` in front and
+`truck_wheel_2` (dual) in the back, the advanced ones the `_armored` pair. (Hardcoded in Templates.cs: `SmallBumpers`, `JunkerBumpers`,
+`TruckBumpers`, per-template `RearWheel` / `Bumpers`.)
 
 ### Convoy spawner
 Enemy groups spawn on their own while you play, drawn from the park (`<Body>_Basic` / `<Body>_Advanced` cars, `Junker_*`, `Rustcargo_*`

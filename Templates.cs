@@ -18,6 +18,8 @@ namespace Apocapatrol
         internal RamTargets Rams = RamTargets.Pedestrians;
         internal string Body = "", Wheel = "", Engine = "", Radiator = "", SteeringWheel = "", Exhaust = "", Seat = "", PassengerSeat = "";
         internal string Driver = "", Passenger = "";
+        internal string RearWheel = "";       // wheel item for hinge_wheel_RL/RR; "" = the same as Wheel
+        internal string[] Bumpers = null;     // front bumper rolled per build from these ("" = none); null = never a bumper
         internal string Cargo = "";           // "Random" = a loot type rolled by the [Loot] chances, or a fixed [Loot] key ("Food", ...); "" = empty bed
         internal float LootScaleMin = 1f, LootScaleMax = 1f;   // per-spawn loot amount factor rolled in this range (on top of [Loot] Multiplier)
         internal bool FillFuel = true, ReleaseHandbrake = true;
@@ -32,6 +34,18 @@ namespace Apocapatrol
             new[] { "Drugs", "alcohol_canister:2;weed_bag:3;plant_weed:1", "10" },
             new[] { "Weapons", "@weapons", "15" },
         };
+
+        // front bumper rolls (Denis): small cars a third each nothing / bumper_8 / bumper_3; junkers nothing / junker_bumper_front / bumper_12;
+        // trucks always one of bumper_12..15
+        internal static readonly string[] SmallBumpers = { "", "bumper_8", "bumper_3" };
+        internal static readonly string[] JunkerBumpers = { "", "junker_bumper_front", "bumper_12" };
+        internal static readonly string[] TruckBumpers = { "bumper_12", "bumper_13", "bumper_14", "bumper_15" };
+
+        internal string RollBumper()
+        {
+            if (Bumpers == null || Bumpers.Length == 0) return "";
+            return Bumpers[UnityEngine.Random.Range(0, Bumpers.Length)] ?? "";
+        }
 
         internal CarTemplate() { }
 
@@ -49,30 +63,30 @@ namespace Apocapatrol
         {
             // name, body, wheel, engine, radiator, steering wheel, exhaust, driver seat, passenger seat, driver, passenger, ramsTargets
             new CarTemplate("PipeRat_Basic", "PipeRat", "small_wheel_1", "1.2L I4 59HP 87Nm Gasoline", "radiator_small", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Sprokka", RamTargets.Pedestrians),
+                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Sprokka", RamTargets.Pedestrians) { Bumpers = SmallBumpers },
             new CarTemplate("PipeRat_Advanced", "PipeRat", "small_wheel_2", "2.8L V6 115HP 183Nm Gasoline", "Medium Radiator", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Spanna", "Lugnut", RamTargets.Pedestrians),
+                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Spanna", "Lugnut", RamTargets.Pedestrians) { Bumpers = SmallBumpers },
             new CarTemplate("Poloska_Basic", "Poloska", "small_wheel_1", "1.2L I4 59HP 87Nm Gasoline", "radiator_small", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Boltjaw", RamTargets.Pedestrians),
+                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Boltjaw", RamTargets.Pedestrians) { Bumpers = SmallBumpers },
             new CarTemplate("Poloska_Advanced", "Poloska", "small_wheel_1", "2.8L V6 115HP 183Nm Gasoline", "radiator_small", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Sprokka", RamTargets.Pedestrians),
+                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Sprokka", RamTargets.Pedestrians) { Bumpers = SmallBumpers },
             new CarTemplate("TinyTyrant_Basic", "TinyTyrant", "small_wheel_1", "1.2L I4 59HP 87Nm Gasoline", "radiator_small", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Sprokka", RamTargets.Pedestrians),
+                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Sprokka", RamTargets.Pedestrians) { Bumpers = SmallBumpers },
             new CarTemplate("TinyTyrant_Advanced", "TinyTyrant", "small_wheel_2", "2.8L V6 115HP 183Nm Gasoline", "Medium Radiator", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Spanna", "Lugnut", RamTargets.Pedestrians),
+                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Spanna", "Lugnut", RamTargets.Pedestrians) { Bumpers = SmallBumpers },
             new CarTemplate("Junker_Basic", "Junker", "small_wheel_1", "2.3L I4 89HP 165Nm Gasoline", "Medium Radiator", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Sprokka", "Lugnut", RamTargets.Pedestrians),
+                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Sprokka", "Lugnut", RamTargets.Pedestrians) { Bumpers = JunkerBumpers },
             new CarTemplate("Junker_Advanced", "Junker", "small_wheel_1", "2.3L I4 89HP 165Nm Gasoline", "Medium Radiator", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Sprokka", "Flexa", RamTargets.Pedestrians),
+                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Sprokka", "Flexa", RamTargets.Pedestrians) { Bumpers = JunkerBumpers },
             new CarTemplate("Rustcargo_Basic", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
-                "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars),
-            new CarTemplate("Rustcargo_Advanced", "Rustcargo", "truck_wheel_2_armored", "7L I6 165HP 542Nm Diesel", "radiator_truck_big", "steeringwheel_3", "exhaust_single",
-                "rustallion_seat_front", "rustallion_seat_front", "Sprokka", "Flexa", RamTargets.Cars),
+                "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { RearWheel = "truck_wheel_2", Bumpers = TruckBumpers },
+            new CarTemplate("Rustcargo_Advanced", "Rustcargo", "truck_wheel_1_armored", "7L I6 165HP 542Nm Diesel", "radiator_truck_big", "steeringwheel_3", "exhaust_single",
+                "rustallion_seat_front", "rustallion_seat_front", "Sprokka", "Flexa", RamTargets.Cars) { RearWheel = "truck_wheel_2_armored", Bumpers = TruckBumpers },
             // the loot truck = Rustcargo_Basic with a loaded bed; the load is rolled by the [Loot] XChance weights, items and amounts in [Loot]
             new CarTemplate("Rustcargo_Loot", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
-                "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Random" },
-            new CarTemplate("Rustcargo_Loot_Advanced", "Rustcargo", "truck_wheel_2_armored", "7L I6 165HP 542Nm Diesel", "radiator_truck_big", "steeringwheel_3", "exhaust_single",
-                "rustallion_seat_front", "rustallion_seat_front", "Sprokka", "Flexa", RamTargets.Cars) { Cargo = "Random", LootScaleMin = 1.5f, LootScaleMax = 2f },
+                "rustallion_seat_front", "rustallion_seat_front", "Spanna", "Flexa", RamTargets.Cars) { Cargo = "Random", RearWheel = "truck_wheel_2", Bumpers = TruckBumpers },
+            new CarTemplate("Rustcargo_Loot_Advanced", "Rustcargo", "truck_wheel_1_armored", "7L I6 165HP 542Nm Diesel", "radiator_truck_big", "steeringwheel_3", "exhaust_single",
+                "rustallion_seat_front", "rustallion_seat_front", "Sprokka", "Flexa", RamTargets.Cars) { Cargo = "Random", LootScaleMin = 1.5f, LootScaleMax = 2f, RearWheel = "truck_wheel_2_armored", Bumpers = TruckBumpers },
         };
 
         internal static RamTargets ParseRams(string s)
@@ -99,7 +113,7 @@ namespace Apocapatrol
 
         internal string Describe()
         {
-            return Body + " / " + Wheel + " / " + Engine + " / " + Radiator + " / " + SteeringWheel + " / " + (Exhaust.Length > 0 ? Exhaust : "no exhaust") + " / seats " + Seat + " + " + PassengerSeat
+            return Body + " / " + Wheel + (RearWheel.Length > 0 ? " + rear " + RearWheel : "") + " / " + Engine + " / " + Radiator + " / " + SteeringWheel + " / " + (Exhaust.Length > 0 ? Exhaust : "no exhaust") + " / seats " + Seat + " + " + PassengerSeat
                 + " / driver " + (Driver.Length > 0 ? Driver : "-") + " / passenger " + (Passenger.Length > 0 ? Passenger : "-") + " / rams " + Rams
                 + (Cargo.Length > 0 ? " / loot " + Cargo : "");
         }
