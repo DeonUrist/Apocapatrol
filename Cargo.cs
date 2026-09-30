@@ -188,7 +188,7 @@ namespace Apocapatrol
                         }
                     }
                     if (baseY < 0f) baseY = FloorAt(car, t, lx, lz, floorY, ceilY);
-                    if (baseY + h > ceilY) { Plugin.Log.LogInfo("Cargo: bed full after " + placed + " of " + wanted + " items"); UnityEngine.Object.Destroy(go); goto done; }
+                    if (baseY + h > ceilY) { Plugin.Verbose("Cargo: bed full after " + placed + " of " + wanted + " items"); UnityEngine.Object.Destroy(go); goto done; }
                     // move the renderer bottom-centre onto (lx, baseY, lz)
                     var pivotWorld = go.transform.position;
                     var bottomWorld = new Vector3(b.center.x, b.min.y, b.center.z);
@@ -203,7 +203,7 @@ namespace Apocapatrol
                 }
             }
             done:
-            Plugin.Log.LogInfo("Cargo: " + placed + " item(s) loaded into " + car.name);
+            Plugin.Verbose("Cargo: " + placed + " item(s) loaded into " + car.name);
             return items;
         }
 

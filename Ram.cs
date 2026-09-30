@@ -96,7 +96,7 @@ namespace Apocapatrol
             if (applied)
                 foreach (var f in effects)
                     if (f.enabled && f.Fsm.Initialized) f.SendEvent("Damage");   // the disabled one ignores it
-            Plugin.Log.LogInfo("Ram: " + car.name + " (" + (body ?? "?") + ") hit the player " + (kind == 2 ? "in their car" : "on foot")
+            Plugin.Verbose("Ram: " + car.name + " (" + (body ?? "?") + ") hit the player " + (kind == 2 ? "in their car" : "on foot")
                 + " at " + kmh.ToString("0") + " km/h -> " + amount + " damage" + (applied ? "" : " (no Player FSM found!)")
                 + (before >= 0f ? ", health " + before.ToString("0") : "") + (hit != null ? ", collider " + hit.name + " layer " + LayerMask.LayerToName(hit.gameObject.layer) : ""));
             if (applied && before >= 0f) { _pending = amount; _pendingAt = Time.time + 0.5f; _healthBefore = before; _pendingCar = car.name; }

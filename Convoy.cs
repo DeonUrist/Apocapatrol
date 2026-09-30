@@ -311,7 +311,7 @@ namespace Apocapatrol
             }
             if (spots == null) { Plugin.Log.LogWarning("Convoy: no ground for " + Label(kind) + " around the player"); return false; }
 
-            Plugin.Log.LogInfo("Convoy: " + Label(kind) + (debug ? " (debug)" : "") + " at heat " + (heat * 100f).ToString("0") + " % (km " + _km.ToString("0.0") + ", bosses " + _bosses + "), "
+            Plugin.Verbose("Convoy: " + Label(kind) + (debug ? " (debug)" : "") + " at heat " + (heat * 100f).ToString("0") + " % (km " + _km.ToString("0.0") + ", bosses " + _bosses + "), "
                 + where + ": " + string.Join(", ", group.Select(t => t.Name).ToArray()));
             StartCoroutine(BuildAll(group, spots, Quaternion.LookRotation(facing)));
             return true;
@@ -379,7 +379,7 @@ namespace Apocapatrol
 
         // One build every BuildInterval seconds (each build itself is spread over frames), the crews held; when the last build
         // has finished the whole group is released at once and departs together.
-        private const float BuildInterval = 1.5f;
+        private const float BuildInterval = 0.7f;
 
         private IEnumerator BuildAll(List<CarTemplate> group, List<Vector3> spots, Quaternion rot)
         {
@@ -401,7 +401,7 @@ namespace Apocapatrol
                 var crew = car.GetComponent<Crew>();
                 if (crew != null) { crew.Release(); released++; }
             }
-            Plugin.Log.LogInfo("Convoy: " + released + " car(s) released");
+            Plugin.Verbose("Convoy: " + released + " car(s) released");
         }
 
         // the automatic clock, for the save sidecar (seconds; < 0 = not rolled yet)

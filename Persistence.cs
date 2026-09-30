@@ -188,7 +188,7 @@ namespace Apocapatrol
                     if (marker != null) cars.Add(marker.Snapshot());
                 data.cars = cars.ToArray();
                 AtomicWrite(path, data);
-                Plugin.Log.LogInfo("Persistence: saved " + data.cars.Length + " patrol car(s) for " + data.saveFile);
+                Plugin.Verbose("Persistence: saved " + data.cars.Length + " patrol car(s) for " + data.saveFile);
             }
             catch (Exception e) { Plugin.Log.LogError("Persistence save failed: " + e); }
         }
@@ -228,7 +228,7 @@ namespace Apocapatrol
                 }
                 if (pending.Count > 0) yield return new WaitForSecondsRealtime(0.5f);
             }
-            Plugin.Log.LogInfo("Persistence: restored " + (savedCars.Length - pending.Count) + "/" + savedCars.Length
+            Plugin.Verbose("Persistence: restored " + (savedCars.Length - pending.Count) + "/" + savedCars.Length
                 + " patrol car(s) from " + slot);
             foreach (var missing in pending) Plugin.Log.LogWarning("Persistence: saved patrol car not found: " + missing.carName);
             _restoreRunning = false;
@@ -272,7 +272,7 @@ namespace Apocapatrol
             PatrolMarker.Attach(car, data.bodyPrefab, data.driverPrefab, driver, data.passengerPrefab, passenger, CarTemplate.ParseRams(data.ramTargets));
             var crew = car.GetComponent<Crew>();
             if (crew != null && phase != CrewPhase.Released && phase != CrewPhase.DeadRolling) crew.Revive();   // handbrake off + ignition, like a fresh build
-            Plugin.Log.LogInfo("Persistence: crew restored on " + car.name + " (" + phase + ")");
+            Plugin.Verbose("Persistence: crew restored on " + car.name + " (" + phase + ")");
         }
 
         private static PatrolSaveData Load(string slot)

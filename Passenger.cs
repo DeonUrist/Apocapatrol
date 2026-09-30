@@ -75,7 +75,7 @@ namespace Apocapatrol
             if (_attack != null) _attack.enabled = false;
             if (_pose != null) { _pose.SetShooting(false); _pose.SetAim(Vector3.zero, false); }
             ScheduleBurst();
-            Plugin.Log.LogInfo("Driver: " + _passenger.name + (_ranged ? " shoots in bursts every " + Plugin.FireIntervalMin.Value + "-" + Plugin.FireIntervalMax.Value + " s" : " does not shoot"));
+            Plugin.Verbose("Driver: " + _passenger.name + (_ranged ? " shoots in bursts every " + Plugin.FireIntervalMin.Value + "-" + Plugin.FireIntervalMax.Value + " s" : " does not shoot"));
         }
 
         private void ScheduleBurst()
@@ -116,7 +116,7 @@ namespace Apocapatrol
                             }
             foreach (var fsm in passenger.GetComponents<PlayMakerFSM>())
                 if (fsm.FsmName == "Damage") fsm.enabled = false;
-            Plugin.Log.LogInfo("Passenger: forced ranged-only Attack on " + passenger.name + "; redirected "
+            Plugin.Verbose("Passenger: forced ranged-only Attack on " + passenger.name + "; redirected "
                 + redirected + " melee event output(s)" + (rangedEvent == null ? " (ranged event not found)" : " to " + rangedEvent.Name));
         }
 
@@ -140,7 +140,7 @@ namespace Apocapatrol
             if (hitbox != null)
                 foreach (var collider in hitbox.GetComponents<Collider>()) collider.enabled = false;
 
-            Plugin.Log.LogInfo("Passenger: neutralized melee/contact damage on " + passenger.name
+            Plugin.Verbose("Passenger: neutralized melee/contact damage on " + passenger.name
                 + "; disabled " + disabledActions + " FSM action(s)" + (hitbox == null ? "; hitbox not found" : "; hitbox disabled"));
         }
 
@@ -160,7 +160,7 @@ namespace Apocapatrol
             guard._pose = passenger.GetComponent<Pose>();
             if (guard._pose != null) guard._pose.ConfigurePassengerAim();
             MuteNonCombatAi(passenger, Plugin.RangedCombat.Value);
-            Plugin.Log.LogInfo("Passenger: " + passenger.name + " fixed in driver pose; "
+            Plugin.Verbose("Passenger: " + passenger.name + " fixed in driver pose; "
                 + (guard._ranged ? "vanilla ranged fire and Sound2 enabled in +/-" + Plugin.FireArc.Value + " degree arc" : "passive"));
         }
 

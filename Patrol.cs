@@ -28,7 +28,7 @@ namespace Apocapatrol
         // builds a template (from the F8 menu); one at a time
         internal void Spawn(CarTemplate t)
         {
-            if (_busy) { Plugin.Log.LogInfo("Spawn: a build is still running"); return; }
+            if (_busy) { Plugin.Verbose("Spawn: a build is still running"); return; }
             if (!InGame()) return;
             _busy = true;
             StartCoroutine(Build(t, null, Quaternion.identity, true, false, null));
@@ -76,7 +76,7 @@ namespace Apocapatrol
                     pos = p + fwd * Plugin.SpawnDistance + Vector3.up * 1.0f;
                     rot = Quaternion.LookRotation(fwd);
                 }
-                Plugin.Log.LogInfo("Building template " + tpl.Name + ": " + tpl.Describe());
+                Plugin.Verbose("Building template " + tpl.Name + ": " + tpl.Describe());
 
                 var body = Prefabs.Find(tpl.Body, "vehicle");
                 if (body == null) { Plugin.Log.LogWarning("Body prefab not found: " + tpl.Body); yield break; }
@@ -84,7 +84,7 @@ namespace Apocapatrol
                 car = UnityEngine.Object.Instantiate(body, pos, rot);
                 car.SetActive(true);
                 Register.Name(car, body.name); Register.Add(car, true);
-                Plugin.Log.LogInfo("Car frame " + car.name + " at " + pos);
+                Plugin.Verbose("Car frame " + car.name + " at " + pos);
 
                 yield return null;   // let the frame's FSMs start (hinges, getEngine, START ...)
 
@@ -103,7 +103,7 @@ namespace Apocapatrol
                 yield return null;
                 parts += AttachAll(car, new[] { "hinge_seat_driver" }, tpl.Seat, "seat");
                 parts += AttachAll(car, new[] { "hinge_seat_passenger" }, tpl.PassengerSeat, "seat");
-                Plugin.Log.LogInfo(parts + " parts attached");
+                Plugin.Verbose(parts + " parts attached");
 
                 if (tpl.FillFuel) Fuel(car, Plugin.RollPartFill());
                 if (tpl.ReleaseHandbrake) Handbrake(car, false);
@@ -113,7 +113,7 @@ namespace Apocapatrol
                     string lootKey = tpl.Cargo.Equals("Random", StringComparison.OrdinalIgnoreCase) ? Cargo.RollLootType() : tpl.Cargo;
                     string spec = Cargo.SpecFor(lootKey);
                     float scale = UnityEngine.Random.Range(Mathf.Min(tpl.LootScaleMin, tpl.LootScaleMax), Mathf.Max(tpl.LootScaleMin, tpl.LootScaleMax));
-                    Plugin.Log.LogInfo("Loot: " + lootKey + " (" + spec + ") x" + Plugin.LootMultiplier.Value + " x" + scale.ToString("0.00") + " (template)");
+                    Plugin.Verbose("Loot: " + lootKey + " (" + spec + ") x" + Plugin.LootMultiplier.Value + " x" + scale.ToString("0.00") + " (template)");
                     cargo = Cargo.Load(car, spec, scale);
                 }
 
@@ -128,7 +128,7 @@ namespace Apocapatrol
                 if (!string.IsNullOrEmpty(tpl.Passenger)) passenger = SeatPassenger(car, tpl.Passenger);
                 PatrolMarker.Attach(car, body.name, tpl.Driver, driver, tpl.Passenger, passenger, tpl.Rams);
 
-                yield return new WaitForSeconds(1.5f);
+                yield return new WaitForSeconds(1f);
                 if (car == null) yield break;
                 if (cargo != null) Cargo.SettleFsms(cargo);
                 SetPartConditions(car);
@@ -155,16 +155,16 @@ namespace Apocapatrol
             yield return null;
             if (car == null) yield break;
             start.Fsm.SetState("Start");
-            yield return new WaitForSeconds(3f);
+            yield return new WaitForSeconds(1.5f);
             if (car == null) yield break;
             bool running = Nwh.EngineRunning(car);
-            Plugin.Log.LogInfo("START state: " + start.ActiveStateName + "  engine running: " + running);
+            Plugin.Verbose("START state: " + start.ActiveStateName + "  engine running: " + running);
             if (!running)
             {
                 Nwh.StartEngine(car);
                 yield return new WaitForSeconds(1f);
                 if (car == null) yield break;
-                Plugin.Log.LogInfo("After NWH StartEngine(): running=" + Nwh.EngineRunning(car) + "  START state: " + start.ActiveStateName);
+                Plugin.Verbose("After NWH StartEngine(): running=" + Nwh.EngineRunning(car) + "  START state: " + start.ActiveStateName);
             }
         }
 
@@ -239,7 +239,7 @@ namespace Apocapatrol
                 if (liquid == null || cap == null) { Plugin.Log.LogWarning(label + "/LiquidAmount has no Liquid/LiquidCapacity"); return true; }
                 float capacity = cap.Value > 0f ? cap.Value : 20f;
                 liquid.Value = capacity * Mathf.Clamp01(pct / 100f);
-                Plugin.Log.LogInfo(label + ": " + liquid.Value.ToString("0.0") + " / " + capacity + " (" + pct.ToString("0") + " %)");
+                Plugin.Verbose(label + ": " + liquid.Value.ToString("0.0") + " / " + capacity + " (" + pct.ToString("0") + " %)");
                 return true;
             }
             return false;
@@ -255,7 +255,7 @@ namespace Apocapatrol
             bool isOn = cur == "HandbrakeOn" || cur == "over" || cur == "Sound 2" || cur == "";
             if (on == isOn) { Plugin.Verbose("Handbrake already " + (on ? "on" : "off") + " (" + cur + ")"); return; }
             f.Fsm.SetState(on ? "Sound 2" : "Sound");
-            Plugin.Log.LogInfo("Handbrake " + (on ? "on" : "released") + " (was " + cur + ")");
+            Plugin.Verbose("Handbrake " + (on ? "on" : "released") + " (was " + cur + ")");
         }
 
         // A ragdoll on the driver seat: the *_Dead prefab's root Rigidbody is made kinematic and parented to the car's sitPos
@@ -289,7 +289,7 @@ namespace Apocapatrol
             int bones = 0;
             foreach (var rb in drv.GetComponentsInChildren<Rigidbody>(true))
                 if (rb != root) { bones++; rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
-            Plugin.Log.LogInfo("Driver " + drv.name + " on " + sit.name + " at " + pos + " (" + bones + " ragdoll bones, " + drvCols.Length + " colliders)");
+            Plugin.Verbose("Driver " + drv.name + " on " + sit.name + " at " + pos + " (" + bones + " ragdoll bones, " + drvCols.Length + " colliders)");
             return drv;
         }
 
@@ -355,7 +355,7 @@ namespace Apocapatrol
             go.transform.SetParent(anchor, true);
             if (Plugin.PoseEnabled.Value) Pose.Apply(go, anchor, prefab.name);
             if (health >= 0f) SetHealth(go, health);
-            Plugin.Log.LogInfo(role + " " + go.name + " on " + anchor.name + " at " + pos);
+            Plugin.Verbose(role + " " + go.name + " on " + anchor.name + " at " + pos);
             return go;
         }
 
@@ -434,7 +434,7 @@ namespace Apocapatrol
                 }
                 var velocity = left * Plugin.EjectSpeed + Vector3.up * (Plugin.EjectSpeed * 0.5f) - car.transform.forward * 0.5f;
                 Launch(root, velocity);
-                Plugin.Log.LogInfo("Eject: " + root.name + " thrown out of " + car.name + " at " + velocity.magnitude.ToString("0.0") + " m/s ("
+                Plugin.Verbose("Eject: " + root.name + " thrown out of " + car.name + " at " + velocity.magnitude.ToString("0.0") + " m/s ("
                     + joints + " joints, " + jointsToCar + " were attached to the car)");
             }
             var eject = car.AddComponent<CorpseEject>();
@@ -498,7 +498,7 @@ namespace Apocapatrol
             pax.name = pax.name.Replace("(Passenger)", "(Driver)");
             if (guard != null) guard.SetDriverMode(sit);
             int pairs = IgnoreCollisions(pax, car);
-            Plugin.Log.LogInfo("Takeover: " + pax.name + " on " + sit.name + ", " + pairs + " collider pairs vs the car ignored");
+            Plugin.Verbose("Takeover: " + pax.name + " on " + sit.name + ", " + pairs + " collider pairs vs the car ignored");
             if (oldAnchor != null && oldAnchor.name == "Apocapatrol.PassengerPos") UnityEngine.Object.Destroy(oldAnchor.gameObject);
             return pax;
         }
@@ -555,7 +555,7 @@ namespace Apocapatrol
             if (health > 0f) { SetHealth(mob, health); mob.AddComponent<LateHealth>().Value = health; }
             UnityEngine.Object.Destroy(pax);
             if (anchor != null && anchor.name == "Apocapatrol.PassengerPos") UnityEngine.Object.Destroy(anchor.gameObject);
-            Plugin.Log.LogInfo("Bail-out: " + mob.name + " got out of " + car.name + " with " + (health > 0f ? health.ToString("0") : "full") + " health at " + pos);
+            Plugin.Verbose("Bail-out: " + mob.name + " got out of " + car.name + " with " + (health > 0f ? health.ToString("0") : "full") + " health at " + pos);
             return mob;
         }
 
@@ -591,7 +591,7 @@ namespace Apocapatrol
                 Plugin.Verbose("  " + f.gameObject.name + " condition " + c.ToString("0"));
                 n++;
             }
-            Plugin.Log.LogInfo("Part conditions set on " + n + " part(s) (" + Plugin.MinPartHealth.Value + ".." + Plugin.MaxPartHealth.Value + " %)");
+            Plugin.Verbose("Part conditions set on " + n + " part(s) (" + Plugin.MinPartHealth.Value + ".." + Plugin.MaxPartHealth.Value + " %)");
         }
 
     // Follows a thrown carcass: Done once it is EjectDistance from the driver seat (the passenger only climbs over then);
@@ -634,7 +634,7 @@ namespace Apocapatrol
                 foreach (var h in Physics.RaycastAll(target, Vector3.down, 8f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                     if (h.collider != null && !h.collider.transform.IsChildOf(transform) && !h.collider.transform.IsChildOf(root) && h.point.y > ground.y) ground = h.point;
                 Patrol.Throw(root, ground + Vector3.up * 0.4f, Vector3.zero);
-                Plugin.Log.LogInfo("Eject: " + root.name + " did not get clear in 3 s, put down " + Plugin.EjectDistance + " m left of the seat");
+                Plugin.Verbose("Eject: " + root.name + " did not get clear in 3 s, put down " + Plugin.EjectDistance + " m left of the seat");
             }
             Done = true;
         }
@@ -861,7 +861,7 @@ namespace Apocapatrol
             if (Mathf.Abs(_applied - want) < 0.001f) return;
             foreach (var v in _limits) v.Value = want;
             _applied = want;
-            Plugin.Log.LogInfo("Exit speed limit set to " + Plugin.ExitSpeedKmh.Value.ToString("0") + " km/h (" + _limits.Count + " compare(s) in PlayerCamera [DriveUse])");
+            Plugin.Verbose("Exit speed limit set to " + Plugin.ExitSpeedKmh.Value.ToString("0") + " km/h (" + _limits.Count + " compare(s) in PlayerCamera [DriveUse])");
         }
     }
 

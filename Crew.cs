@@ -64,7 +64,7 @@ namespace Apocapatrol
             // nobody else drives while the driver lives: no enter trigger (no F prompt), no Drive FSM (Activate events are ignored).
             // The car's DistanceKinematic FSM is left alone: re-enabling it restarts it in KinematicOn, which freezes a moving car.
             SeatLocked(driver != null);
-            Plugin.Log.LogInfo("Crew: driver " + (driver != null ? driver.name : "absent") + " seated, " + "drives off in " + (_delayOverride >= 0f ? _delayOverride : 0f) + " s"
+            Plugin.Verbose("Crew: driver " + (driver != null ? driver.name : "absent") + " seated, " + "drives off in " + (_delayOverride >= 0f ? _delayOverride : 0f) + " s"
                 + (_enterTrigger != null ? "" : " (no enter trigger found!)") + (_drive != null ? "" : " (no Drive FSM found!)"));
         }
 
@@ -120,7 +120,7 @@ namespace Apocapatrol
             Patrol.Handbrake(_car, false);
             if (!Nwh.EngineRunning(_car)) yield return Patrol.StartUp(_car);
             if (_car == null) yield break;
-            Plugin.Log.LogInfo("Crew: revived " + _car.name + " after load: engine running " + Nwh.EngineRunning(_car) + ", handbrake released, " + Nwh.Diag(_car));
+            Plugin.Verbose("Crew: revived " + _car.name + " after load: engine running " + Nwh.EngineRunning(_car) + ", handbrake released, " + Nwh.Diag(_car));
         }
 
         internal GameObject Driver { get { return _driver; } }
@@ -193,24 +193,24 @@ namespace Apocapatrol
                 {
                     bool running = Nwh.EngineRunning(_car);
                     if (running && !Hold) StartDriving();
-                    else if (!running && _seated >= delay + 8f && !_revived) { Plugin.Log.LogInfo("Crew: engine of " + _car.name + " never started; reviving"); Revive(); }
+                    else if (!running && _seated >= delay + 8f && !_revived) { Plugin.Verbose("Crew: engine of " + _car.name + " never started; reviving"); Revive(); }
                 }
                 if (Time.time >= _nextHandbrakeCheck)
                 {
                     _nextHandbrakeCheck = Time.time + 1f;
                     if (!_outOfFuel && CheckDry()) return;
                     // the player pulled the handbrake on a driven car (or it came back on after a load): the driver lets it go
-                    if (_driving && HandbrakeOn()) { Patrol.Handbrake(_car, false); Plugin.Log.LogInfo("Crew: driver of " + _car.name + " released the handbrake"); }
+                    if (_driving && HandbrakeOn()) { Patrol.Handbrake(_car, false); Plugin.Verbose("Crew: driver of " + _car.name + " released the handbrake"); }
                 }
                 return;
             }
 
             // Dead driver: preserve a stuck pedal until takeover, or hold zero while the car rolls out (inputs written in FixedUpdate).
-            if (PlayerInside()) { Plugin.Log.LogInfo("Crew: player took the car after its driver died"); _ctl.Release(); _done = true; return; }
+            if (PlayerInside()) { Plugin.Verbose("Crew: player took the car after its driver died"); _ctl.Release(); _done = true; return; }
             if (_stuck) return;
             _rolling += Time.deltaTime;
             if (_rb != null && _rb.velocity.magnitude > 0.3f && _rolling < 120f) return;
-            Plugin.Log.LogInfo("Crew: car rolled to a stop after " + _rolling.ToString("0.0") + " s");
+            Plugin.Verbose("Crew: car rolled to a stop after " + _rolling.ToString("0.0") + " s");
             _ctl.Release();
             _done = true;
         }
@@ -225,12 +225,12 @@ namespace Apocapatrol
             if (fuel >= 0f && fuel <= 0.05f && standing && _seated > 5f) _dryFor += 1f; else _dryFor = 0f;
             if (_dryFor < 3f) return false;
             _outOfFuel = true;
-            Plugin.Log.LogInfo("Crew: " + _car.name + " ran out of fuel");
+            Plugin.Verbose("Crew: " + _car.name + " ran out of fuel");
             if (!OnStuck())
             {
                 if (_pilot != null) { _pilot.Detach(); _pilot = null; }
                 if (_driving) Nwh.SetInput(_car, 0f, 0f, 0f);
-                Plugin.Log.LogInfo("Crew: the crew stays in the dry car");
+                Plugin.Verbose("Crew: the crew stays in the dry car");
             }
             return true;
         }
@@ -275,7 +275,7 @@ namespace Apocapatrol
             {
                 _paxDecided = true;
                 _paxBails = UnityEngine.Random.Range(0f, 100f) < Plugin.BailChance.Value;
-                Plugin.Log.LogInfo("Crew: passenger " + pax.name + " will " + (_paxBails ? "bail out" : "take the wheel") + " once the car stops ("
+                Plugin.Verbose("Crew: passenger " + pax.name + " will " + (_paxBails ? "bail out" : "take the wheel") + " once the car stops ("
                     + Plugin.BailChance.Value + " % bail roll)");
             }
             if (_promoting)
@@ -291,7 +291,7 @@ namespace Apocapatrol
             {
                 _stuck = false; _rolling = 0f;
                 Nwh.SetInput(_car, 0f, 0f, 0f);
-                Plugin.Log.LogInfo("Crew: passenger kicked the dead driver's foot off the pedal");
+                Plugin.Verbose("Crew: passenger kicked the dead driver's foot off the pedal");
             }
             float speed = _rb != null ? _rb.velocity.magnitude : 0f;
             if (speed > 1f && !playerIn) return false;                  // still rolling: let the roll-out logic run
@@ -311,7 +311,7 @@ namespace Apocapatrol
             _eject = Patrol.EjectCorpses(_car, pax);
             if (_eject == null) { FinishPromote(pax, marker); return; }
             _promoting = true;
-            Plugin.Log.LogInfo("Crew: " + pax.name + " waits for the dead driver to clear the seat");
+            Plugin.Verbose("Crew: " + pax.name + " waits for the dead driver to clear the seat");
         }
 
         // Called by the Pilot when it gives up (MaxRecovers reached). With [Driver] StuckBailChance the whole crew gets out
@@ -321,7 +321,7 @@ namespace Apocapatrol
             if (_dead || _done) return false;
             if (UnityEngine.Random.Range(0f, 100f) >= Plugin.StuckBailChance.Value) return false;
             var marker = _car.GetComponent<PatrolMarker>();
-            Plugin.Log.LogInfo("Crew: stuck for good, the crew bails out (" + Plugin.StuckBailChance.Value + " % roll)");
+            Plugin.Verbose("Crew: stuck for good, the crew bails out (" + Plugin.StuckBailChance.Value + " % roll)");
             if (_pilot != null) { _pilot.Detach(); _pilot = null; }
             Nwh.SetInput(_car, 0f, 0f, 0f);
             if (_ctl != null && _ctl.Taken) _ctl.Release();
@@ -353,7 +353,7 @@ namespace Apocapatrol
             Init(_car, drv);
             _seated = 0f;
             MuteAi();
-            Plugin.Log.LogInfo("Crew: " + drv.name + " took the wheel, " + "drives off in " + _delayOverride + " s" + "; car " + Speed() + " km/h, " + Nwh.Diag(_car));
+            Plugin.Verbose("Crew: " + drv.name + " took the wheel, " + "drives off in " + _delayOverride + " s" + "; car " + Speed() + " km/h, " + Nwh.Diag(_car));
         }
 
         private bool PlayerInside()
@@ -366,7 +366,7 @@ namespace Apocapatrol
             _driving = true;
             _ctl.Take();
             _pilot = Pilot.Attach(_car);
-            Plugin.Log.LogInfo("Crew: driver drives off at " + Speed() + " km/h, " + Nwh.Diag(_car));
+            Plugin.Verbose("Crew: driver drives off at " + Speed() + " km/h, " + Nwh.Diag(_car));
         }
 
         private void OnDriverDied()
@@ -377,7 +377,7 @@ namespace Apocapatrol
             if (Nwh.GearIndex(_car) < 0) Nwh.ShiftInto(_car, 1);   // died while reversing: a stuck pedal pushes forward, not back
             if (!_driving)
             {
-                Plugin.Log.LogInfo("Crew: driver died before driving off; seat free");
+                Plugin.Verbose("Crew: driver died before driving off; seat free");
                 _done = true;
                 return;
             }
@@ -390,12 +390,12 @@ namespace Apocapatrol
                 _stuck = true;
                 _ctl.Take();
                 Nwh.SetInput(_car, Plugin.AiThrottle.Value, 0f, 0f);
-                Plugin.Log.LogInfo("Crew: driver died at " + Speed() + " km/h - gas pedal stuck (" + Plugin.StuckPedalChance.Value + " % roll), seat free");
+                Plugin.Verbose("Crew: driver died at " + Speed() + " km/h - gas pedal stuck (" + Plugin.StuckPedalChance.Value + " % roll), seat free");
                 return;
             }
             _ctl.Take();
             Nwh.SetInput(_car, 0f, 0f, 0f);
-            Plugin.Log.LogInfo("Crew: driver died at " + Speed() + " km/h - gas released, rolling out, seat free");
+            Plugin.Verbose("Crew: driver died at " + Speed() + " km/h - gas released, rolling out, seat free");
         }
 
         private void OnDestroy()

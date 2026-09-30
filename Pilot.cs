@@ -70,7 +70,7 @@ namespace Apocapatrol
             p._rams = marker != null ? marker.Rams : RamTargets.Pedestrians;
             p.Enter(PilotState.Charge, "start");
             if (!_ownRoots.Contains(car.transform)) _ownRoots.Add(car.transform);
-            Plugin.Log.LogInfo("Pilot: driving AI on " + car.name + ", rams " + p._rams);
+            Plugin.Verbose("Pilot: driving AI on " + car.name + ", rams " + p._rams);
             return p;
         }
 
@@ -110,7 +110,7 @@ namespace Apocapatrol
             // flipped over: nothing to do but wait for the game's own flip-over handling
             if (_tf.up.y < 0.2f)
             {
-                if (Time.time > _flipLogged + 10f) { _flipLogged = Time.time; Plugin.Log.LogInfo("Pilot: " + _car.name + " is on its side/roof, waiting"); }
+                if (Time.time > _flipLogged + 10f) { _flipLogged = Time.time; Plugin.Verbose("Pilot: " + _car.name + " is on its side/roof, waiting"); }
                 Apply(0f, 0f, 0.3f);
                 return;
             }

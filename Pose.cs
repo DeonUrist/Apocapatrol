@@ -45,7 +45,7 @@ namespace Apocapatrol
             if (_spine == null || _spine1 == null || _spine2 == null) missing.Add("spine");
             if (_lUpLeg == null || _lLeg == null || _rUpLeg == null || _rLeg == null) missing.Add("legs");
             if (_lArm == null || _lForeArm == null || _lHand == null || _rArm == null || _rForeArm == null || _rHand == null) missing.Add("arms/hands");
-            Plugin.Log.LogInfo("Pose: bones " + (missing.Count == 0 ? "all found" : "missing " + string.Join(", ", missing.ToArray())));
+            Plugin.Verbose("Pose: bones " + (missing.Count == 0 ? "all found" : "missing " + string.Join(", ", missing.ToArray())));
         }
 
         private void FindWeapons()

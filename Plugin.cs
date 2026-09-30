@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.25.1";
+        public const string VERSION = "0.26.0";
 
         internal static ManualLogSource Log;
 
@@ -207,7 +207,7 @@ namespace Apocapatrol
             AiIgnoreMassBelow = Config.Bind("AI", "IgnoreMassBelow", 40f, new ConfigDescription(
                 "Loose physics objects lighter than this (kg) are not obstacles; the car drives through them",
                 new AcceptableValueRange<float>(0f, 1000f)));
-            AiGiveUpDistance = Config.Bind("AI", "GiveUpDistance", 500f, new ConfigDescription(
+            AiGiveUpDistance = Config.Bind("AI", "GiveUpDistance", 700f, new ConfigDescription(
                 "Beyond this distance from the player the car stops chasing and coasts until the player comes closer, m",
                 new AcceptableValueRange<float>(20f, 2000f)));
             AiInvertSteering = Config.Bind("AI", "InvertSteering", false,
@@ -261,7 +261,7 @@ namespace Apocapatrol
                 "and shortens the cooldown a little", new AcceptableValueRange<float>(0f, 5f)));
             HeatIntervalKm = Config.Bind(CS, "HeatIntervalKm", 10f, new ConfigDescription(
                 "Every this many km of the game's Distance Travelled add 25 % heat (linear: 10 = 100 % at 40 km)", new AcceptableValueRange<float>(1f, 200f)));
-            ConvoySpawnDistance = Config.Bind(CS, "SpawnDistance", 300f, new ConfigDescription(
+            ConvoySpawnDistance = Config.Bind(CS, "SpawnDistance", 350f, new ConfigDescription(
                 "How far away a spawn appears (m): ahead of your car, up to 45 degrees left or right; behind you when on foot", new AcceptableValueRange<float>(50f, 1000f)));
             JustCarsToConvoyRatio = Config.Bind(CS, "JustCarsToConvoyRatio", 0.8f, new ConfigDescription(
                 "When a convoy is allowed, how likely plain enemy cars spawn instead of it (0 = always the convoy, 1 = never)", new AcceptableValueRange<float>(0f, 1f)));
@@ -287,7 +287,7 @@ namespace Apocapatrol
             AdvancedConvoyChance = Config.Bind(CS, "AdvancedConvoyChance", 30f, new ConfigDescription("Weight of the advanced convoy (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
 
             MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.F8, "Open the template spawner: a list of the park, click a car to build it in front of you. None = off");
-            VerboseLog = Config.Bind("Debug", "VerboseLog", true, "Log every build step (prefab lookups, hinge states, engine state) and the AI's state changes");
+            VerboseLog = Config.Bind("Debug", "VerboseLog", false, "Log what the mod does: spawns, builds, crews, the AI's state changes, ram hits. Off = only the load line and warnings, nothing that gives a spawn away");
             ExitSpeedKmh = Config.Bind("Debug", "ExitSpeedKmh", 30f, new ConfigDescription(
                 "You can leave your car below this speed (km/h). The game's own limit is 6 m/s = 21.6 km/h, too low to get out of a car a truck keeps shoving",
                 new AcceptableValueRange<float>(5f, 200f)));
