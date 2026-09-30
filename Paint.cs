@@ -22,17 +22,37 @@ namespace Apocapatrol
         }
 
         // Textures/<body>.png (poloska.png, tinytyrant.png, rustcargo.png, junker.png) = that body's main paint texture, whatever the game
-        // calls it; wins over a file named after the texture itself. PipeRat: piperat.png = its main body panels' tiling rust texture
-        // metal_rusted_26 (body shell + one side panel; the texture repeats across them, so a recolour rather than a livery).
+        // calls it; wins over a file named after the texture itself.
         private static readonly Dictionary<string, string> BodyTexture = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { "Poloska", "DefaultMaterial_BaseColor" },
             { "TinyTyrant", "tinytyrant_yellow" },
             { "Rustcargo", "rustcargo_green_2" },
             { "Junker", "junker" },
-            { "PipeRat", "metal_rusted_26" },
+        };
+        // Per-mesh files, for bodies built from several shared textures: PipeRat's pipe frame (the four "roofrack" meshes, textures
+        // metal_rusted_26/34/28/23 - tiling, so a recolour) -> piperat.png; its dashboard (dashboard.010, metal_rusted_24) -> piperat_dashboard.png.
+        // The rest of the PipeRat (panels, centre, footwell...) keeps its textures. Mesh names as in the game's assets.
+        private static readonly Dictionary<string, Dictionary<string, string>> MeshFiles = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "PipeRat", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "roofrack.004", "piperat" }, { "roofrack.001", "piperat" }, { "roofrack.003", "piperat" }, { "roofrack.022", "piperat" },
+                    { "dashboard.010", "piperat_dashboard" },
+                } },
         };
         private static readonly Dictionary<string, Material> _bodyMat = new Dictionary<string, Material>();   // "<orig mat id>|<file>"
+
+        private static Material Copy(Material m, string file, Texture2D tex)
+        {
+            string key = m.GetInstanceID() + "|" + file;
+            Material painted;
+            if (_bodyMat.TryGetValue(key, out painted) && painted != null) return painted;
+            painted = new Material(m) { name = m.name + " (Apocapatrol " + file + ")" };
+            painted.mainTexture = tex;
+            _bodyMat[key] = painted;
+            return painted;
+        }
 
         internal static void Apply(GameObject car, string body)
         {
@@ -44,28 +64,28 @@ namespace Apocapatrol
                 bodyFile = body.ToLowerInvariant();
                 bodyTex = Load(bodyFile);
             }
+            Dictionary<string, string> meshFiles = null;
+            if (!string.IsNullOrEmpty(body)) MeshFiles.TryGetValue(body, out meshFiles);
             try
             {
                 foreach (var r in car.GetComponentsInChildren<Renderer>(true))
                 {
                     if (r == null || r.GetType().Name == "ParticleSystemRenderer" || !OnFrame(car, r.transform)) continue;
+                    string meshFile = null; Texture2D meshTex = null;
+                    if (meshFiles != null)
+                    {
+                        var mf = r.GetComponent<MeshFilter>();
+                        if (mf != null && mf.sharedMesh != null && meshFiles.TryGetValue(mf.sharedMesh.name, out meshFile)) meshTex = Load(meshFile);
+                    }
                     var mats = r.sharedMaterials;
                     bool changed = false;
                     for (int i = 0; i < mats.Length; i++)
                     {
                         var m = mats[i];
                         if (m == null || !m.HasProperty("_MainTex")) continue;
-                        Material painted = null;
-                        if (bodyTex != null && m.mainTexture != null && m.mainTexture.name == bodyTexName)
-                        {
-                            string key = m.GetInstanceID() + "|" + bodyFile;
-                            if (!_bodyMat.TryGetValue(key, out painted) || painted == null)
-                            {
-                                painted = new Material(m) { name = m.name + " (Apocapatrol " + bodyFile + ")" };
-                                painted.mainTexture = bodyTex;
-                                _bodyMat[key] = painted;
-                            }
-                        }
+                        Material painted;
+                        if (meshTex != null) painted = Copy(m, meshFile, meshTex);
+                        else if (bodyTex != null && m.mainTexture != null && m.mainTexture.name == bodyTexName) painted = Copy(m, bodyFile, bodyTex);
                         else painted = Painted(m);
                         if (painted != null && painted != m) { mats[i] = painted; changed = true; n++; }
                     }
