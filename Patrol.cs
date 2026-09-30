@@ -8,14 +8,12 @@ using UnityEngine;
 
 namespace Apocapatrol
 {
-    // Runner: waits for the spawn key in game and assembles one car.
+    // Runner on the hidden plugin object: the car builder (template spawner + convoy), the in-game check, the persistence tick.
     internal class Patrol : MonoBehaviour
     {
         private PlayMakerFSM _menu, _saveLoad;
         private float _nextRefScan;
         private bool _busy;                 // the template spawner's own build (one at a time)
-        private int _building;              // every running Build (spawner + convoy)
-        internal int Building { get { return _building; } }
 
         internal static void ResetForScene() { Prefabs.Invalidate(); }
 
@@ -32,14 +30,15 @@ namespace Apocapatrol
             if (_busy) { Plugin.Log.LogInfo("Spawn: a build is still running"); return; }
             if (!InGame()) return;
             _busy = true;
-            StartCoroutine(Build(t, null, Quaternion.identity, true));
+            StartCoroutine(Build(t, null, Quaternion.identity, true, false, null));
         }
 
-        // builds a template at a given place (convoy spawner); several may run at once
-        internal void SpawnAt(CarTemplate t, Vector3 pos, Quaternion rot)
+        // Builds a template at a given place (convoy spawner). hold = the crew waits for Crew.Release() before driving off;
+        // onDone receives the car (or null) when the build has finished.
+        internal void SpawnAt(CarTemplate t, Vector3 pos, Quaternion rot, bool hold, Action<GameObject> onDone)
         {
-            if (!InGame()) return;
-            StartCoroutine(Build(t, pos, rot, false));
+            if (!InGame()) { if (onDone != null) onDone(null); return; }
+            StartCoroutine(Build(t, pos, rot, false, hold, onDone));
         }
 
         internal bool InGame()
@@ -60,10 +59,11 @@ namespace Apocapatrol
 
         // =============================================================== build
 
-        // at == null: SpawnDistance in front of the player, facing the player's way; otherwise exactly there
-        private IEnumerator Build(CarTemplate tpl, Vector3? at, Quaternion rot, bool menu)
+        // at == null: SpawnDistance in front of the player, facing the player's way; otherwise exactly there.
+        // The work is spread over several frames (one Instantiate group per frame) so a build never stalls a single frame for long.
+        private IEnumerator Build(CarTemplate tpl, Vector3? at, Quaternion rot, bool menu, bool hold, Action<GameObject> onDone)
         {
-            _building++;
+            GameObject car = null;
             try
             {
                 Vector3 pos;
@@ -80,7 +80,7 @@ namespace Apocapatrol
                 var body = Prefabs.Find(tpl.Body, "vehicle");
                 if (body == null) { Plugin.Log.LogWarning("Body prefab not found: " + tpl.Body); yield break; }
 
-                var car = UnityEngine.Object.Instantiate(body, pos, rot);
+                car = UnityEngine.Object.Instantiate(body, pos, rot);
                 car.SetActive(true);
                 Register.Name(car, body.name); Register.Add(car, true);
                 Plugin.Log.LogInfo("Car frame " + car.name + " at " + pos);
@@ -89,13 +89,17 @@ namespace Apocapatrol
 
                 int parts = 0;
                 parts += AttachAll(car, new[] { "hinge_wheel_FL", "hinge_wheel_FR" }, tpl.Wheel, "wheel");
+                yield return null;
                 parts += AttachAll(car, new[] { "hinge_wheel_RL", "hinge_wheel_RR" }, tpl.RearWheel.Length > 0 ? tpl.RearWheel : tpl.Wheel, "wheel");
+                yield return null;
                 string bumper = tpl.RollBumper();
                 if (bumper.Length > 0) { Plugin.Verbose("Front bumper roll: " + bumper); parts += AttachAll(car, new[] { "hinge_bumper_front" }, bumper, "bumper"); }
                 parts += AttachAll(car, new[] { "hinge_engine" }, tpl.Engine, "engine");
+                yield return null;
                 parts += AttachAll(car, new[] { "hinge_radiator" }, tpl.Radiator, "radiator");
                 parts += AttachAll(car, new[] { "hinge_steeringwheel" }, tpl.SteeringWheel, "steeringwheel");
                 parts += AttachAll(car, new[] { "hinge_exhaust" }, tpl.Exhaust, "exhaust");
+                yield return null;
                 parts += AttachAll(car, new[] { "hinge_seat_driver" }, tpl.Seat, "seat");
                 parts += AttachAll(car, new[] { "hinge_seat_passenger" }, tpl.PassengerSeat, "seat");
                 Plugin.Log.LogInfo(parts + " parts attached");
@@ -117,23 +121,25 @@ namespace Apocapatrol
                 if (!string.IsNullOrEmpty(tpl.Driver))
                 {
                     if (tpl.Driver.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase)) driver = SeatDriver(car, tpl.Driver);
-                    else driver = SeatLiveDriver(car, tpl.Driver);
+                    else driver = SeatLiveDriver(car, tpl.Driver, -1f, CrewPhase.Waiting, 0f, hold);
                 }
+                yield return null;
                 if (!string.IsNullOrEmpty(tpl.Passenger)) passenger = SeatPassenger(car, tpl.Passenger);
                 PatrolMarker.Attach(car, body.name, tpl.Driver, driver, tpl.Passenger, passenger, tpl.Rams);
 
                 yield return new WaitForSeconds(1.5f);
+                if (car == null) yield break;
                 if (cargo != null) Cargo.SettleFsms(cargo);
                 SetPartConditions(car);
                 FillParts(car);
-                if (Plugin.VerboseLog.Value) LogHingeStates(car);
 
                 yield return StartUp(car);
-
-                if (driver != null && !tpl.Driver.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase))
-                    Plugin.Log.LogInfo("Driver in place; the Crew component takes it from here");
             }
-            finally { _building--; if (menu) _busy = false; }
+            finally
+            {
+                if (menu) _busy = false;
+                if (onDone != null) onDone(car);
+            }
         }
 
         // The game's own ignition: START [Start] FSM Ignition -> Start (engine sound, RPM, IsRunning), NWH StartEngine() as a fallback.
@@ -238,27 +244,8 @@ namespace Apocapatrol
             return false;
         }
 
-        // Liquid left in the tank (l), -1 = unknown
-        internal static float FuelLeft(GameObject car)
-        {
-            var fuel = FindChild(car.transform, "Fuel");
-            if (fuel == null) return -1f;
-            foreach (var f in fuel.GetComponents<PlayMakerFSM>())
-                if (f.FsmName == "LiquidAmount" && f.Fsm.Initialized) { var v = f.FsmVariables.GetFsmFloat("Liquid"); return v != null ? v.Value : -1f; }
-            return -1f;
-        }
-
         // The handbrake lever FSM: HandbrakeOn -> (click) over -> Sound -> HandbrakeOff (SetProperty input.Handbrake + lever rotation).
         // Entering "Sound" plays the click and flows into HandbrakeOff by itself; "Sound 2" goes back to HandbrakeOn.
-        // true when the game's handbrake FSM sits in an "on" state (HandbrakeOn / over / Sound 2)
-        internal static bool HandbrakeOn(GameObject car)
-        {
-            var f = FindFsm(car, "handbrake", "Handbrake");
-            if (f == null || !f.Fsm.Initialized) return false;
-            string cur = f.ActiveStateName;
-            return cur == "HandbrakeOn" || cur == "over" || cur == "Sound 2";
-        }
-
         internal static void Handbrake(GameObject car, bool on)
         {
             var f = FindFsm(car, "handbrake", "Handbrake");
@@ -308,7 +295,7 @@ namespace Apocapatrol
         // A live enemy at the wheel with its AI off: instantiated at sitPos, the mover/AI FSMs disabled before they Start,
         // root Rigidbody kinematic and parented to the seat, collisions with the car ignored. Health/Damage/Bodypart stay
         // vanilla so it can be shot; the Crew component drives the car and reacts to its death.
-        internal static GameObject SeatLiveDriver(GameObject car, string prefabName, float health = -1f, CrewPhase phase = CrewPhase.Waiting, float seated = 0f)
+        internal static GameObject SeatLiveDriver(GameObject car, string prefabName, float health = -1f, CrewPhase phase = CrewPhase.Waiting, float seated = 0f, bool hold = false)
         {
             var sit = FindChild(car.transform, "sitPos") ?? FindChild(car.transform, "hinge_seat_driver");
             if (sit == null) { Plugin.Log.LogWarning("No sitPos on " + car.name); return null; }
@@ -316,6 +303,7 @@ namespace Apocapatrol
             if (drv == null) return null;
             if (Plugin.RangedCombat.Value && PassengerGuard.IsRangedHuman(drv)) PassengerGuard.AttachDriver(drv, car, sit);
             var crew = phase == CrewPhase.Waiting && seated <= 0f ? Crew.Attach(car, drv) : Crew.Restore(car, drv, phase, seated);
+            crew.Hold = hold;
             crew.MuteAi();
             return drv;
         }
@@ -605,18 +593,6 @@ namespace Apocapatrol
             Plugin.Log.LogInfo("Part conditions set on " + n + " part(s) (" + Plugin.MinPartHealth.Value + ".." + Plugin.MaxPartHealth.Value + " %)");
         }
 
-        private static void LogHingeStates(GameObject car)
-        {
-            foreach (var f in car.GetComponentsInChildren<PlayMakerFSM>(true))
-            {
-                string n = f.gameObject.name;
-                if (!(n.StartsWith("hinge_") || n == "START" || n == "Fuel")) continue;
-                if (f.FsmName != "vehPart_Attach" && f.FsmName != "checkWheel" && f.FsmName != "getEngine" && f.FsmName != "getRadiator"
-                    && f.FsmName != "Start" && f.FsmName != "LiquidAmount") continue;
-                Plugin.Log.LogInfo("  " + n + " [" + f.FsmName + "] " + (f.Fsm.Initialized ? f.ActiveStateName : "(not init)") + " children=" + f.transform.childCount);
-            }
-        }
-
     // Follows a thrown carcass: Done once it is EjectDistance from the driver seat (the passenger only climbs over then);
     // if it has not got there after 3 s (caught on something) it is put down at that distance once. Removes itself when done.
     internal class CorpseEject : MonoBehaviour
@@ -676,37 +652,6 @@ namespace Apocapatrol
     }
 
     // =============================================================== helpers
-
-        // F9 survey: hinge_exhaust transforms of every car in the scene and of every frame prefab, to find out why exhausts
-        // on freshly instantiated frames sit 90 degrees off compared with the game's own cars.
-        internal static void SurveyExhausts()
-        {
-            Plugin.Log.LogInfo("=== Exhaust survey: scene cars ===");
-            foreach (var t in UnityEngine.Object.FindObjectsOfType<Transform>())
-            {
-                if (t.parent != null || !PlayerRef.HasVehicleController(t)) continue;
-                LogHinge(t.name, t);
-            }
-            Plugin.Log.LogInfo("=== Exhaust survey: frame prefabs (assets) ===");
-            foreach (var name in new[] { "PipeRat", "Poloska", "TinyTyrant", "Junker", "Rustcargo", "Duke", "Vulture", "Rustallion" })
-            {
-                var p = Prefabs.Find(name, "vehicle");
-                if (p != null) LogHinge(p.name + " [asset]", p.transform);
-            }
-        }
-
-        private static void LogHinge(string label, Transform car)
-        {
-            var h = FindChild(car, "hinge_exhaust");
-            if (h == null) { Plugin.Log.LogInfo(label + ": no hinge_exhaust"); return; }
-            string s = label + ": hinge_exhaust localPos " + h.localPosition.ToString("0.000") + " localEuler " + h.localEulerAngles.ToString("0.0")
-                + " parent=" + (h.parent != null ? h.parent.name : "-") + " worldEuler " + h.eulerAngles.ToString("0.0") + " carEuler " + car.eulerAngles.ToString("0.0");
-            foreach (Transform c in h)
-                s += "\n      child " + c.name + " tag=" + c.tag + " localPos " + c.localPosition.ToString("0.000") + " localEuler " + c.localEulerAngles.ToString("0.0") + " scale " + c.localScale.ToString("0.00");
-            var vis = FindChild(car, "exhaustHingeVisible");
-            if (vis != null) s += "\n      exhaustHingeVisible localPos " + vis.localPosition.ToString("0.000") + " localEuler " + vis.localEulerAngles.ToString("0.0") + " worldEuler " + vis.eulerAngles.ToString("0.0");
-            Plugin.Log.LogInfo(s);
-        }
 
         private static bool PlayerPose(out Vector3 p, out Vector3 fwd)
         {
@@ -906,42 +851,84 @@ namespace Apocapatrol
     }
 
     // =============================================================== NWH Vehicle Physics 2 by reflection
+    // Everything is reached by reflection (no compile dependency on the NWH assembly). The VehicleController and its input /
+    // powertrain / engine / transmission objects are stable for the life of the car and the member lookups never change, so
+    // both are cached: a Handle per car and a MemberInfo table per (type, name). The pilots ask several times per physics step.
     internal static class Nwh
     {
-        private static Component Vc(GameObject car)
+        private class Handle
         {
+            public Component Vc;
+            public object Input, Engine, Transmission;
+        }
+
+        private static readonly Dictionary<int, Handle> _handles = new Dictionary<int, Handle>();
+        private static readonly Dictionary<Type, Dictionary<string, MemberInfo>> _members = new Dictionary<Type, Dictionary<string, MemberInfo>>();
+        private static float _nextSweep;
+
+        private static Handle Of(GameObject car)
+        {
+            if (car == null) return null;
+            if (Time.unscaledTime >= _nextSweep) { _nextSweep = Time.unscaledTime + 30f; Sweep(); }
+            Handle h;
+            int id = car.GetInstanceID();
+            if (_handles.TryGetValue(id, out h) && h.Vc != null) return h;
+            h = new Handle();
             foreach (var c in car.GetComponents<Component>())
-                if (c != null && c.GetType().Name == "VehicleController") return c;
-            return null;
+                if (c != null && c.GetType().Name == "VehicleController") { h.Vc = c; break; }
+            if (h.Vc == null) return null;
+            h.Input = Get(h.Vc, "input");
+            var pt = Get(h.Vc, "powertrain");
+            h.Engine = Get(pt, "engine");
+            h.Transmission = Get(pt, "transmission");
+            _handles[id] = h;
+            return h;
+        }
+
+        // drop the handles of destroyed cars
+        private static void Sweep()
+        {
+            var dead = new List<int>();
+            foreach (var kv in _handles) if (kv.Value.Vc == null) dead.Add(kv.Key);
+            foreach (var k in dead) _handles.Remove(k);
+        }
+
+        private static MemberInfo Member(Type t, string name)
+        {
+            Dictionary<string, MemberInfo> d;
+            if (!_members.TryGetValue(t, out d)) _members[t] = d = new Dictionary<string, MemberInfo>();
+            MemberInfo m;
+            if (d.TryGetValue(name, out m)) return m;
+            m = (MemberInfo)t.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                ?? t.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            d[name] = m;
+            return m;
         }
 
         private static object Get(object o, string name)
         {
             if (o == null) return null;
-            var t = o.GetType();
-            var f = t.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var m = Member(o.GetType(), name);
+            var f = m as FieldInfo;
             if (f != null) return f.GetValue(o);
-            var p = t.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (p != null) return p.GetValue(o, null);
-            return null;
+            var p = m as PropertyInfo;
+            return p != null ? p.GetValue(o, null) : null;
         }
 
         private static bool Set(object o, string name, object value)
         {
             if (o == null) return false;
-            var t = o.GetType();
-            var f = t.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var m = Member(o.GetType(), name);
+            var f = m as FieldInfo;
             if (f != null) { f.SetValue(o, value); return true; }
-            var p = t.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var p = m as PropertyInfo;
             if (p != null && p.CanWrite) { p.SetValue(o, value, null); return true; }
             return false;
         }
 
-        private static object Engine(GameObject car) { return Get(Get(Vc(car), "powertrain"), "engine"); }
-
         internal static bool EngineRunning(GameObject car)
         {
-            try { var r = Get(Engine(car), "IsRunning"); return r is bool && (bool)r; }
+            try { var h = Of(car); var r = h != null ? Get(h.Engine, "IsRunning") : null; return r is bool && (bool)r; }
             catch (Exception e) { Plugin.Log.LogWarning("EngineRunning: " + e.Message); return false; }
         }
 
@@ -949,7 +936,8 @@ namespace Apocapatrol
         {
             try
             {
-                var eng = Engine(car);
+                var h = Of(car);
+                var eng = h != null ? h.Engine : null;
                 if (eng == null) { Plugin.Log.LogWarning("No powertrain.engine"); return; }
                 var m = eng.GetType().GetMethod("StartEngine", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
                 if (m == null) { Plugin.Log.LogWarning("No StartEngine()"); return; }
@@ -963,7 +951,8 @@ namespace Apocapatrol
         {
             try
             {
-                var input = Get(Vc(car), "input");
+                var h = Of(car);
+                var input = h != null ? h.Input : null;
                 var was = Get(input, "autoSetInput");
                 if (!Set(input, "autoSetInput", on)) Plugin.Verbose("no autoSetInput");
                 return was is bool ? (bool)was : false;
@@ -973,34 +962,32 @@ namespace Apocapatrol
 
         internal static int GearIndex(GameObject car)
         {
-            try { var g = Get(Get(Get(Vc(car), "powertrain"), "transmission"), "Gear"); return g is int ? (int)g : 0; }
+            try { var h = Of(car); var g = h != null ? Get(h.Transmission, "Gear") : null; return g is int ? (int)g : 0; }
             catch (Exception) { return 0; }
         }
 
-        private static bool _shiftLogged;
         // input.ShiftInto = gear index (-1 R, 0 N, 1 = 1st/D); the vehicle consumes it on its next update
         internal static void ShiftInto(GameObject car, int gear)
         {
             try
             {
-                var input = Get(Vc(car), "input");
-                bool ok = Set(input, "ShiftInto", gear);
-                if (!ok) ok = Set(input, "shiftInto", gear);
-                if (!_shiftLogged) { _shiftLogged = true; Plugin.Verbose("ShiftInto " + gear + (ok ? "" : " FAILED (no ShiftInto on input)")); }
+                var h = Of(car);
+                if (h == null) return;
+                if (!Set(h.Input, "ShiftInto", gear)) Set(h.Input, "shiftInto", gear);
             }
             catch (Exception e) { Plugin.Log.LogWarning("ShiftInto: " + e.Message); }
         }
 
-        // one-line state readback for the drive test log
+        // one-line NWH state readback for the log
         internal static string Diag(GameObject car)
         {
             try
             {
-                var vc = Vc(car); var input = Get(vc, "input"); var pt = Get(vc, "powertrain");
-                var eng = Get(pt, "engine"); var tr = Get(pt, "transmission");
-                return "thr=" + Get(input, "Throttle") + " clutch=" + Get(input, "Clutch") + " hb=" + Get(input, "Handbrake")
-                     + " rpm=" + F(Get(eng, "RPM") ?? Get(eng, "OutputRPM")) + " trType=" + Get(tr, "transmissionType")
-                     + " active=" + (Get(vc, "IsActive") ?? Get(vc, "Active")) + " enabled=" + (vc != null ? ((Behaviour)vc).enabled.ToString() : "?");
+                var h = Of(car);
+                if (h == null) return "diag: no VehicleController";
+                return "thr=" + Get(h.Input, "Throttle") + " clutch=" + Get(h.Input, "Clutch") + " hb=" + Get(h.Input, "Handbrake")
+                     + " rpm=" + F(Get(h.Engine, "RPM") ?? Get(h.Engine, "OutputRPM")) + " trType=" + Get(h.Transmission, "transmissionType")
+                     + " active=" + (Get(h.Vc, "IsActive") ?? Get(h.Vc, "Active")) + " enabled=" + ((Behaviour)h.Vc).enabled;
             }
             catch (Exception e) { return "diag: " + e.Message; }
         }
@@ -1009,13 +996,13 @@ namespace Apocapatrol
 
         internal static string Gear(GameObject car)
         {
-            try { var tr = Get(Get(Vc(car), "powertrain"), "transmission"); var g = Get(tr, "Gear"); return g != null ? g.ToString() : "?"; }
+            try { var h = Of(car); var g = h != null ? Get(h.Transmission, "Gear") : null; return g != null ? g.ToString() : "?"; }
             catch (Exception) { return "?"; }
         }
 
         internal static void SetHandbrake(GameObject car, float value)
         {
-            try { var input = Get(Vc(car), "input"); if (!Set(input, "Handbrake", value)) Plugin.Verbose("no input.Handbrake"); }
+            try { var h = Of(car); if (h == null || !Set(h.Input, "Handbrake", value)) Plugin.Verbose("no input.Handbrake"); }
             catch (Exception e) { Plugin.Log.LogWarning("SetHandbrake: " + e.Message); }
         }
 
@@ -1023,11 +1010,11 @@ namespace Apocapatrol
         {
             try
             {
-                var input = Get(Vc(car), "input");
-                if (input == null) { Plugin.Log.LogWarning("No VehicleController.input"); return; }
-                Set(input, "Throttle", throttle);
-                Set(input, "Steering", steering);
-                Set(input, "Brakes", brakes);
+                var h = Of(car);
+                if (h == null || h.Input == null) { Plugin.Log.LogWarning("No VehicleController.input"); return; }
+                Set(h.Input, "Throttle", throttle);
+                Set(h.Input, "Steering", steering);
+                Set(h.Input, "Brakes", brakes);
             }
             catch (Exception e) { Plugin.Log.LogWarning("SetInput: " + e.Message); }
         }

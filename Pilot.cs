@@ -39,10 +39,6 @@ namespace Apocapatrol
         private int _recoverCount;
         private float _lastRecover = -999f;
         private float _recoverDur, _recoverSteer;
-        private static bool _reverseByBrake;  // NWH reverse mode that turned out to work (auto-detected, shared by all cars)
-        private static bool _reverseKnown;
-        private bool _reverseChecked;
-        private int _reverseTries;
 
         private bool _hitPending, _hitIsTarget, _rearHit, _abandoned;
         private float _hitSide;
@@ -60,6 +56,9 @@ namespace Apocapatrol
         private readonly Dictionary<Collider, bool> _obstacleCache = new Dictionary<Collider, bool>();
         private float _cacheClear;
         private static readonly List<Transform> _ownRoots = new List<Transform>();
+        private static readonly RaycastHit[] _hits = new RaycastHit[24];   // non-allocating cast buffer (shared; casts never nest)
+        private int _senseStep;                                            // feelers run every other physics step
+        private float _senseSteer, _senseThrottle = 1f, _senseBrake;       // last feeler result, reused on the skipped step
 
         internal PilotState State { get { return _state; } }
 
@@ -115,11 +114,10 @@ namespace Apocapatrol
                 Apply(0f, 0f, 0.3f);
                 return;
             }
-            if (!Nwh.EngineRunning(_car) && Time.time >= _nextEngine)
+            if (Time.time >= _nextEngine)
             {
-                _nextEngine = Time.time + 5f;
-                Nwh.StartEngine(_car);
-                Plugin.Verbose("Pilot: engine off, StartEngine()");
+                _nextEngine = Time.time + 1f;
+                if (!Nwh.EngineRunning(_car)) { _nextEngine = Time.time + 5f; Nwh.StartEngine(_car); Plugin.Verbose("Pilot: engine off, StartEngine()"); }
             }
 
             // pushing slowly against something for a while counts as stuck (a car being shoved, a fence...)
@@ -160,7 +158,7 @@ namespace Apocapatrol
                     break;
             }
 
-            if (Time.time >= _nextLog)
+            if (Plugin.VerboseLog.Value && Time.time >= _nextLog)
             {
                 _nextLog = Time.time + 5f;
                 Plugin.Verbose("Pilot: " + _state + " " + (speed * 3.6f).ToString("0") + " km/h (fwd " + (forwardSpeed * 3.6f).ToString("0") + ") gear " + Nwh.Gear(_car)
@@ -265,37 +263,9 @@ namespace Apocapatrol
                 Enter(PilotState.Charge, why);
                 return;
             }
-            // reverse: NWH either takes a reverse gear + throttle, or brake input at standstill; find out which works once
-            if (!_reverseByBrake)
-            {
-                if (Nwh.GearIndex(_car) >= 0) Nwh.ShiftInto(_car, -1);
-                Apply(Plugin.AiReverseThrottle.Value, MoveSteer(_recoverSteer, dt), 0f);
-            }
-            else Apply(0f, MoveSteer(_recoverSteer, dt), Plugin.AiReverseThrottle.Value);
-
-            if (!_reverseChecked && _stateTime >= 1.2f)
-            {
-                _reverseChecked = true;
-                if (forwardSpeed < -0.3f)
-                {
-                    if (!_reverseKnown) Plugin.Log.LogInfo("Pilot: reversing works with " + (_reverseByBrake ? "brake input" : "gear -1 + throttle"));
-                    _reverseKnown = true;
-                }
-                else if (!_reverseKnown && _reverseTries == 0)
-                {
-                    // not moving back: try the other mode once; if that fails too the car is simply blocked, keep the gear mode
-                    _reverseTries = 1;
-                    _reverseByBrake = !_reverseByBrake;
-                    _reverseChecked = false;
-                    Plugin.Log.LogInfo("Pilot: not reversing with " + (_reverseByBrake ? "gear -1 + throttle" : "brake input") + ", trying " + (_reverseByBrake ? "brake input" : "gear -1 + throttle"));
-                    _stateTime = 0f;   // give the other mode its own time
-                }
-                else if (!_reverseKnown)
-                {
-                    _reverseByBrake = false;
-                    Plugin.Log.LogInfo("Pilot: neither reverse mode moved the car (blocked?), keeping gear -1 + throttle");
-                }
-            }
+            // reverse = gear -1 + throttle (NWH's automatic takes the reverse gear from input.ShiftInto)
+            if (Nwh.GearIndex(_car) >= 0) Nwh.ShiftInto(_car, -1);
+            Apply(Plugin.AiReverseThrottle.Value, MoveSteer(_recoverSteer, dt), 0f);
             if (_stateTime >= _recoverDur)
             {
                 if (Nwh.GearIndex(_car) < 0) Nwh.ShiftInto(_car, 1);
@@ -329,7 +299,6 @@ namespace Apocapatrol
             float s = obstacleSide != 0f ? Mathf.Sign(obstacleSide) : -Mathf.Sign(_angle == 0f ? 1f : _angle);
             if (_recoverCount >= 3) s = UnityEngine.Random.value < 0.5f ? -1f : 1f;
             _recoverSteer = s * 0.9f;
-            _reverseChecked = false; _reverseTries = 0;
             _stuckTime = 0f;
             Enter(PilotState.Recover, why);
         }
@@ -376,6 +345,14 @@ namespace Apocapatrol
 
         // Casts the front feelers and the cliff probe; returns a steering correction (+ = right), a throttle factor and a brake amount.
         private void Sense(float speed, out float steer, out float throttleFactor, out float brake)
+        {
+            // every other physics step (25 Hz is plenty for a car; halves the raycasts of a convoy); the skipped step reuses the last result
+            if ((++_senseStep & 1) == 1) { steer = _senseSteer; throttleFactor = _senseThrottle; brake = _senseBrake; return; }
+            SenseNow(speed, out steer, out throttleFactor, out brake);
+            _senseSteer = steer; _senseThrottle = throttleFactor; _senseBrake = brake;
+        }
+
+        private void SenseNow(float speed, out float steer, out float throttleFactor, out float brake)
         {
             steer = 0f; throttleFactor = 1f; brake = 0f;
             float range = Plugin.AiFeelerRange.Value + speed * Plugin.AiFeelerSpeedFactor.Value;
@@ -441,13 +418,13 @@ namespace Apocapatrol
         // first hit along the ray that counts as an obstacle, or -1
         private float Cast(Vector3 origin, Vector3 dir, float len, float radius, float minSlopeNormalY)
         {
-            RaycastHit[] hits = radius > 0f
-                ? Physics.SphereCastAll(origin, radius, dir, len, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
-                : Physics.RaycastAll(origin, dir, len, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            int n = radius > 0f
+                ? Physics.SphereCastNonAlloc(origin, radius, dir, _hits, len, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+                : Physics.RaycastNonAlloc(origin, dir, _hits, len, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float best = -1f;
-            for (int i = 0; i < hits.Length; i++)
+            for (int i = 0; i < n; i++)
             {
-                var h = hits[i];
+                var h = _hits[i];
                 if (best >= 0f && h.distance >= best) continue;
                 if (h.collider == null) continue;
                 if (h.distance < 0.05f) continue;                      // overlap at the start of the cast (Unity reports distance 0, a sideways normal)
@@ -460,10 +437,10 @@ namespace Apocapatrol
 
         private bool GroundBelow(Vector3 from, float depth)
         {
-            var hits = Physics.RaycastAll(from, Vector3.down, depth, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-            for (int i = 0; i < hits.Length; i++)
+            int n = Physics.RaycastNonAlloc(from, Vector3.down, _hits, depth, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
             {
-                var c = hits[i].collider;
+                var c = _hits[i].collider;
                 if (c == null || c.transform.IsChildOf(_tf)) continue;
                 return true;
             }
@@ -569,7 +546,7 @@ namespace Apocapatrol
             string s = _car.name + ": " + _state + " (" + _why + ")  " + (vel.magnitude * 3.6f).ToString("0") + " km/h  gear " + Nwh.Gear(_car)
                 + "  target " + _dist.ToString("0") + " m @ " + _angle.ToString("0") + "°  steer " + _steer.ToString("0.00")
                 + "  thr " + _throttle.ToString("0.00") + "  brk " + _brakes.ToString("0.00") + Feelers()
-                + "  recovers " + _recoverCount + (_reverseByBrake ? "  rev=brake" : "  rev=gear")
+                + "  recovers " + _recoverCount
                 + (_state == PilotState.Recover ? "  rear " + (_rearClear < 0f ? "clear" : _rearClear.ToString("0.0") + " m") : "")
                 + (_pushTime > 0f ? "  push " + _pushTime.ToString("0.0") + " s " + _pushName : "");
             GUI.Label(new Rect(10, 10 + 18 * line, 1400, 22), s);
@@ -659,8 +636,6 @@ namespace Apocapatrol
             vel = _vel;
             return true;
         }
-
-        internal static bool IsPlayerOrPlayerCar(Transform t) { return Kind(t) != 0; }
 
         // 0 = neither, 1 = the player on foot, 2 = the car the player is driving
         internal static int Kind(Transform t)

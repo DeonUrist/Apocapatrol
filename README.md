@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.24.0)
+# Apocapatrol (prototype 0.25.0)
 
 BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
 car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
@@ -154,9 +154,16 @@ ones × heat; the weights are normalised) → nothing allowed = nothing spawns.
 | Advanced convoy (30 % × heat) | 20 / 3 | 1 advanced truck + 2 junkers + 3–5 small cars, each 50 % advanced, at least 2 advanced |
 
 The group appears `SpawnDistance` (300 m) ahead of your car, up to 45° left or right of your direction of travel — behind you when you
-are on foot — in rows of three facing you on open terrain (the truck first), built 0.6 s apart, and the crews start hunting at once.
+are on foot — in rows of three facing you on open terrain (the truck first). The cars are built one every 1.5 s, each build spread over
+several frames, with their crews held; when the last one is done the whole group is released at once and departs together. The
+convoy clock is saved in the sidecar, so a load continues the same countdown.
 The F8 menu has two debug buttons above the park: **Enemy cars** and **Enemy patrol** (a convoy) — they roll the type as if every
 distance/boss requirement were met, with the real heat but at least 100 %. Log: "Convoy: <type> at heat H % (km, bosses), ahead-left 300 m: <templates>".
+
+### Performance
+NWH is driven by reflection with per-car handles and cached member lookups; the pilots' feelers run at 25 Hz with non-allocating casts;
+the crews' AI-mute guards, collision ignores and handbrake/fuel checks run a few times a second, not per frame; seated poses far from the
+camera refresh every 4th frame. `[Debug] VerboseLog` off keeps the per-car log lines out of the game entirely.
 
 ### After a load
 A saved patrol car comes back with its handbrake FSM in its start state (on) and its START FSM off, so a restored driver used to sit

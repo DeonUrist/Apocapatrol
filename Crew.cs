@@ -34,6 +34,12 @@ namespace Apocapatrol
         private float _nextHandbrakeCheck;
         private float _dryFor;                // seconds the tank has been empty while the car stands
         private bool _outOfFuel;
+        private float _nextGuard;             // the AI-mute guard runs a few times a second, not every frame
+        private PlayMakerFSM _handbrake, _tank;   // cached: handbrake [Handbrake], Fuel [LiquidAmount]
+
+        // A car built for a convoy waits for Convoy to release the whole group at once (so the group departs together and
+        // the builds do not pile up on one frame); the driver sits with the engine running until then.
+        internal bool Hold;
 
         internal static Crew Attach(GameObject car, GameObject driver)
         {
@@ -48,6 +54,9 @@ namespace Apocapatrol
             _rb = car.GetComponent<Rigidbody>();
             _health = driver != null ? driver.GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == "Health") : null;
             _drive = Patrol.FindFsm(car, "DriveTrigger", "Drive");
+            _handbrake = Patrol.FindFsm(car, "handbrake", "Handbrake");
+            var tank = Patrol.FindChild(car.transform, "Fuel");
+            _tank = tank != null ? tank.GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == "LiquidAmount") : null;
             var dt = Patrol.FindChild(car.transform, "DriveTrigger");
             if (dt != null) _enterTrigger = dt.GetComponents<Collider>().FirstOrDefault(c => c is SphereCollider);
             _ctl = new InputControl(car);
@@ -166,7 +175,7 @@ namespace Apocapatrol
             if (Time.timeScale <= 0f) return;
             if (Time.time >= _nextIgnore)
             {
-                _nextIgnore = Time.time + 1f;
+                _nextIgnore = Time.time + 2f;
                 if (!_dead && _driver != null) Patrol.IgnoreCollisionsIfChanged(_driver, _car);
                 var marker = _car.GetComponent<PatrolMarker>();
                 if (marker != null && marker.Passenger != null) Patrol.IgnoreCollisionsIfChanged(marker.Passenger, _car);
@@ -177,32 +186,21 @@ namespace Apocapatrol
             if (!_dead)
             {
                 if (!DriverAlive()) { OnDriverDied(); return; }
-                MuteAi();
+                if (Time.time >= _nextGuard) { _nextGuard = Time.time + 0.5f; MuteAi(); }
                 _seated += Time.deltaTime;
                 float delay = _delayOverride >= 0f ? _delayOverride : 0f;
-                if (!_driving && _seated >= delay && Nwh.EngineRunning(_car)) StartDriving();
-                else if (!_driving && _seated >= delay + 8f && !_revived) { Plugin.Log.LogInfo("Crew: engine of " + _car.name + " never started; reviving"); Revive(); }
-                if (_driving && !_outOfFuel && Time.time >= _nextHandbrakeCheck)
+                if (!_driving && !_outOfFuel && _seated >= delay)
                 {
-                    // dry tank: the engine dies; treat it like being stuck for good (StuckBailChance: the crew gets out, else it sits and waits)
-                    float fuel = Patrol.FuelLeft(_car);
-                    bool standing = _rb == null || _rb.velocity.magnitude < 1f;
-                    if (fuel >= 0f && fuel <= 0.05f && standing) _dryFor += 1f; else _dryFor = 0f;
-                    if (_dryFor >= 3f)
-                    {
-                        _outOfFuel = true;
-                        Plugin.Log.LogInfo("Crew: " + _car.name + " ran out of fuel");
-                        if (!OnStuck())
-                        {
-                            if (_pilot != null) { _pilot.Detach(); _pilot = null; }
-                            Nwh.SetInput(_car, 0f, 0f, 0f);
-                            Plugin.Log.LogInfo("Crew: the crew stays in the dry car");
-                        }
-                        return;
-                    }
-                    // the player pulled the handbrake on a driven car (or it came back on after a load): the driver lets it go
+                    bool running = Nwh.EngineRunning(_car);
+                    if (running && !Hold) StartDriving();
+                    else if (!running && _seated >= delay + 8f && !_revived) { Plugin.Log.LogInfo("Crew: engine of " + _car.name + " never started; reviving"); Revive(); }
+                }
+                if (Time.time >= _nextHandbrakeCheck)
+                {
                     _nextHandbrakeCheck = Time.time + 1f;
-                    if (Patrol.HandbrakeOn(_car)) { Patrol.Handbrake(_car, false); Plugin.Log.LogInfo("Crew: driver of " + _car.name + " released the handbrake"); }
+                    if (!_outOfFuel && CheckDry()) return;
+                    // the player pulled the handbrake on a driven car (or it came back on after a load): the driver lets it go
+                    if (_driving && HandbrakeOn()) { Patrol.Handbrake(_car, false); Plugin.Log.LogInfo("Crew: driver of " + _car.name + " released the handbrake"); }
                 }
                 return;
             }
@@ -216,6 +214,36 @@ namespace Apocapatrol
             _ctl.Release();
             _done = true;
         }
+
+        // Once a second: a dry tank while the car stands (driving, or restored/waiting with a dead engine) = stuck for good.
+        // StuckBailChance decides whether the crew gets out; otherwise it sits in the dead car. Returns true when it fired.
+        private bool CheckDry()
+        {
+            float fuel = -1f;
+            if (_tank != null && _tank.Fsm.Initialized) { var v = _tank.FsmVariables.GetFsmFloat("Liquid"); if (v != null) fuel = v.Value; }
+            bool standing = _rb == null || _rb.velocity.magnitude < 1f;
+            if (fuel >= 0f && fuel <= 0.05f && standing && _seated > 5f) _dryFor += 1f; else _dryFor = 0f;
+            if (_dryFor < 3f) return false;
+            _outOfFuel = true;
+            Plugin.Log.LogInfo("Crew: " + _car.name + " ran out of fuel");
+            if (!OnStuck())
+            {
+                if (_pilot != null) { _pilot.Detach(); _pilot = null; }
+                if (_driving) Nwh.SetInput(_car, 0f, 0f, 0f);
+                Plugin.Log.LogInfo("Crew: the crew stays in the dry car");
+            }
+            return true;
+        }
+
+        private bool HandbrakeOn()
+        {
+            if (_handbrake == null || !_handbrake.Fsm.Initialized) return false;
+            string cur = _handbrake.ActiveStateName;
+            return cur == "HandbrakeOn" || cur == "over" || cur == "Sound 2";
+        }
+
+        // convoy: every car of the group is released together
+        internal void Release() { Hold = false; }
 
         // NWH samples its input on the physics step, so the inputs are written here, not in Update.
         private void FixedUpdate()
@@ -290,7 +318,7 @@ namespace Apocapatrol
         // instead of waiting: the car is left standing as an ordinary vehicle. Returns true if the crew left.
         internal bool OnStuck()
         {
-            if (_dead || _done || !_driving) return false;
+            if (_dead || _done) return false;
             if (UnityEngine.Random.Range(0f, 100f) >= Plugin.StuckBailChance.Value) return false;
             var marker = _car.GetComponent<PatrolMarker>();
             Plugin.Log.LogInfo("Crew: stuck for good, the crew bails out (" + Plugin.StuckBailChance.Value + " % roll)");

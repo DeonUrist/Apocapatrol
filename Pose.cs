@@ -97,9 +97,14 @@ namespace Apocapatrol
             return null;
         }
 
+        private int _lodFrame;
+
         private void LateUpdate()
         {
             if (_root == null || _anchor == null) return;
+            // far from the camera the pose is refreshed every 4th frame only (several crews at 300 m add up)
+            var cam = Camera.main;
+            if (cam != null && (cam.transform.position - _anchor.position).sqrMagnitude > 120f * 120f && (++_lodFrame & 3) != 0) return;
             if (_lockSeatRotation) _root.localRotation = _seatRotation;
             var right = _anchor.right;
             var up = _anchor.up;

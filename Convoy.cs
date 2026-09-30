@@ -34,6 +34,14 @@ namespace Apocapatrol
             _inst._bosses = 0;
         }
 
+        internal static float CurrentCooldown() { return _inst != null ? _inst._cooldown : -1f; }
+        internal static void SetCooldown(float seconds)
+        {
+            if (_inst == null) return;
+            _inst._cooldown = seconds;
+            if (seconds >= 0f) Plugin.Verbose("Convoy: clock restored, next roll in " + (seconds / 60f).ToString("0.0") + " min");
+        }
+
         internal float Heat { get { return _heat; } }
         internal float Km { get { return _km; } }
         internal int Bosses { get { return _bosses; } }
@@ -369,14 +377,34 @@ namespace Apocapatrol
             return true;
         }
 
+        // One build every BuildInterval seconds (each build itself is spread over frames), the crews held; when the last build
+        // has finished the whole group is released at once and departs together.
+        private const float BuildInterval = 1.5f;
+
         private IEnumerator BuildAll(List<CarTemplate> group, List<Vector3> spots, Quaternion rot)
         {
+            var cars = new List<GameObject>();
+            int pending = 0;
             for (int i = 0; i < group.Count && i < spots.Count; i++)
             {
-                if (_patrol == null || !_patrol.InGame()) yield break;
-                _patrol.SpawnAt(group[i], spots[i], rot);
-                yield return new WaitForSeconds(0.6f);      // spread the frame/FSM start-up spikes a little
+                if (_patrol == null || !_patrol.InGame()) break;
+                pending++;
+                _patrol.SpawnAt(group[i], spots[i], rot, true, car => { pending--; if (car != null) cars.Add(car); });
+                yield return new WaitForSeconds(BuildInterval);
             }
+            float until = Time.time + 30f;
+            while (pending > 0 && Time.time < until) yield return null;
+            int released = 0;
+            foreach (var car in cars)
+            {
+                if (car == null) continue;
+                var crew = car.GetComponent<Crew>();
+                if (crew != null) { crew.Release(); released++; }
+            }
+            Plugin.Log.LogInfo("Convoy: " + released + " car(s) released");
         }
+
+        // the automatic clock, for the save sidecar (seconds; < 0 = not rolled yet)
+        internal float CooldownSeconds { get { return _cooldown; } set { _cooldown = value; } }
     }
 }

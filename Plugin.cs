@@ -11,14 +11,14 @@ using UnityEngine.SceneManagement;
 
 namespace Apocapatrol
 {
-    // Prototype: press a key, a complete car (frame + wheels + engine + radiator + steering wheel) is assembled in front of
-    // the player with the game's own part-attach recipe, fuelled and started. Groundwork for AI-driven raider cars.
+    // AI-driven raider cars: templates assembled from the game's own frames and parts, live crews with a driving AI, ranged
+    // passengers, ram damage, loot trucks, a convoy spawner driven by the game's Distance Travelled, and a save sidecar.
     [BepInPlugin(GUID, NAME, VERSION)]
     public class Plugin : BaseUnityPlugin
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.24.0";
+        public const string VERSION = "0.25.0";
 
         internal static ManualLogSource Log;
 

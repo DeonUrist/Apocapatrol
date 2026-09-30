@@ -178,7 +178,7 @@ namespace Apocapatrol
         // The melee prop is neutralised in place (renderers and colliders off) rather than deactivated: the Attack FSM's
         // close-range state re-activates the object every frame, and a SetActive ping-pong made its collider enter the car's
         // CarAttack trigger every frame ("Could not find FSM: ID on collider" spam, a physics pair reset per frame, lag).
-        private float _nextWeaponCheck;
+        private float _nextWeaponCheck, _nextGuard;
         private void HideMeleeWeapons()
         {
             if (_meleeWeapons == null) return;
@@ -220,7 +220,7 @@ namespace Apocapatrol
                 if (_ranged) foreach (var fsm in _combat) if (fsm != null) fsm.enabled = true;
                 else if (_attack != null) _attack.enabled = false;
             }
-            MuteNonCombatAi(_passenger, CombatAllowed);
+            if (Time.time >= _nextGuard) { _nextGuard = Time.time + 0.5f; MuteNonCombatAi(_passenger, CombatAllowed); }
             if (!_ranged)
             {
                 if (_pose != null) _pose.SetAim(Vector3.zero, false);
