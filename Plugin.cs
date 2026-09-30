@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.6.5";
+        public const string VERSION = "1.7.0";
 
         internal static ManualLogSource Log;
 
@@ -52,6 +52,7 @@ namespace Apocapatrol
 
         // [Combat]
         internal static ConfigEntry<bool> RangedCombat;
+        internal static ConfigEntry<int> AudioVoices;
         internal static ConfigEntry<float> FireArc, MaxAimPitch, AimTurnSpeed, FireBurstSeconds, FireIntervalMin, FireIntervalMax, ShootDistance;
         internal static ConfigEntry<bool> RamDamage, RamDamageInCar;
         internal static ConfigEntry<float> RamDamageMultiplier, RamFullSpeedKmh, RamInCarFactor, RamPushStrength;
@@ -114,6 +115,13 @@ namespace Apocapatrol
                 "Lower it on a weak PC - fewer cars means fewer crews, physics bodies and AI drivers at once. A spawn always brings at least " +
                 "one car; a convoy always brings its truck first",
                 new AcceptableValueList<int>(25, 50, 100, 125, 150)));
+
+            AudioVoices = Config.Bind("General", "AudioVoices", 64, new ConfigDescription(
+                "How many sounds the game can play at once (Unity's real voices; the game ships with 32). A firefight with several raider cars needs " +
+                "more: every shot and every hit is a sound, and beyond the limit sounds - the player's own shots too - cut out. 64 is a good value; " +
+                "0 leaves the game's own setting. Applied at game start (restart the game after a change)",
+                new AcceptableValueList<int>(0, 32, 48, 64, 96, 128)));
+            ApplyAudioVoices();
 
             RangedCombat = Config.Bind("Combat", "RangedCombat", true,
                 "Ranged humans (Boltjaw/Flexa/Lugnut/Scrud/Sprokka) in a car use their vanilla targeting and ranged attack: the passenger whenever a target " +
@@ -384,6 +392,24 @@ namespace Apocapatrol
             _runner.AddComponent<TemplateMenu>();
             _runner.AddComponent<Convoy>();
             _runner.AddComponent<Cleanup>();
+        }
+
+        // Unity mixes at most numRealVoices sounds; the rest are virtual (silent until a slot frees up). Reset() restarts the audio system,
+        // so this runs once at plugin load, before the game plays anything.
+        private static void ApplyAudioVoices()
+        {
+            try
+            {
+                int want = AudioVoices.Value;
+                var cfg = AudioSettings.GetConfiguration();
+                if (want <= 0 || cfg.numRealVoices == want) { Log.LogInfo("Audio: " + cfg.numRealVoices + " real voices (unchanged)"); return; }
+                int before = cfg.numRealVoices;
+                cfg.numRealVoices = want;
+                if (cfg.numVirtualVoices < want) cfg.numVirtualVoices = want * 8;
+                bool ok = AudioSettings.Reset(cfg);
+                Log.LogInfo("Audio: real voices " + before + " -> " + AudioSettings.GetConfiguration().numRealVoices + (ok ? "" : " (Reset failed)"));
+            }
+            catch (Exception e) { Log.LogWarning("Audio: could not set the voice count: " + e.Message); }
         }
 
         internal static void Verbose(string msg)

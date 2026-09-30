@@ -32,6 +32,10 @@ namespace Apocapatrol
         // driver mode: the same combat, but only in random bursts; the driver pose in between
         private bool _driverMode, _shooting;
         private float _nextBurst, _burstUntil;
+        // the fire decision (target in arc and in range) is taken every FireCheckSeconds, not per frame: switching the Attack FSM on restarts it,
+        // and a target on the edge of the arc used to restart it every frame
+        private const float FireCheckSeconds = 0.5f;
+        private float _nextFireCheck; private bool _canFire;
 
         internal static bool IsRangedHuman(GameObject who) { return IsRanged(who); }
 
@@ -234,17 +238,22 @@ namespace Apocapatrol
             }
 
             GameObject target = FindVanillaTarget();
-            bool inArc = false;
             Vector3 aimPoint = Vector3.zero;
-            if (target != null)
+            if (target != null) { _targetAcquired = true; aimPoint = AimPoint(target); }
+            if (Time.time >= _nextFireCheck || target == null)
             {
-                _targetAcquired = true;
-                aimPoint = AimPoint(target);
-                var flat = Vector3.ProjectOnPlane(aimPoint - _passenger.transform.position, _car.transform.up);
-                if (flat.sqrMagnitude > 0.001f)
-                    inArc = Mathf.Abs(Vector3.SignedAngle(_car.transform.forward, flat, _car.transform.up)) <= Plugin.FireArc.Value
-                         && (aimPoint - _passenger.transform.position).magnitude <= Plugin.ShootDistance.Value;
+                _nextFireCheck = Time.time + FireCheckSeconds;
+                bool ok = false;
+                if (target != null)
+                {
+                    var flat = Vector3.ProjectOnPlane(aimPoint - _passenger.transform.position, _car.transform.up);
+                    if (flat.sqrMagnitude > 0.001f)
+                        ok = Mathf.Abs(Vector3.SignedAngle(_car.transform.forward, flat, _car.transform.up)) <= Plugin.FireArc.Value
+                          && (aimPoint - _passenger.transform.position).magnitude <= Plugin.ShootDistance.Value;
+                }
+                _canFire = ok;
             }
+            bool inArc = _canFire;   // held for the interval (the aim itself still follows the target every frame)
 
             if (_driverMode)
             {
