@@ -22,13 +22,15 @@ namespace Apocapatrol
         }
 
         // Textures/<body>.png (poloska.png, tinytyrant.png, rustcargo.png, junker.png) = that body's main paint texture, whatever the game
-        // calls it; wins over a file named after the texture itself. PipeRat has no single body texture (shared tiling rust textures).
+        // calls it; wins over a file named after the texture itself. PipeRat: piperat.png = its main body panels' tiling rust texture
+        // metal_rusted_26 (body shell + one side panel; the texture repeats across them, so a recolour rather than a livery).
         private static readonly Dictionary<string, string> BodyTexture = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { "Poloska", "DefaultMaterial_BaseColor" },
             { "TinyTyrant", "tinytyrant_yellow" },
             { "Rustcargo", "rustcargo_green_2" },
             { "Junker", "junker" },
+            { "PipeRat", "metal_rusted_26" },
         };
         private static readonly Dictionary<string, Material> _bodyMat = new Dictionary<string, Material>();   // "<orig mat id>|<file>"
 
