@@ -33,6 +33,7 @@ namespace Apocapatrol
         public bool playerEntered;           // schema 4: the player has sat in it (never cleaned up)
         public float farSeconds;             // schema 4: cleanup timer
         public bool exploded;                // schema 5: self-destructed; a dead chassis (removed beyond 1000 m)
+        public string cargoKey = "";         // schema 6: the loot type it was built with ("" = none / unknown) - picks the container texture
     }
 
     internal sealed class PatrolMarker : MonoBehaviour
@@ -51,6 +52,7 @@ namespace Apocapatrol
         internal bool PlayerEntered;          // the player has sat in this car: it is theirs, the cleanup never removes it
         internal float FarSeconds;            // how long it has been beyond the cleanup distance
         internal bool Exploded;               // self-destructed: a dead chassis, removed beyond Explode.RemoveDistance
+        internal string CargoKey = "";        // loot type at build (Food, Water, ...; "" = none): the container texture, kept across saves
 
         internal static PatrolMarker Attach(GameObject car, string bodyPrefab, string driverPrefab, GameObject driver,
             string passengerPrefab, GameObject passenger, RamTargets rams)
@@ -130,14 +132,15 @@ namespace Apocapatrol
                 passengerHealth = passengerHealth,
                 playerEntered = PlayerEntered,
                 farSeconds = FarSeconds,
-                exploded = Exploded
+                exploded = Exploded,
+                cargoKey = CargoKey ?? ""
             };
         }
     }
 
     internal static class PatrolPersistence
     {
-        private const int SchemaVersion = 5;   // 1 = no ramTargets (read as Pedestrians), 2 = no convoy cooldown, 3 = no cleanup fields, 4 = no exploded flag
+        private const int SchemaVersion = 6;   // 1 = no ramTargets (read as Pedestrians), 2 = no convoy cooldown, 3 = no cleanup fields, 4 = no exploded flag, 5 = no cargo key
         private const int Magic = 0x434F5041; // "APOC" in little-endian; rejects unrelated/corrupt files.
         private const int MaxCarsPerSave = 1024;
         private static PlayMakerFSM _saveLoad, _newGoSave;
@@ -289,6 +292,7 @@ namespace Apocapatrol
         {
             if (car.GetComponent<PatrolMarker>() != null) return;
             Paint.Apply(car);   // the game rebuilt the frame from its prefab: the mod's paint again
+            Paint.ApplyCargo(car, data.cargoKey);
             GameObject driver = null, passenger = null;
             CrewPhase phase;
             if (!Enum.TryParse(data.driverPhase, out phase)) phase = CrewPhase.Waiting;
@@ -296,7 +300,7 @@ namespace Apocapatrol
             {
                 // a dead chassis: nobody inside, nothing works; its FSMs restarted with the scene, so it is deadened again
                 var dead = PatrolMarker.Attach(car, data.bodyPrefab, data.driverPrefab, null, data.passengerPrefab, null, CarTemplate.ParseRams(data.ramTargets));
-                dead.PlayerEntered = data.playerEntered; dead.FarSeconds = data.farSeconds; dead.Exploded = true;
+                dead.PlayerEntered = data.playerEntered; dead.FarSeconds = data.farSeconds; dead.Exploded = true; dead.CargoKey = data.cargoKey ?? "";
                 Explode.RestoreDead(car, data.bodyPrefab);
                 Plugin.Verbose("Persistence: dead chassis restored: " + car.name);
                 return;
@@ -318,6 +322,7 @@ namespace Apocapatrol
             var mk = PatrolMarker.Attach(car, data.bodyPrefab, data.driverPrefab, driver, data.passengerPrefab, passenger, CarTemplate.ParseRams(data.ramTargets));
             mk.PlayerEntered = data.playerEntered;
             mk.FarSeconds = data.farSeconds;
+            mk.CargoKey = data.cargoKey ?? "";
             var crew = car.GetComponent<Crew>();
             if (crew != null && phase != CrewPhase.Released && phase != CrewPhase.DeadRolling) crew.Revive();   // handbrake off + ignition, like a fresh build
             Plugin.Verbose("Persistence: crew restored on " + car.name + " (" + phase + ")");
@@ -403,6 +408,7 @@ namespace Apocapatrol
             WriteString(writer, car.ramTargets ?? "Pedestrians");
             writer.Write(car.playerEntered); writer.Write(car.farSeconds);
             writer.Write(car.exploded);
+            WriteString(writer, car.cargoKey);
         }
 
         private static PatrolCarData ReadCar(BinaryReader reader, int version)
@@ -419,6 +425,7 @@ namespace Apocapatrol
             if (version >= 4) { car.playerEntered = reader.ReadBoolean(); car.farSeconds = reader.ReadSingle(); }
             else if (car.driverPhase == "Released") car.playerEntered = true;   // older save: an empty raider car may be one the player drove - keep it
             if (version >= 5) car.exploded = reader.ReadBoolean();
+            if (version >= 6) car.cargoKey = ReadString(reader);
             return car;
         }
 

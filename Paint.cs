@@ -46,6 +46,66 @@ namespace Apocapatrol
             if (n > 0) Plugin.Verbose("Paint: " + car.name + " repainted (" + n + " material(s))");
         }
 
+        // Cargo trucks: the container (texture shipping_container_6m_1 - not its doors _2/_3, not the cab) wears a texture by its load:
+        // Textures/cargo_<load>.png (water, gasoline, diesel, medicine, weapons, drugs, mechanic), cargo_food.png for dog food, rats and
+        // corpses, cargo.png for an empty truck or any other load, and cargo.png again when the specific file is missing.
+        internal const string ContainerTexture = "shipping_container_6m_1";
+        private static readonly Dictionary<string, Material> _cargoMat = new Dictionary<string, Material>();   // "<orig mat id>|<file>" -> copy
+        private static readonly Dictionary<Material, Material> _cargoOrig = new Dictionary<Material, Material>();   // copy -> original
+
+        internal static string CargoFile(string lootKey)
+        {
+            string k = (lootKey ?? "").Trim().ToLowerInvariant();
+            switch (k)
+            {
+                case "food": case "rats": case "corpses": return "cargo_food";
+                case "water": case "gasoline": case "diesel": case "medicine": case "weapons": case "drugs": case "mechanic": return "cargo_" + k;
+                default: return "cargo";
+            }
+        }
+
+        internal static void ApplyCargo(GameObject car, string lootKey)
+        {
+            if (car == null || _dir == null || !Directory.Exists(_dir)) return;
+            try
+            {
+                string file = CargoFile(lootKey);
+                var tex = Load(file);
+                if (tex == null && file != "cargo") { file = "cargo"; tex = Load(file); }
+                if (tex == null) return;
+                int n = 0;
+                foreach (var r in car.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null || r.GetType().Name == "ParticleSystemRenderer" || !OnFrame(car, r.transform)) continue;
+                    var mats = r.sharedMaterials;
+                    bool changed = false;
+                    for (int i = 0; i < mats.Length; i++)
+                    {
+                        var m = mats[i];
+                        if (m == null) continue;
+                        Material orig;
+                        if (!_cargoOrig.TryGetValue(m, out orig))
+                        {
+                            if (!m.HasProperty("_MainTex") || m.mainTexture == null || m.mainTexture.name != ContainerTexture) continue;
+                            orig = m;
+                        }
+                        string key = orig.GetInstanceID() + "|" + file;
+                        Material copy;
+                        if (!_cargoMat.TryGetValue(key, out copy) || copy == null)
+                        {
+                            copy = new Material(orig) { name = orig.name + " (Apocapatrol " + file + ")" };
+                            copy.mainTexture = tex;
+                            _cargoMat[key] = copy; _cargoOrig[copy] = orig;
+                        }
+                        if (mats[i] != copy) { mats[i] = copy; changed = true; n++; }
+                    }
+                    if (changed) r.sharedMaterials = mats;
+                }
+                if (n > 0) Plugin.Verbose("Paint: " + car.name + " container = " + file + " (" + (string.IsNullOrEmpty(lootKey) ? "no cargo" : lootKey) + ")");
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("Paint: cargo: " + e.Message); }
+        }
+
         // the frame's own renderers: not the attached parts, occupants, carcasses or cargo
         private static bool OnFrame(GameObject car, Transform t)
         {

@@ -142,9 +142,10 @@ namespace Apocapatrol
                 if (tpl.FillFuel) Fuel(car, Plugin.RollPartFill());
                 if (tpl.ReleaseHandbrake) Handbrake(car, false);
                 List<GameObject> cargo = null;
+                string lootKey = null;
                 if (!string.IsNullOrEmpty(tpl.Cargo))
                 {
-                    string lootKey = tpl.Cargo.Equals("Random", StringComparison.OrdinalIgnoreCase) ? Cargo.RollLootType() : tpl.Cargo;
+                    lootKey = tpl.Cargo.Equals("Random", StringComparison.OrdinalIgnoreCase) ? Cargo.RollLootType() : tpl.Cargo;
                     string spec = Cargo.SpecFor(lootKey);
                     float scale = UnityEngine.Random.Range(Mathf.Min(tpl.LootScaleMin, tpl.LootScaleMax), Mathf.Max(tpl.LootScaleMin, tpl.LootScaleMax));
                     Plugin.Verbose("Loot: " + lootKey + " (" + spec + ") x" + Plugin.LootMultiplier.Value + " x" + scale.ToString("0.00") + " (template)");
@@ -162,7 +163,9 @@ namespace Apocapatrol
                 }
                 yield return null;
                 if (!string.IsNullOrEmpty(tpl.Passenger)) passenger = SeatPassenger(car, tpl.Passenger);
-                PatrolMarker.Attach(car, body.name, tpl.Driver, driver, tpl.Passenger, passenger, tpl.Rams);
+                var marker = PatrolMarker.Attach(car, body.name, tpl.Driver, driver, tpl.Passenger, passenger, tpl.Rams);
+                marker.CargoKey = lootKey ?? "";
+                Paint.ApplyCargo(car, lootKey);   // the container's texture by load (Textures/cargo_*.png)
 
                 yield return new WaitForSeconds(1f);
                 if (car == null) yield break;
