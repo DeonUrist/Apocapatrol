@@ -254,7 +254,8 @@ namespace Apocapatrol
             }
             // the vehicle controller and the wheel controllers (NWH suspension raycasts would keep the frame floating on invisible wheels);
             // a truck keeps both - it stands on its real wheels, engine off, handbrake and brakes on
-            if (truck) { Nwh.StopEngine(car); Nwh.SetInput(car, 0f, 0f, 1f); Nwh.SetHandbrake(car, 1f); }
+            Nwh.StopEngine(car);   // once: every start-up path stops for good via IsWreck, nothing polls the wreck afterwards
+            if (truck) { Nwh.SetInput(car, 0f, 0f, 1f); Nwh.SetHandbrake(car, 1f); }
             else foreach (var c in car.GetComponentsInChildren<Component>(true))
             {
                 if (!(c is Behaviour)) continue;
@@ -274,10 +275,6 @@ namespace Apocapatrol
             if (pilot != null) pilot.Detach();
             var crew = car.GetComponent<Crew>();
             if (crew != null) crew.enabled = false;
-            // the wreck keeps itself dead from now on (engine, crew, sounds; a truck is frozen once it has settled on its wheels)
-            var w = car.GetComponent<Wreck>();
-            if (w == null) w = car.AddComponent<Wreck>();
-            w.Truck = truck;
         }
 
         private static void StopLoops(GameObject car)
@@ -292,65 +289,6 @@ namespace Apocapatrol
             if (car == null) return true;
             var m = car.GetComponent<PatrolMarker>();
             return m != null && m.Exploded;
-        }
-
-        // Sits on an exploded car. Twice a second: no crew, no pilot, engine off, no looping sound. A truck stands on its wheels with the
-        // vehicle controller on until it has settled (still for 1.5 s, at most 10 s), then it is frozen: engine stopped, VehicleController and
-        // WheelControllers off, Rigidbody kinematic - nothing of the NWH simulation (starter, auto-start, sounds) runs on a wreck any more.
-        // Removal beyond Explode.RemoveDistance is the Cleanup's job (PatrolMarker.Exploded).
-        internal sealed class Wreck : MonoBehaviour
-        {
-            internal bool Truck;
-            private float _next, _still, _settleUntil;
-            private bool _frozen, _started;
-
-            private void Start()
-            {
-                _settleUntil = Time.time + 10f;
-                var crew = GetComponent<Crew>();
-                if (crew != null) { crew.StopAllCoroutines(); crew.enabled = false; }   // a revive/start-up still waiting
-                _started = true;
-            }
-
-            private void Update()
-            {
-                if (!_started || Time.time < _next) return;
-                _next = Time.time + 0.5f;
-                try
-                {
-                    var car = gameObject;
-                    var pilot = GetComponent<Pilot>();
-                    if (pilot != null) pilot.Detach();
-                    var crew = GetComponent<Crew>();
-                    if (crew != null && crew.enabled) crew.enabled = false;
-                    if (!_frozen && Nwh.EngineRunning(car)) { Nwh.StopEngine(car); Plugin.Verbose("Explode: " + car.name + " engine stopped (wreck)"); }
-                    StopLoops(car);
-                    if (_frozen) return;
-                    if (!Truck) { _frozen = true; return; }   // a car's controller is already off
-                    Nwh.SetInput(car, 0f, 0f, 1f);
-                    Nwh.SetHandbrake(car, 1f);
-                    var rb = GetComponent<Rigidbody>();
-                    float v = rb != null && !rb.isKinematic ? rb.velocity.magnitude : 0f;
-                    _still = v < 0.3f ? _still + 0.5f : 0f;
-                    if (_still >= 1.5f || Time.time >= _settleUntil) Freeze(car, rb);
-                }
-                catch (Exception e) { Plugin.Log.LogWarning("Explode: wreck: " + e.Message); _frozen = true; }
-            }
-
-            private void Freeze(GameObject car, Rigidbody rb)
-            {
-                _frozen = true;
-                Nwh.StopEngine(car);
-                foreach (var c in car.GetComponentsInChildren<Component>(true))
-                {
-                    if (!(c is Behaviour)) continue;
-                    string n = c.GetType().Name;
-                    if (n == "VehicleController" || n == "WheelController") ((Behaviour)c).enabled = false;
-                }
-                if (rb != null) { rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; rb.isKinematic = true; }
-                StopLoops(car);
-                Plugin.Verbose("Explode: " + car.name + " wreck settled and frozen");
-            }
         }
 
         // after a load: a chassis that exploded before the save is dead again
