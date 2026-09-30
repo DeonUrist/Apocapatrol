@@ -54,6 +54,26 @@ namespace Apocapatrol
             return painted;
         }
 
+        // Decodes every PNG in Textures once, at plugin load (before the main menu): a PNG decode + mipmaps + GPU upload runs on the main
+        // thread and froze the first spawn that needed it. Layout guides (*_uv_layout / *_uv_over_texture) are skipped.
+        internal static void Preload()
+        {
+            if (_dir == null || !Directory.Exists(_dir)) return;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            int n = 0;
+            try
+            {
+                foreach (var path in Directory.GetFiles(_dir, "*.png"))
+                {
+                    string name = Path.GetFileNameWithoutExtension(path);
+                    if (name.EndsWith("_uv_layout", StringComparison.OrdinalIgnoreCase) || name.EndsWith("_uv_over_texture", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (Load(name) != null) n++;
+                }
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("Paint: preload: " + e.Message); }
+            Plugin.Log.LogInfo("Paint: " + n + " texture(s) preloaded in " + sw.ElapsedMilliseconds + " ms");
+        }
+
         internal static void Apply(GameObject car, string body)
         {
             if (car == null || _dir == null || !Directory.Exists(_dir)) return;
@@ -330,6 +350,7 @@ namespace Apocapatrol
                 try
                 {
                     t = new Texture2D(2, 2, TextureFormat.RGBA32, true) { name = name + " (Apocapatrol)" };
+                    t.hideFlags = HideFlags.DontUnloadUnusedAsset;   // preloaded at start: must survive Resources.UnloadUnusedAssets on scene loads
                     if (ImageConversion.LoadImage(t, File.ReadAllBytes(path), true))
                     {
                         t.wrapMode = TextureWrapMode.Repeat; t.filterMode = FilterMode.Trilinear; t.anisoLevel = 4;

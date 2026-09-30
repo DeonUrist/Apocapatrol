@@ -1,4 +1,4 @@
-# Apocapatrol 1.8.2
+# Apocapatrol 1.8.3
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -114,9 +114,10 @@ strippable, cleaned up by the rules below.
 The raiders' cars wear their own paint. Put a PNG named after the car into the mod's `Textures` folder and every car of that
 kind the mod spawns (basic and advanced, in patrols and convoys) wears it; the same cars you find in the world keep the game's
 look. `junker.png`, `poloska.png`, `tinytyrant.png`, `piperat.png` (the PipeRat's pipe frame), `piperat_dashboard.png` (its
-dashboard) and `rustcargo.png` (the truck's cab) are recognised. Keep the size and
-layout of the game's texture (Junker 1024 x 1024, Poloska and TinyTyrant 4096 x 4096, Rustcargo and PipeRat 2048 x 2048; the PipeRat's textures repeat
-along its pipes, so recolour them rather than paint a picture on them), and keep the
+dashboard) and `rustcargo.png` (the truck's cab) are recognised. Keep the layout of
+the game's texture (its originals: Junker 1024 x 1024, Poloska and TinyTyrant 4096 x 4096, Rustcargo and PipeRat 2048 x 2048; the PipeRat's
+textures repeat along its pipes, so recolour them rather than paint a picture on them). Any square size works - smaller files load faster;
+all of them are loaded once when the game starts. Keep the
 Junker's transparent spots - those are its rust holes. Any other car texture works too: a PNG named after the game's texture
 replaces it on every raider car that uses it.
 

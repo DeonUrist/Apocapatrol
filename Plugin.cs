@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.8.2";
+        public const string VERSION = "1.8.3";
 
         internal static ManualLogSource Log;
 
@@ -406,6 +406,7 @@ namespace Apocapatrol
             
             MigrateMovedSettings();
             ApplyAudioVoices();   // after the migration: an old [General] AudioVoices counts
+            Paint.Preload();      // all Textures decoded now, not in the middle of a spawn
             PurgeStaleEntries();
 
             SceneManager.sceneLoaded += (s, m) => { EnsureRunner(); Patrol.ResetForScene(); PlayerRef.Reset(); PatrolPersistence.ResetForScene(); Convoy.ResetForScene(); };
