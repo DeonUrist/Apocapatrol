@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.26.0)
+# Apocapatrol 1.0.0
 
 BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
 car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
@@ -216,13 +216,22 @@ Sidecars are written atomically and checked against the save slot, world seed, v
 sidecar is logged and ignored without changing the game save. Persistence begins with saves made by version 0.8.0 or later; older saves contain no
 reliable patrol marker and are intentionally not guessed.
 
+## Install
+BepInEx 5 (tested with 5.4.23.3). Copy `Apocapatrol.dll` into `BepInEx\plugins\`. Apocasetter is optional: with it every setting is editable
+in game (Mods menu) and the F8 spawner uses its theme. Works together with Apocatremors (its `[Apocapatrol]` section adjusts ambush pacing
+while this mod is loaded). Safe to add to an existing save: heat comes from the game's own Distance Travelled and boss kills from the game's
+Boss_* flags. Removing the mod leaves the spawned cars in the save as ordinary (empty) vehicles.
+
+## Build
+`MANAGED=<game>/Apocalypter_Data/Managed BEPCORE=<game>/BepInEx/core sh build.sh` (mcs), or `dotnet build` with the csproj.
+
 What happens on a spawn:
 1. The frame prefab is instantiated 8 m ahead, named and registered like a vanilla spawn (`ArrayList_Cars`).
 2. Each part is instantiated at its hinge (`hinge_wheel_FL/FR/RL/RR`, `hinge_engine`, `hinge_radiator`, `hinge_steeringwheel`, `hinge_exhaust`,
    the seat hinges) and attached exactly like the game's `vehPart_Attach` FSM does: Rigidbody destroyed, tag `vehPart`, layer 8, parented with
    local pos/rot reset; parts are registered in `ArrayList_Items` so the car saves like a player-built one.
-3. The tank (`Fuel/LiquidAmount`) is filled to capacity, the handbrake lever FSM is stepped to `HandbrakeOff`, cargo is loaded (trucks).
+3. The tank (`Fuel/LiquidAmount`) is filled to a rolled `MinPartsFill`..`MaxPartsFill` %, the handbrake lever FSM is stepped to `HandbrakeOff`, cargo is loaded (trucks).
    The driver is put on the car's `sitPos`, the passenger on the matching front-seat position. Each root Rigidbody is made kinematic and parented
    to the seat so it rides along, collisions with the car are ignored.
-4. The frame's `START` key FSM is stepped through `Ignition` → `Start`; if NWH reports the engine not running after 3 s,
+4. The frame's `START` key FSM is stepped through `Ignition` → `Start`; if NWH reports the engine not running after 1.5 s,
    `powertrain.engine.StartEngine()` is called directly. Then the Crew component drives.
