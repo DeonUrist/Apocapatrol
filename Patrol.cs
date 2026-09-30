@@ -25,6 +25,17 @@ namespace Apocapatrol
             if (!InGame()) return;
             Ram.Tick();
             ExitSpeed.Tick();
+            if (Time.unscaledTime >= _nextPrune) { _nextPrune = Time.unscaledTime + 30f; PruneIgnoreSignatures(); }
+        }
+
+        // occupants of destroyed cars (the game deletes cars beyond 5 km, the cleanup removes more) leave their signature behind
+        private static float _nextPrune;
+        private static readonly List<GameObject> _deadKeys = new List<GameObject>();
+        private static void PruneIgnoreSignatures()
+        {
+            _deadKeys.Clear();
+            foreach (var k in _ignoreSignature.Keys) if (k == null) _deadKeys.Add(k);
+            foreach (var k in _deadKeys) _ignoreSignature.Remove(k);
         }
 
         // [Debug] AiOverlay: one OnGUI for every pilot (an OnGUI on each car would be dispatched per IMGUI event whether or not it draws)

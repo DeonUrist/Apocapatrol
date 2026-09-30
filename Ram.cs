@@ -131,8 +131,19 @@ namespace Apocapatrol
         }
 
         // Called from the runner: resumes the paused Movement FSM, and checks half a second after a hit that the health really went down.
+        // an entry only matters until its time has passed; dropped every 30 s (destroyed cars left theirs behind for good)
+        private static float _nextPrune;
+        private static readonly List<int> _expired = new List<int>();
+        private static void PruneHitTimes()
+        {
+            _expired.Clear();
+            foreach (var kv in _next) if (Time.time >= kv.Value) _expired.Add(kv.Key);
+            foreach (var k in _expired) _next.Remove(k);
+        }
+
         internal static void Tick()
         {
+            if (Time.unscaledTime >= _nextPrune) { _nextPrune = Time.unscaledTime + 30f; PruneHitTimes(); }
             if (_pausedMovement != null && Time.time >= _resumeAt)
             {
                 if (_pausedMovement.gameObject != null) { _pausedMovement.enabled = true; _pausedMovement.Fsm.RestartOnEnable = true; }
