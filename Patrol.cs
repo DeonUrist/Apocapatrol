@@ -124,32 +124,37 @@ namespace Apocapatrol
                 SetPartConditions(car);
                 if (Plugin.VerboseLog.Value) LogHingeStates(car);
 
-                {
-                    var start = FindFsm(car, "START", "Start");
-                    if (start == null) Plugin.Log.LogWarning("No START/Start FSM on the frame");
-                    else
-                    {
-                        Plugin.Verbose("START state before: " + start.ActiveStateName);
-                        start.Fsm.SetState("Ignition");
-                        yield return null;
-                        yield return null;
-                        start.Fsm.SetState("Start");
-                        yield return new WaitForSeconds(3f);
-                        bool running = Nwh.EngineRunning(car);
-                        Plugin.Log.LogInfo("START state: " + start.ActiveStateName + "  engine running: " + running);
-                        if (!running)
-                        {
-                            Nwh.StartEngine(car);
-                            yield return new WaitForSeconds(1f);
-                            Plugin.Log.LogInfo("After NWH StartEngine(): running=" + Nwh.EngineRunning(car) + "  START state: " + start.ActiveStateName);
-                        }
-                    }
-                }
+                yield return StartUp(car);
 
                 if (driver != null && !tpl.Driver.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase))
                     Plugin.Log.LogInfo("Driver in place; the Crew component takes it from here");
             }
             finally { _building--; if (menu) _busy = false; }
+        }
+
+        // The game's own ignition: START [Start] FSM Ignition -> Start (engine sound, RPM, IsRunning), NWH StartEngine() as a fallback.
+        // Used by the build and when a saved car is revived after a load.
+        internal static IEnumerator StartUp(GameObject car)
+        {
+            var start = FindFsm(car, "START", "Start");
+            if (start == null) { Plugin.Log.LogWarning("No START/Start FSM on " + (car != null ? car.name : "?")); yield break; }
+            Plugin.Verbose("START state before: " + start.ActiveStateName);
+            start.Fsm.SetState("Ignition");
+            yield return null;
+            yield return null;
+            if (car == null) yield break;
+            start.Fsm.SetState("Start");
+            yield return new WaitForSeconds(3f);
+            if (car == null) yield break;
+            bool running = Nwh.EngineRunning(car);
+            Plugin.Log.LogInfo("START state: " + start.ActiveStateName + "  engine running: " + running);
+            if (!running)
+            {
+                Nwh.StartEngine(car);
+                yield return new WaitForSeconds(1f);
+                if (car == null) yield break;
+                Plugin.Log.LogInfo("After NWH StartEngine(): running=" + Nwh.EngineRunning(car) + "  START state: " + start.ActiveStateName);
+            }
         }
 
         private static int AttachAll(GameObject car, string[] hingeNames, string partQuery, string kind)
@@ -206,6 +211,15 @@ namespace Apocapatrol
 
         // The handbrake lever FSM: HandbrakeOn -> (click) over -> Sound -> HandbrakeOff (SetProperty input.Handbrake + lever rotation).
         // Entering "Sound" plays the click and flows into HandbrakeOff by itself; "Sound 2" goes back to HandbrakeOn.
+        // true when the game's handbrake FSM sits in an "on" state (HandbrakeOn / over / Sound 2)
+        internal static bool HandbrakeOn(GameObject car)
+        {
+            var f = FindFsm(car, "handbrake", "Handbrake");
+            if (f == null || !f.Fsm.Initialized) return false;
+            string cur = f.ActiveStateName;
+            return cur == "HandbrakeOn" || cur == "over" || cur == "Sound 2";
+        }
+
         internal static void Handbrake(GameObject car, bool on)
         {
             var f = FindFsm(car, "handbrake", "Handbrake");

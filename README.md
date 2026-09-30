@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.22.0)
+# Apocapatrol (prototype 0.22.1)
 
 BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
 car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
@@ -144,6 +144,14 @@ The group appears `SpawnDistance` (300 m) ahead of your car, up to 45° left or 
 are on foot — in rows of three facing you on open terrain (the truck first), built 0.6 s apart, and the crews start hunting at once.
 The F8 menu has two debug buttons above the park: **Enemy cars** and **Enemy patrol** (a convoy) — they roll the type as if every
 distance/boss requirement were met, with the real heat but at least 100 %. Log: "Convoy: <type> at heat H % (km, bosses), ahead-left 300 m: <templates>".
+
+### After a load
+A saved patrol car comes back with its handbrake FSM in its start state (on) and its START FSM off, so a restored driver used to sit
+still. Now every restored crew is *revived*: once the car's FSMs are initialized the handbrake is released and the game's ignition is run
+(START Ignition → Start, NWH `StartEngine()` as a fallback), and the driver drives off through the normal path when the engine runs. A car
+whose engine never starts within 8 s of the driver sitting down gets the same treatment. While the game's `DistanceKinematic` FSM holds a
+far-away car kinematic (right after a load) the pilot waits instead of counting it as stuck. A driving crew also checks the handbrake once a
+second and releases it if someone pulled it.
 
 ### Ram damage
 The game's own bumper damage (`CarAttack` FSM, a trigger that hurts what it touches) only works against creatures, and the player's car's

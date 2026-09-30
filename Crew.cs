@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Linq;
 using UnityEngine;
 
@@ -29,6 +30,8 @@ namespace Apocapatrol
         private float _nextIgnore;            // periodic re-apply of occupant-vs-car collision ignores
         private Patrol.CorpseEject _eject;           // the dead driver being thrown out; the passenger climbs over once it is Done
         private bool _promoting;
+        private bool _revived;                // the after-load start-up (handbrake off, ignition) has been run or requested
+        private float _nextHandbrakeCheck;
 
         internal static Crew Attach(GameObject car, GameObject driver)
         {
@@ -59,11 +62,10 @@ namespace Apocapatrol
             var c = car.GetComponent<Crew>() ?? car.AddComponent<Crew>();
             c.Init(car, driver);
             c._seated = Mathf.Max(0f, seated);
-            if (phase == CrewPhase.Driving)
-            {
-                if (!Nwh.EngineRunning(car)) Nwh.StartEngine(car);
-                c.StartDriving();
-            }
+            // A restored "Driving" car is treated like a seated driver whose engine is not running yet: Revive() (called by the
+            // restore) releases the handbrake and runs the ignition, then Update's normal path drives off. Before 0.22.1 it went
+            // straight to StartDriving with the handbrake on and the START FSM off - the car just sat there.
+            if (phase == CrewPhase.Driving) { }
             else if (phase == CrewPhase.DeadStuck)
             {
                 c._dead = true; c._stuck = true; c._driving = true;
@@ -80,6 +82,34 @@ namespace Apocapatrol
                 c.SeatLocked(false);
             }
             return c;
+        }
+
+        // After a save load: the car comes back with its handbrake FSM in its start state (on) and the START FSM off.
+        // Same start-up as a fresh build, once the car's FSMs are initialized. Safe to call more than once.
+        internal void Revive()
+        {
+            if (_revived || _done) return;
+            _revived = true;
+            StartCoroutine(ReviveRoutine());
+        }
+
+        private IEnumerator ReviveRoutine()
+        {
+            float until = Time.realtimeSinceStartup + 5f;
+            PlayMakerFSM hb = null;
+            while (Time.realtimeSinceStartup < until)
+            {
+                if (_car == null) yield break;
+                hb = Patrol.FindFsm(_car, "handbrake", "Handbrake");
+                var start = Patrol.FindFsm(_car, "START", "Start");
+                if (hb != null && hb.Fsm.Initialized && start != null && start.Fsm.Initialized) break;
+                yield return null;
+            }
+            if (_car == null) yield break;
+            Patrol.Handbrake(_car, false);
+            if (!Nwh.EngineRunning(_car)) yield return Patrol.StartUp(_car);
+            if (_car == null) yield break;
+            Plugin.Log.LogInfo("Crew: revived " + _car.name + " after load: engine running " + Nwh.EngineRunning(_car) + ", handbrake released, " + Nwh.Diag(_car));
         }
 
         internal GameObject Driver { get { return _driver; } }
@@ -149,6 +179,13 @@ namespace Apocapatrol
                 _seated += Time.deltaTime;
                 float delay = _delayOverride >= 0f ? _delayOverride : 0f;
                 if (!_driving && _seated >= delay && Nwh.EngineRunning(_car)) StartDriving();
+                else if (!_driving && _seated >= delay + 8f && !_revived) { Plugin.Log.LogInfo("Crew: engine of " + _car.name + " never started; reviving"); Revive(); }
+                if (_driving && Time.time >= _nextHandbrakeCheck)
+                {
+                    // the player pulled the handbrake on a driven car (or it came back on after a load): the driver lets it go
+                    _nextHandbrakeCheck = Time.time + 1f;
+                    if (Patrol.HandbrakeOn(_car)) { Patrol.Handbrake(_car, false); Plugin.Log.LogInfo("Crew: driver of " + _car.name + " released the handbrake"); }
+                }
                 return;
             }
 

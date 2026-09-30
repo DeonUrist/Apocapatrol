@@ -267,6 +267,8 @@ namespace Apocapatrol
                 passenger = Patrol.SeatPassenger(car, data.passengerPrefab, data.passengerHealth);
 
             PatrolMarker.Attach(car, data.bodyPrefab, data.driverPrefab, driver, data.passengerPrefab, passenger, CarTemplate.ParseRams(data.ramTargets));
+            var crew = car.GetComponent<Crew>();
+            if (crew != null && phase != CrewPhase.Released && phase != CrewPhase.DeadRolling) crew.Revive();   // handbrake off + ignition, like a fresh build
             Plugin.Log.LogInfo("Persistence: crew restored on " + car.name + " (" + phase + ")");
         }
 

@@ -88,6 +88,7 @@ namespace Apocapatrol
         internal void Step()
         {
             if (_abandoned) return;
+            if (_rb != null && _rb.isKinematic) return;     // the game's DistanceKinematic froze the car (far from the player after a load): hold, don't count as stuck
             float dt = Time.fixedDeltaTime;
             _stateTime += dt;
 
