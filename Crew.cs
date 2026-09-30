@@ -32,6 +32,8 @@ namespace Apocapatrol
         private bool _promoting;
         private bool _revived;                // the after-load start-up (handbrake off, ignition) has been run or requested
         private float _nextHandbrakeCheck;
+        private float _dryFor;                // seconds the tank has been empty while the car stands
+        private bool _outOfFuel;
 
         internal static Crew Attach(GameObject car, GameObject driver)
         {
@@ -180,8 +182,24 @@ namespace Apocapatrol
                 float delay = _delayOverride >= 0f ? _delayOverride : 0f;
                 if (!_driving && _seated >= delay && Nwh.EngineRunning(_car)) StartDriving();
                 else if (!_driving && _seated >= delay + 8f && !_revived) { Plugin.Log.LogInfo("Crew: engine of " + _car.name + " never started; reviving"); Revive(); }
-                if (_driving && Time.time >= _nextHandbrakeCheck)
+                if (_driving && !_outOfFuel && Time.time >= _nextHandbrakeCheck)
                 {
+                    // dry tank: the engine dies; treat it like being stuck for good (StuckBailChance: the crew gets out, else it sits and waits)
+                    float fuel = Patrol.FuelLeft(_car);
+                    bool standing = _rb == null || _rb.velocity.magnitude < 1f;
+                    if (fuel >= 0f && fuel <= 0.05f && standing) _dryFor += 1f; else _dryFor = 0f;
+                    if (_dryFor >= 3f)
+                    {
+                        _outOfFuel = true;
+                        Plugin.Log.LogInfo("Crew: " + _car.name + " ran out of fuel");
+                        if (!OnStuck())
+                        {
+                            if (_pilot != null) { _pilot.Detach(); _pilot = null; }
+                            Nwh.SetInput(_car, 0f, 0f, 0f);
+                            Plugin.Log.LogInfo("Crew: the crew stays in the dry car");
+                        }
+                        return;
+                    }
                     // the player pulled the handbrake on a driven car (or it came back on after a load): the driver lets it go
                     _nextHandbrakeCheck = Time.time + 1f;
                     if (Patrol.HandbrakeOn(_car)) { Patrol.Handbrake(_car, false); Plugin.Log.LogInfo("Crew: driver of " + _car.name + " released the handbrake"); }

@@ -100,7 +100,7 @@ namespace Apocapatrol
                 parts += AttachAll(car, new[] { "hinge_seat_passenger" }, tpl.PassengerSeat, "seat");
                 Plugin.Log.LogInfo(parts + " parts attached");
 
-                if (tpl.FillFuel) Fuel(car);
+                if (tpl.FillFuel) Fuel(car, Plugin.RollPartFill());
                 if (tpl.ReleaseHandbrake) Handbrake(car, false);
                 List<GameObject> cargo = null;
                 if (!string.IsNullOrEmpty(tpl.Cargo))
@@ -125,6 +125,7 @@ namespace Apocapatrol
                 yield return new WaitForSeconds(1.5f);
                 if (cargo != null) Cargo.SettleFsms(cargo);
                 SetPartConditions(car);
+                FillParts(car);
                 if (Plugin.VerboseLog.Value) LogHingeStates(car);
 
                 yield return StartUp(car);
@@ -195,22 +196,56 @@ namespace Apocapatrol
             Plugin.Verbose("  " + part.name + " -> " + hinge.name);
         }
 
-        private static void Fuel(GameObject car)
+        // The tank: <car>/Fuel [LiquidAmount] Liquid / LiquidCapacity, filled to pct % of the capacity.
+        private static void Fuel(GameObject car, float pct)
         {
             var fuel = FindChild(car.transform, "Fuel");
             if (fuel == null) { Plugin.Log.LogWarning("No Fuel child"); return; }
-            foreach (var f in fuel.GetComponents<PlayMakerFSM>())
+            if (!SetLiquid(fuel.gameObject, pct, "Fuel")) Plugin.Log.LogWarning("Fuel/LiquidAmount FSM not found");
+        }
+
+        // Engine oil and radiator water live on the part's "cap" child ([LiquidAmount] Liquid / LiquidCapacity, 2 l oil, 3 l water);
+        // filled to a rolled % once the parts sit on their hinges.
+        private static void FillParts(GameObject car)
+        {
+            foreach (var hn in new[] { "hinge_engine", "hinge_radiator" })
+            {
+                var hinge = FindChild(car.transform, hn);
+                if (hinge == null) continue;
+                for (int i = 0; i < hinge.childCount; i++)
+                {
+                    var part = hinge.GetChild(i);
+                    var cap = FindChild(part, "cap");
+                    if (cap == null) continue;
+                    SetLiquid(cap.gameObject, Plugin.RollPartFill(), part.name);
+                }
+            }
+        }
+
+        private static bool SetLiquid(GameObject holder, float pct, string label)
+        {
+            foreach (var f in holder.GetComponents<PlayMakerFSM>())
             {
                 if (f.FsmName != "LiquidAmount") continue;
                 var liquid = f.FsmVariables.GetFsmFloat("Liquid");
                 var cap = f.FsmVariables.GetFsmFloat("LiquidCapacity");
-                if (liquid == null || cap == null) { Plugin.Log.LogWarning("Fuel/LiquidAmount has no Liquid/LiquidCapacity"); return; }
-                float amount = cap.Value > 0f ? cap.Value : 20f;
-                liquid.Value = amount;
-                Plugin.Log.LogInfo("Fuel: " + amount + " / " + cap.Value);
-                return;
+                if (liquid == null || cap == null) { Plugin.Log.LogWarning(label + "/LiquidAmount has no Liquid/LiquidCapacity"); return true; }
+                float capacity = cap.Value > 0f ? cap.Value : 20f;
+                liquid.Value = capacity * Mathf.Clamp01(pct / 100f);
+                Plugin.Log.LogInfo(label + ": " + liquid.Value.ToString("0.0") + " / " + capacity + " (" + pct.ToString("0") + " %)");
+                return true;
             }
-            Plugin.Log.LogWarning("Fuel/LiquidAmount FSM not found");
+            return false;
+        }
+
+        // Liquid left in the tank (l), -1 = unknown
+        internal static float FuelLeft(GameObject car)
+        {
+            var fuel = FindChild(car.transform, "Fuel");
+            if (fuel == null) return -1f;
+            foreach (var f in fuel.GetComponents<PlayMakerFSM>())
+                if (f.FsmName == "LiquidAmount" && f.Fsm.Initialized) { var v = f.FsmVariables.GetFsmFloat("Liquid"); return v != null ? v.Value : -1f; }
+            return -1f;
         }
 
         // The handbrake lever FSM: HandbrakeOn -> (click) over -> Sound -> HandbrakeOff (SetProperty input.Handbrake + lever rotation).

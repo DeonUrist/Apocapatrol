@@ -18,13 +18,13 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.23.1";
+        public const string VERSION = "0.24.0";
 
         internal static ManualLogSource Log;
 
         internal static ConfigEntry<Key> MenuKey;
         internal static readonly Dictionary<string, ConfigEntry<float>> LootChances = new Dictionary<string, ConfigEntry<float>>(StringComparer.OrdinalIgnoreCase);
-        internal static ConfigEntry<float> MinPartHealth, MaxPartHealth, LootMultiplier;
+        internal static ConfigEntry<float> MinPartHealth, MaxPartHealth, MinPartsFill, MaxPartsFill, LootMultiplier;
 
         internal static float LootChance(string key)
         {
@@ -33,9 +33,13 @@ namespace Apocapatrol
         }
 
         // Condition of a spawned part: min..max, weighted toward two thirds of the way up (triangular distribution)
-        internal static float RollPartHealth()
+        internal static float RollPartHealth() { return Triangular(MinPartHealth.Value, MaxPartHealth.Value); }
+        internal static float RollPartFill() { return Triangular(MinPartsFill.Value, MaxPartsFill.Value); }
+
+        // random between a and b, weighted toward two thirds of the way up
+        internal static float Triangular(float a, float b)
         {
-            float lo = Mathf.Min(MinPartHealth.Value, MaxPartHealth.Value), hi = Mathf.Max(MinPartHealth.Value, MaxPartHealth.Value);
+            float lo = Mathf.Min(a, b), hi = Mathf.Max(a, b);
             if (hi - lo < 0.01f) return lo;
             float mode = lo + (hi - lo) * 2f / 3f;
             float u = UnityEngine.Random.value, f = (mode - lo) / (hi - lo);
@@ -220,6 +224,11 @@ namespace Apocapatrol
                 "Lowest condition (%) of a spawned car's parts that have one (engine, radiator, wheels)", new AcceptableValueRange<float>(0f, 100f)));
             MaxPartHealth = Config.Bind("Loot", "MaxPartHealth", 35f, new ConfigDescription(
                 "Highest condition (%) of a spawned car's parts; the roll is weighted toward two thirds of the way from Min to Max",
+                new AcceptableValueRange<float>(0f, 100f)));
+            MinPartsFill = Config.Bind("Loot", "MinPartsFill", 15f, new ConfigDescription(
+                "Lowest fill (% of capacity) of a spawned car's tank (gas/diesel), engine oil and radiator water", new AcceptableValueRange<float>(0f, 100f)));
+            MaxPartsFill = Config.Bind("Loot", "MaxPartsFill", 60f, new ConfigDescription(
+                "Highest fill (%) of tank, oil and water; each rolled separately, weighted toward two thirds of the way from Min to Max",
                 new AcceptableValueRange<float>(0f, 100f)));
 
             var offsetRange = new AcceptableValueRange<float>(-2f, 2f);

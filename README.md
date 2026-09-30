@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.23.1)
+# Apocapatrol (prototype 0.24.0)
 
 BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
 car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
@@ -47,6 +47,9 @@ Scraffa_Dead; Rats 6-8 Rat_Dead. `[Loot] Multiplier` (0-3, default 1) scales eve
 floor (rested on the actual floor collider, random yaw, cans and canisters lying on their side more often than not, stacked only when there is no
 free spot left), and locked at once.
 
+The tank (gas or diesel), the engine oil and the radiator water are each filled to a rolled `[Loot] MinPartsFill` (15) .. `MaxPartsFill` (60) %
+of their capacity (same two-thirds weighting). A car that runs dry and stops is treated like one stuck for good: `StuckBailChance` decides
+whether the crew gets out or sits in the dead car.
 Parts with a `Condition` FSM (engine, radiator, wheels) get a rolled condition between `[Loot] MinPartHealth` (2) and `MaxPartHealth` (35) %,
 weighted toward two thirds of the way up (triangular distribution), so raider cars are worn but not dead.
 
