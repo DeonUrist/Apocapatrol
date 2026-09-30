@@ -81,7 +81,7 @@ namespace Apocapatrol
             }
         }
 
-        private static void Remove(PatrolMarker m, string why)
+        internal static void Remove(PatrolMarker m, string why)
         {
             var car = m.gameObject;
             Plugin.Verbose("Cleanup: removed " + car.name + " (" + why + ")");

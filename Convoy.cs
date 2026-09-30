@@ -172,8 +172,48 @@ namespace Apocapatrol
             else pool = convoys.Count > 0 ? convoys : cars;
             var kind = Roll(pool, _heat);
             if (kind == null) { ResetCooldown("no kind"); return; }
+            if (!ClearOldGroups()) return;
             if (!Launch(kind.Value, _heat, false)) { _cooldown = 60f; return; }   // no spot: try again in a minute
             ResetCooldown("after " + kind.Value);
+        }
+
+        // Before an automatic spawn: raider cars that still have a live crew (and that the player never sat in) are an earlier group.
+        // All of them 300 m or more away -> removed with their crew, parts and cargo, then the new group comes. Any of them closer ->
+        // no spawn now, and the next roll comes sooner: half the usual cooldown, weighted toward the short end.
+        private const float OldGroupDistance = 300f;
+        private bool ClearOldGroups()
+        {
+            var player = PlayerRef.Player;
+            if (player == null) return true;
+            var old = new List<PatrolMarker>();
+            float nearest = float.MaxValue;
+            foreach (var m in PatrolMarker.All.ToArray())
+            {
+                if (m == null || m.Exploded || m.PlayerEntered) continue;
+                var crew = m.GetComponent<Crew>();
+                if (crew == null || !crew.CrewAlive) continue;
+                old.Add(m);
+                nearest = Mathf.Min(nearest, Vector3.Distance(m.transform.position, player.position));
+            }
+            if (old.Count == 0) return true;
+            if (nearest < OldGroupDistance)
+            {
+                ResetCooldownRetry(old.Count + " live raider car(s), nearest " + nearest.ToString("0") + " m");
+                return false;
+            }
+            foreach (var m in old) Cleanup.Remove(m, "an older group, " + OldGroupDistance.ToString("0") + "+ m away, before a new spawn");
+            Plugin.Verbose("Convoy: removed " + old.Count + " older raider car(s) before the new spawn (nearest " + nearest.ToString("0") + " m)");
+            return true;
+        }
+
+        // half the usual Min..Max cooldown, the roll squared so short waits are likelier
+        private void ResetCooldownRetry(string why)
+        {
+            float a = Mathf.Max(0f, Plugin.MinConvoyCooldown.Value), b = Mathf.Max(a, Plugin.MaxConvoyCooldown.Value);
+            float factor = 1f / (0.75f + 0.25f * Mathf.Max(0f, _heat));
+            float u = UnityEngine.Random.value;
+            _cooldown = (a + (b - a) * u * u) * 60f * 0.5f * factor;
+            Plugin.Verbose("Convoy: spawn postponed (" + why + "), next roll in " + (_cooldown / 60f).ToString("0.0") + " min");
         }
 
         // Debug buttons: every requirement counts as met; the real heat, but at least 100 % so a full group appears.

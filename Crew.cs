@@ -135,6 +135,17 @@ namespace Apocapatrol
 
         internal GameObject Driver { get { return _driver; } }
         internal float SeatedSeconds { get { return _seated; } }
+        // a live driver, or a live passenger still in the car
+        internal bool CrewAlive
+        {
+            get
+            {
+                if (!_dead) return true;
+                var mk = Marker;
+                return mk != null && mk.Passenger != null && PassengerAlive(mk, mk.Passenger);
+            }
+        }
+
         internal CrewPhase Phase
         {
             get
