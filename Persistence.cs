@@ -296,7 +296,7 @@ namespace Apocapatrol
                 // a dead chassis: nobody inside, nothing works; its FSMs restarted with the scene, so it is deadened again
                 var dead = PatrolMarker.Attach(car, data.bodyPrefab, data.driverPrefab, null, data.passengerPrefab, null, CarTemplate.ParseRams(data.ramTargets));
                 dead.PlayerEntered = data.playerEntered; dead.FarSeconds = data.farSeconds; dead.Exploded = true;
-                Explode.RestoreDead(car);
+                Explode.RestoreDead(car, data.bodyPrefab);
                 Plugin.Verbose("Persistence: dead chassis restored: " + car.name);
                 return;
             }

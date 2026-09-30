@@ -10,6 +10,8 @@ namespace Apocapatrol
     // or the last passenger got out beside a dead driver - it "explodes": the frame goes almost black, the exploder zombie's harmless blast (fireball + bang)
     // goes off at the car, and every part pops off its hinge with condition 0 (CarPartsLootFromExplodedCars % of them keep theirs).
     // What is left is a dead chassis: nothing to enter, attach, adjust or fuel, and the Cleanup removes it beyond 1000 m.
+    // Trucks (Rust* bodies) are a lootable wreck instead: no charring, the wheels stay on (same condition roll) and it sits on them
+    // with the handbrake on, the rear doors still open and close, and the cargo stays locked in the bed where it spawned.
     //
     // Popping a part is what the wrench does: re-tag it vehPartRemoved on layer 9 (the part's own de_Attach state); the part's
     // CheckTag FSM then unparents it and adds a Rigidbody on its next frame, and we give that body a shove the frame after.
@@ -39,25 +41,29 @@ namespace Apocapatrol
             marker.Exploded = true;
             Plugin.Verbose("Explode: " + car.name + " (" + why + ")");
 
+            bool truck = IsTruck(marker.BodyPrefab);
             var crew = car.GetComponent<Crew>();
             if (crew != null) crew.OnExploded();
-            Nwh.SetInput(car, 0f, 0f, 0f);
+            Nwh.SetInput(car, 0f, 0f, truck ? 1f : 0f);
+            if (truck) { Nwh.StopEngine(car); Patrol.Handbrake(car, true); Nwh.SetHandbrake(car, 1f); }
 
-            Darken(car);
+            if (!truck) Darken(car);
             Blast(car);
 
-            var parts = Parts(car);
-            int kept = 0;
-            foreach (var p in parts)
+            var parts = new List<Transform>();
+            int kept = 0, wheels = 0;
+            foreach (var p in Parts(car))
             {
                 bool keep = KeepsCondition();
                 if (!keep) SetCondition(p, 0f);
                 else kept++;
+                if (truck && OnWheelHinge(car, p)) { wheels++; continue; }   // a truck keeps its wheels (rolled like the rest)
+                parts.Add(p);
                 // the wrench's de_Attach: layer Item + tag vehPartRemoved -> the part's CheckTag FSM unparents it and adds a Rigidbody
                 p.gameObject.layer = 9;
                 try { p.tag = "vehPartRemoved"; } catch (Exception e) { Plugin.Log.LogWarning("Explode: tag: " + e.Message); }
             }
-            var cargo = Cargo(car);
+            var cargo = truck ? new List<Transform>() : Cargo(car);   // a truck's cargo stays locked in the bed
             foreach (var c in cargo)
             {
                 // a locked item: the vanilla pickup path (LockPhysics_OFF) gives it its Rigidbody back
@@ -65,7 +71,8 @@ namespace Apocapatrol
                     if (f.FsmName == "LockPhysics") { f.enabled = true; f.SendEvent("LockPhysics_OFF"); }
                 c.SetParent(null, true);
             }
-            Plugin.Verbose("Explode: " + parts.Count + " part(s) popped (" + kept + " keep their condition), " + cargo.Count + " cargo item(s) spilled");
+            Plugin.Verbose("Explode: " + parts.Count + " part(s) popped" + (truck ? ", " + wheels + " wheel(s) stay on" : "") + " (" + kept + " keep their condition), "
+                + (truck ? "cargo stays in the bed" : cargo.Count + " cargo item(s) spilled"));
 
             yield return null;
             yield return null;   // CheckTag / LockPhysics have run: the Rigidbodies exist
@@ -82,10 +89,29 @@ namespace Apocapatrol
                     Shove(t, centre, 3f, 6f);
                 }
 
-            Deaden(car);
+            Deaden(car, truck);
         }
 
         // ------------------------------------------------------------ pieces
+
+        // the cargo trucks (Rustcargo...): same test as the convoy / template code
+        internal static bool IsTruck(string body) { return (body ?? "").StartsWith("Rust", StringComparison.OrdinalIgnoreCase); }
+
+        private static bool OnWheelHinge(GameObject car, Transform t)
+        {
+            for (var a = t.parent; a != null && a != car.transform; a = a.parent)
+                if (a.name.StartsWith("hinge_wheel", StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        // what a dead truck keeps working: the rear doors (parts/door_hinge_*: DoorOpen/DoorClose), the wheel hinges (Suspension,
+        // checkWheel, attach - the NWH wheels read them) and the cargo in parts/PhysicsLock (its own LockPhysics/pickup FSMs)
+        private static bool KeptOnTruck(GameObject car, Transform t)
+        {
+            for (var a = t; a != null && a != car.transform; a = a.parent)
+                if (a.name.StartsWith("door_hinge", StringComparison.Ordinal) || a.name.StartsWith("hinge_wheel", StringComparison.Ordinal)) return true;
+            return false;
+        }
 
         // Every attached part: a vehPart-tagged object under the car (not one nested in another part, not an occupant)
         private static List<Transform> Parts(GameObject car)
@@ -212,7 +238,7 @@ namespace Apocapatrol
 
         // A dead chassis: every FSM on it off (no F prompt, no attach/adjust/fuel/handbrake, no CarAttack), the vehicle controller off.
         // Also used after a load for a chassis that exploded before the save (its FSMs restarted with the scene).
-        internal static void Deaden(GameObject car)
+        internal static void Deaden(GameObject car, bool truck)
         {
             if (car == null) return;
             foreach (var f in car.GetComponentsInChildren<PlayMakerFSM>(true))
@@ -221,13 +247,15 @@ namespace Apocapatrol
                 var t = f.transform;
                 bool occupant = false;
                 for (var a = t; a != null && a != car.transform; a = a.parent)
-                    if (a.CompareTag("vehPart") || a.name.IndexOf("_Dead", StringComparison.Ordinal) >= 0) { occupant = true; break; }
-                if (occupant) continue;
+                    if (a.CompareTag("vehPart") || a.name.IndexOf("_Dead", StringComparison.Ordinal) >= 0 || a.name == "PhysicsLock") { occupant = true; break; }
+                if (occupant || (truck && KeptOnTruck(car, t))) continue;
                 f.Fsm.RestartOnEnable = false;
                 f.enabled = false;
             }
-            // the vehicle controller and the wheel controllers (NWH suspension raycasts would keep the frame floating on invisible wheels)
-            foreach (var c in car.GetComponentsInChildren<Component>(true))
+            // the vehicle controller and the wheel controllers (NWH suspension raycasts would keep the frame floating on invisible wheels);
+            // a truck keeps both - it stands on its real wheels, engine off, handbrake and brakes on
+            if (truck) { Nwh.StopEngine(car); Nwh.SetInput(car, 0f, 0f, 1f); Nwh.SetHandbrake(car, 1f); }
+            else foreach (var c in car.GetComponentsInChildren<Component>(true))
             {
                 if (!(c is Behaviour)) continue;
                 string n = c.GetType().Name;
@@ -235,15 +263,18 @@ namespace Apocapatrol
             }
             var dt = Patrol.FindChild(car.transform, "DriveTrigger");
             if (dt != null) foreach (var col in dt.GetComponents<Collider>()) col.enabled = false;
+            var start = Patrol.FindChild(car.transform, "START");     // the ignition's click collider (its FSM is already off)
+            if (start != null) foreach (var col in start.GetComponents<Collider>()) col.enabled = false;
             var pilot = car.GetComponent<Pilot>();
             if (pilot != null) pilot.Detach();
         }
 
         // after a load: a chassis that exploded before the save is dead again
-        internal static void RestoreDead(GameObject car)
+        internal static void RestoreDead(GameObject car, string body)
         {
-            Darken(car);
-            Deaden(car);
+            bool truck = IsTruck(body);
+            if (!truck) Darken(car);
+            Deaden(car, truck);
         }
     }
 }

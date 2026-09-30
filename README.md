@@ -1,4 +1,4 @@
-# Apocapatrol 1.4.1
+# Apocapatrol 1.4.2
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -101,8 +101,9 @@ While a raider drives, you can't take the car apart: the wrench does nothing on 
 Once a raider car is fully vacated - the crew is dead, they bailed out, or the last passenger climbed out beside a dead driver - the car
 blows up with the exploder zombie's fireball and bang (just the show: it doesn't hurt you): the frame turns black, and every part pops off. Most popped parts are wrecked (0 condition); about one in five keeps its
 condition and is worth picking up (**CarPartsLootFromExplodedCars**, 12 % by default - the roll favours low numbers, so 12 gives a bit more
-than 12 %). Cargo spills out of the bed. What's left is a dead chassis: you can't get in, fuel it or fit parts to it, and it disappears once
-you're 1000 m away. A car you've sat in never explodes. Turn **SelfDestructingCars** off and vacated cars stay as they were before: driveable,
+than 12 %). What's left is a dead chassis: you can't get in, fuel it or fit parts to it, and it disappears once
+you're 1000 m away. Trucks are different: they don't turn black, their wheels stay on (with the same condition roll), they stay
+parked where they stopped, their rear doors still open, and the cargo stays in the bed for you to loot. A car you've sat in never explodes. Turn **SelfDestructingCars** off and vacated cars stay as they were before: driveable,
 strippable, cleaned up by the rules below.
 
 ## Saving and loading

@@ -1105,6 +1105,20 @@ namespace Apocapatrol
             catch (Exception e) { Plugin.Log.LogWarning("StartEngine: " + e.Message); }
         }
 
+        internal static void StopEngine(GameObject car)
+        {
+            try
+            {
+                var h = Of(car);
+                var eng = h != null ? h.Engine : null;
+                if (eng == null) return;
+                var m = eng.GetType().GetMethod("StopEngine", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
+                if (m == null) { Plugin.Verbose("No StopEngine()"); return; }
+                m.Invoke(eng, null);
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("StopEngine: " + e.Message); }
+        }
+
         // returns the previous value
         internal static bool AutoInput(GameObject car, bool on)
         {
