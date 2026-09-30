@@ -883,6 +883,26 @@ namespace Apocapatrol
             go.name = prefab + "(Clone)" + (id >= 0 ? id.ToString() : "");
         }
 
+        // Takes a car and everything under it (parts, cargo) out of the game's NewGO lists before it is destroyed, so the
+        // save does not keep references to it.
+        internal static void RemoveTree(GameObject root)
+        {
+            var reg = GameObject.Find("NewGO_ArrayList");
+            if (reg == null || root == null) return;
+            var set = new HashSet<GameObject>();
+            foreach (var t in root.GetComponentsInChildren<Transform>(true)) set.Add(t.gameObject);
+            foreach (var p in reg.GetComponents<PlayMakerArrayListProxy>())
+            {
+                var list = p.arrayList;
+                if (list == null) continue;
+                for (int i = list.Count - 1; i >= 0; i--)
+                {
+                    var go = list[i] as GameObject;
+                    if (go != null && set.Contains(go)) list.RemoveAt(i);
+                }
+            }
+        }
+
         internal static void Add(GameObject go, bool isVehicle)
         {
             var reg = GameObject.Find("NewGO_ArrayList");

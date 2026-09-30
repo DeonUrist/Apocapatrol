@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.0.0";
+        public const string VERSION = "1.1.0";
 
         internal static ManualLogSource Log;
 
@@ -64,6 +64,10 @@ namespace Apocapatrol
         // [Debug]
         internal static ConfigEntry<bool> VerboseLog;
         internal static ConfigEntry<float> ExitSpeedKmh;
+        // [Cleanup]
+        internal static ConfigEntry<bool> CleanupEnabled;
+        internal static ConfigEntry<float> CleanupMinutes, CleanupDistance;
+        internal static ConfigEntry<int> CleanupMaxCars;
         // [Convoy spawner]
         internal static ConfigEntry<bool> ConvoyEnabled;
         internal static ConfigEntry<float> MaxHeat, HeatIntervalKm, ConvoySpawnDistance, JustCarsToConvoyRatio, MinConvoyCooldown, MaxConvoyCooldown;
@@ -286,6 +290,15 @@ namespace Apocapatrol
             AdvancedConvoyBosses = Config.Bind(CS, "AdvancedConvoyBossesKilled", 3, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
             AdvancedConvoyChance = Config.Bind(CS, "AdvancedConvoyChance", 30f, new ConfigDescription("Weight of the advanced convoy (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
 
+            CleanupEnabled = Config.Bind("Cleanup", "Enabled", true,
+                "Remove raider cars you left behind. A car you have ever sat in is never removed (the game itself only deletes cars beyond 5 km)");
+            CleanupMinutes = Config.Bind("Cleanup", "RemoveAfterMinutes", 40f, new ConfigDescription(
+                "A raider car farther than MinDistance for this long is removed with its crew and cargo (0 = never by time)", new AcceptableValueRange<float>(0f, 600f)));
+            CleanupMaxCars = Config.Bind("Cleanup", "MaxCars", 30, new ConfigDescription(
+                "With more raider cars than this in the world, the farthest ones beyond MinDistance are removed first (0 = no limit)", new AcceptableValueRange<int>(0, 200)));
+            CleanupDistance = Config.Bind("Cleanup", "MinDistance", 800f, new ConfigDescription(
+                "Cars closer than this are never removed (m)", new AcceptableValueRange<float>(100f, 5000f)));
+
             MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.F8, "Open the template spawner: a list of the park, click a car to build it in front of you. None = off");
             VerboseLog = Config.Bind("Debug", "VerboseLog", false, "Log what the mod does: spawns, builds, crews, the AI's state changes, ram hits. Off = only the load line and warnings, nothing that gives a spawn away");
             ExitSpeedKmh = Config.Bind("Debug", "ExitSpeedKmh", 30f, new ConfigDescription(
@@ -345,6 +358,7 @@ namespace Apocapatrol
             _runner.AddComponent<Patrol>();
             _runner.AddComponent<TemplateMenu>();
             _runner.AddComponent<Convoy>();
+            _runner.AddComponent<Cleanup>();
         }
 
         internal static void Verbose(string msg)

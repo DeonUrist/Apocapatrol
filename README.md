@@ -1,4 +1,4 @@
-# Apocapatrol 1.0.0
+# Apocapatrol 1.1.0
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -83,6 +83,12 @@ the mod to a game in progress picks up right where you are.
 
 A group builds up out of sight and then sets off all at once.
 
+## Cleanup
+
+Raider cars you leave behind don't pile up in your world or your save. A raider car that stays more than 800 m away from you for
+40 minutes disappears together with its crew and cargo, and if more than 30 raider cars are around, the farthest ones go first. A car
+you've sat in counts as yours and is never removed, whether it's loot you took or a car you drove.
+
 ## Saving and loading
 
 Raider cars, their crews, the crews' health and what they were doing are saved with your game. After a load they start their engines
@@ -102,6 +108,8 @@ Every setting can be changed in game through the Apocasetter Mods menu if you ha
 - **Loot**: the chance of each cargo, a loot multiplier (0–3×), and the ranges for part condition and fuel/oil/water levels.
 - **Convoy spawner**: on/off, maximum heat, km per heat step, spawn distance (350 m), the cars-versus-convoy ratio, the minimum and maximum
   time between spawns, and the distance, boss kills and chance for each group.
+- **Cleanup**: on/off, how long a car must be left behind before it's removed (40 min), the most raider cars at once (30), and the distance
+  inside which nothing is ever removed (800 m).
 - **Debug**: the key for the F8 spawner menu, detailed logging, an on-screen AI readout, and the speed at which you can leave a car (30 km/h).
 
 ## F8 menu

@@ -29,6 +29,8 @@ namespace Apocapatrol
         public string passengerPrefab;
         public bool passengerPresent;
         public float passengerHealth = -1f;
+        public bool playerEntered;           // schema 4: the player has sat in it (never cleaned up)
+        public float farSeconds;             // schema 4: cleanup timer
     }
 
     internal sealed class PatrolMarker : MonoBehaviour
@@ -38,6 +40,8 @@ namespace Apocapatrol
         private RamTargets _rams = RamTargets.Pedestrians;
 
         internal RamTargets Rams { get { return _rams; } }
+        internal bool PlayerEntered;          // the player has sat in this car: it is theirs, the cleanup never removes it
+        internal float FarSeconds;            // how long it has been beyond the cleanup distance
 
         internal static PatrolMarker Attach(GameObject car, string bodyPrefab, string driverPrefab, GameObject driver,
             string passengerPrefab, GameObject passenger, RamTargets rams)
@@ -99,14 +103,16 @@ namespace Apocapatrol
                 seatedSeconds = crew != null ? crew.SeatedSeconds : 0f,
                 passengerPrefab = _passengerPrefab,
                 passengerPresent = passengerPresent,
-                passengerHealth = passengerHealth
+                passengerHealth = passengerHealth,
+                playerEntered = PlayerEntered,
+                farSeconds = FarSeconds
             };
         }
     }
 
     internal static class PatrolPersistence
     {
-        private const int SchemaVersion = 3;   // 1 = no ramTargets (read as Pedestrians), 2 = no convoy cooldown
+        private const int SchemaVersion = 4;   // 1 = no ramTargets (read as Pedestrians), 2 = no convoy cooldown, 3 = no cleanup fields
         private const int Magic = 0x434F5041; // "APOC" in little-endian; rejects unrelated/corrupt files.
         private const int MaxCarsPerSave = 1024;
         private static PlayMakerFSM _saveLoad, _newGoSave;
@@ -269,7 +275,9 @@ namespace Apocapatrol
             if (data.passengerPresent && !string.IsNullOrEmpty(data.passengerPrefab))
                 passenger = Patrol.SeatPassenger(car, data.passengerPrefab, data.passengerHealth);
 
-            PatrolMarker.Attach(car, data.bodyPrefab, data.driverPrefab, driver, data.passengerPrefab, passenger, CarTemplate.ParseRams(data.ramTargets));
+            var mk = PatrolMarker.Attach(car, data.bodyPrefab, data.driverPrefab, driver, data.passengerPrefab, passenger, CarTemplate.ParseRams(data.ramTargets));
+            mk.PlayerEntered = data.playerEntered;
+            mk.FarSeconds = data.farSeconds;
             var crew = car.GetComponent<Crew>();
             if (crew != null && phase != CrewPhase.Released && phase != CrewPhase.DeadRolling) crew.Revive();   // handbrake off + ignition, like a fresh build
             Plugin.Verbose("Persistence: crew restored on " + car.name + " (" + phase + ")");
@@ -353,6 +361,7 @@ namespace Apocapatrol
             writer.Write(car.driverPresent); writer.Write(car.driverHealth); writer.Write(car.seatedSeconds);
             WriteString(writer, car.passengerPrefab); writer.Write(car.passengerPresent); writer.Write(car.passengerHealth);
             WriteString(writer, car.ramTargets ?? "Pedestrians");
+            writer.Write(car.playerEntered); writer.Write(car.farSeconds);
         }
 
         private static PatrolCarData ReadCar(BinaryReader reader, int version)
@@ -366,6 +375,8 @@ namespace Apocapatrol
                 passengerPrefab = ReadString(reader), passengerPresent = reader.ReadBoolean(), passengerHealth = reader.ReadSingle()
             };
             car.ramTargets = version >= 2 ? ReadString(reader) : "Pedestrians";
+            if (version >= 4) { car.playerEntered = reader.ReadBoolean(); car.farSeconds = reader.ReadSingle(); }
+            else if (car.driverPhase == "Released") car.playerEntered = true;   // older save: an empty raider car may be one the player drove - keep it
             return car;
         }
 
