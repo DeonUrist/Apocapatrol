@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.5.0";
+        public const string VERSION = "1.5.1";
 
         internal static ManualLogSource Log;
 
@@ -388,7 +388,7 @@ namespace Apocapatrol
 
         internal static void Verbose(string msg)
         {
-            if (VerboseLog.Value) Log.LogInfo(msg);
+            if (VerboseLog != null && VerboseLog.Value && Log != null) Log.LogInfo(msg);   // null while Awake is still binding the config
         }
 
         internal static bool Pressed(Key key)

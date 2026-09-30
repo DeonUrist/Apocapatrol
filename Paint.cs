@@ -18,8 +18,7 @@ namespace Apocapatrol
 
         internal static void Init(string pluginDll)
         {
-            _dir = Path.Combine(Path.GetDirectoryName(pluginDll) ?? ".", Folder);
-            if (Directory.Exists(_dir)) Plugin.Verbose("Paint: textures from " + _dir);
+            _dir = Path.Combine(Path.GetDirectoryName(pluginDll) ?? ".", Folder);   // called early in Awake: no logging here
         }
 
         internal static void Apply(GameObject car)
