@@ -22,6 +22,7 @@
     <Reference Include="UnityEngine.TerrainPhysicsModule"><HintPath>$(ManagedDir)\UnityEngine.TerrainPhysicsModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.TerrainModule"><HintPath>$(ManagedDir)\UnityEngine.TerrainModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.AudioModule"><HintPath>$(ManagedDir)\UnityEngine.AudioModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Unity.InputSystem"><HintPath>$(ManagedDir)\Unity.InputSystem.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="PlayMaker"><HintPath>$(ManagedDir)\PlayMaker.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Assembly-CSharp"><HintPath>$(ManagedDir)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>

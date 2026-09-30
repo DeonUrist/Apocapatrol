@@ -30,7 +30,7 @@ namespace Apocapatrol
 
             if (Time.unscaledTime < _nextTick) return;
             _nextTick = Time.unscaledTime + Interval;
-            if (!Plugin.CleanupEnabled.Value) return;
+            if (!Plugin.CleanupEnabled.Value && !Plugin.SelfDestruct.Value) return;
             var player = PlayerRef.Player;
             if (player == null) return;
 
@@ -42,6 +42,13 @@ namespace Apocapatrol
             foreach (var m in all)
             {
                 if (m == null) continue;
+                // a self-destructed chassis goes as soon as the player is far enough away to not see it (regardless of the timer and the cap)
+                if (m.Exploded)
+                {
+                    if (Vector3.Distance(m.transform.position, player.position) > Explode.RemoveDistance) Remove(m, "dead chassis beyond " + Explode.RemoveDistance.ToString("0") + " m");
+                    continue;
+                }
+                if (!Plugin.CleanupEnabled.Value) continue;   // only dead chassis are removed with the cleanup off
                 alive++;
                 if (m.PlayerEntered) { m.FarSeconds = 0f; continue; }
                 float d = Vector3.Distance(m.transform.position, player.position);

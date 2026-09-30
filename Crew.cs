@@ -40,6 +40,8 @@ namespace Apocapatrol
         private PlayMakerFSM _handbrake, _tank;   // cached: handbrake [Handbrake], Fuel [LiquidAmount]
         private FsmFloat _healthVar;          // the driver's Health variable (looked up by name every frame before)
         private PatrolMarker _marker;         // the car's marker (attached after the crew on a fresh build: resolved lazily)
+        private PlayMakerFSM[] _partDetach;   // the parts' de_Attach FSMs: off while the crew drives, so the wrench cannot take the wheels off
+        private bool _vacated;                // the crew is gone (dead or bailed): the self-destruct has been scheduled
 
         private PatrolMarker Marker { get { if (_marker == null && _car != null) _marker = _car.GetComponent<PatrolMarker>(); return _marker; } }
 
@@ -67,6 +69,7 @@ namespace Apocapatrol
             var dt = Patrol.FindChild(car.transform, "DriveTrigger");
             if (dt != null) _enterTrigger = dt.GetComponents<Collider>().FirstOrDefault(c => c is SphereCollider);
             _ctl = new InputControl(car);
+            _partDetach = car.GetComponentsInChildren<PlayMakerFSM>(true).Where(f => f.FsmName == "de_Attach").ToArray();
 
             // nobody else drives while the driver lives: no enter trigger (no F prompt), no Drive FSM (Activate events are ignored).
             // The car's DistanceKinematic FSM is left alone: re-enabling it restarts it in KinematicOn, which freezes a moving car.
@@ -96,7 +99,7 @@ namespace Apocapatrol
             }
             else if (phase == CrewPhase.Released)
             {
-                c._dead = true; c._done = true;
+                c._dead = true; c._done = true; c._vacated = true;   // vacated before the save: no retroactive self-destruct
                 c.SeatLocked(false);
             }
             return c;
@@ -142,10 +145,32 @@ namespace Apocapatrol
             }
         }
 
+        // Nobody enters and nothing comes off while the driver lives: the enter trigger, the Drive FSM and the parts' de_Attach FSMs
+        // (the wrench sends de_Attach to the part; a disabled FSM ignores it) are off together.
         private void SeatLocked(bool locked)
         {
             if (_enterTrigger != null) _enterTrigger.enabled = !locked;
             if (_drive != null) _drive.enabled = !locked;   // restart on re-enable lands in outCar, which has no actions
+            if (_partDetach != null)
+                foreach (var f in _partDetach)
+                    if (f != null && f.enabled == locked) f.enabled = !locked;   // de_Attach's start state is idle: a restart is harmless
+        }
+
+        // The car is fully vacated: the crew is dead or got out. With SelfDestructingCars the car explodes shortly after.
+        private void Vacated(string why)
+        {
+            if (_vacated) return;
+            _vacated = true;
+            Explode.Schedule(this, _car, Marker, why);
+        }
+
+        // the car blew up: nothing drives it any more
+        internal void OnExploded()
+        {
+            if (_pilot != null) { _pilot.Detach(); _pilot = null; }
+            if (_ctl != null && _ctl.Taken) _ctl.Release();
+            SeatLocked(false);
+            _dead = true; _done = true; _driving = false; _stuck = false;
         }
 
         // Switch off the AI / body-mover FSMs; called right after Instantiate (before their Start) and every frame as a guard,
@@ -203,6 +228,7 @@ namespace Apocapatrol
                 }
             }
             if (_dead && PassengerReacts()) return;
+            if (_dead && !_vacated && !PlayerInside()) { var mk = Marker; if (mk == null || mk.Passenger == null || !PassengerAlive(mk, mk.Passenger)) Vacated("crew dead"); }
             if (_done) return;
 
             if (!_dead)
@@ -324,6 +350,7 @@ namespace Apocapatrol
             if (_paxBails)
             {
                 Patrol.BailOut(_car, pax, marker);
+                if (!playerIn) Vacated("passenger bailed out");
                 return true;
             }
             Promote(pax, marker);
@@ -360,6 +387,7 @@ namespace Apocapatrol
             }
             _driver = null; _health = null;
             _dead = true; _done = true; _driving = false;    // Phase = Released: saved as an empty car
+            Vacated("crew bailed out");
             return true;
         }
 

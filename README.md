@@ -1,4 +1,4 @@
-# Apocapatrol 1.3.2
+# Apocapatrol 1.4.0
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -94,6 +94,17 @@ Raider cars you leave behind don't pile up in your world or your save. A raider 
 40 minutes disappears together with its crew and cargo, and if more than 30 raider cars are around, the farthest ones go first. A car
 you've sat in counts as yours and is never removed, whether it's loot you took or a car you drove.
 
+## Self-destructing cars
+
+While a raider drives, you can't take the car apart: the wrench does nothing on its wheels, engine or seats until the driver is dead.
+
+Once a raider car is fully vacated - the crew is dead, they bailed out, or the last passenger climbed out beside a dead driver - the car
+blows up: the frame turns black, and every part pops off. Most popped parts are wrecked (0 condition); about one in five keeps its
+condition and is worth picking up (**CarPartsLootFromExplodedCars**, 12 % by default - the roll favours low numbers, so 12 gives a bit more
+than 12 %). Cargo spills out of the bed. What's left is a dead chassis: you can't get in, fuel it or fit parts to it, and it disappears once
+you're 1000 m away. A car you've sat in never explodes. Turn **SelfDestructingCars** off and vacated cars stay as they were before: driveable,
+strippable, cleaned up by the rules below.
+
 ## Saving and loading
 
 Raider cars, their crews, the crews' health and what they were doing are saved with your game. After a load they start their engines
@@ -110,6 +121,7 @@ Every setting can be changed in game through the Apocasetter Mods menu if you ha
   damage while you're in your car.
 - **Driving**: the chances of a jammed gas pedal (5 %), of the passenger bailing out instead of taking the wheel (25 %), and of the crew
   leaving a stuck car (50 %).
+- **Self-destruct**: self-destructing cars on/off, and the share of popped parts that keep their condition (12 %).
 - **AI**: how the raiders drive, including throttle, steering, how far they run out after a pass, obstacle avoidance and the give-up distance.
 - **Loot**: the chance of each cargo, a loot multiplier (0–3×), and the ranges for part condition and fuel/oil/water levels.
 - **Convoy spawner**: on/off, maximum heat, km per heat step, spawn distance (350 m), the cars-versus-convoy ratio, the minimum and maximum

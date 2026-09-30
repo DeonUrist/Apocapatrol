@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.3.2";
+        public const string VERSION = "1.4.0";
 
         internal static ManualLogSource Log;
 
@@ -58,6 +58,9 @@ namespace Apocapatrol
         internal static ConfigEntry<string> RamDamageByBody;
         // [Driving]
         internal static ConfigEntry<float> StuckPedalChance, StuckPedalTakeoverSeconds, BailChance, StuckBailChance;
+        // [Self-destruct]
+        internal static ConfigEntry<bool> SelfDestruct;
+        internal static ConfigEntry<float> ExplodedLootPercent;
         // [AI]
         internal static ConfigEntry<bool> AiInvertSteering, AiOverlay;
         internal static ConfigEntry<float> AiDriveByOffset;
@@ -158,6 +161,16 @@ namespace Apocapatrol
             StuckBailChance = Config.Bind("Driving", "StuckBailChance", 50f, new ConfigDescription(
                 "% chance that, when the driving AI gives up on a stuck car (after [AI] MaxRecovers), the whole crew gets out and fights on foot " +
                 "instead of the car waiting WaitSeconds and trying again", new AcceptableValueRange<float>(0f, 100f)));
+
+            SelfDestruct = Config.Bind("Self-destruct", "SelfDestructingCars", true,
+                "A raider car that is fully vacated (crew dead, bailed out, or the last passenger got out beside a dead driver) explodes: the frame " +
+                "goes black, every part pops off with 0 condition (see CarPartsLootFromExplodedCars) and the dead chassis cannot be entered, " +
+                "fuelled or fitted with parts any more; it is removed once you are 1000 m away. Off = vacated cars stay as they are now. " +
+                "A car you have sat in never explodes");
+            ExplodedLootPercent = Config.Bind("Self-destruct", "CarPartsLootFromExplodedCars", 12f, new ConfigDescription(
+                "% of the popped-off parts that keep their condition instead of dropping to 0. Each part rolls 0-100 weighted toward the low " +
+                "numbers and keeps its condition when the roll is at or below this value (12 = about one part in five, 50 = about 70 %, 100 = all)",
+                new AcceptableValueRange<float>(0f, 100f)));
 
             AiThrottle = Config.Bind("AI", "Throttle", 1f, new ConfigDescription(
                 "Maximum throttle the driving AI uses (0..1); also the throttle of a stuck pedal", new AcceptableValueRange<float>(0.05f, 1f)));
