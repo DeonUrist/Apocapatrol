@@ -209,8 +209,10 @@ namespace Apocapatrol
         private static CarTemplate Junker(bool advanced) { return Pick(t => IsJunkerTpl(t) && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }
         private static CarTemplate Truck(bool advanced) { return Pick(t => IsTruckTpl(t) && (advanced ? IsAdvancedTpl(t) : !IsAdvancedTpl(t))); }
 
-        // base count x heat x [General] PatrolSizePercent, never below min (1 = a spawn always brings a car)
-        private static int Scaled(int baseCount, float heat, int min) { return Mathf.Max(min, Mathf.RoundToInt(baseCount * heat * Plugin.SizeFactor)); }
+        // base count x heat (capped at 100 %: the group grows with the heat until it is complete, never beyond - heat above 100 %
+        // only makes the tougher groups likelier and the clock shorter) x [General] PatrolSizePercent, never below min
+        // (1 = a spawn always brings a car)
+        private static int Scaled(int baseCount, float heat, int min) { return Mathf.Max(min, Mathf.RoundToInt(baseCount * Mathf.Min(1f, heat) * Plugin.SizeFactor)); }
         private static int Scaled(int baseCount, float heat) { return Scaled(baseCount, heat, 1); }
 
         // Cars are rolled body first (small or junker), then whether that car is advanced; minimums are applied afterwards.

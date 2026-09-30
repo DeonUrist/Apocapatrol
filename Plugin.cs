@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.3.0";
+        public const string VERSION = "1.3.1";
 
         internal static ManualLogSource Log;
 
@@ -105,9 +105,10 @@ namespace Apocapatrol
                 "To expose seat offsets, shared pose settings and all per-human controls, uncomment the next line and restart:\n" +
                 "PoseConfiguration = true");
             PatrolSizePercent = Config.Bind("General", "PatrolSizePercent", 100, new ConfigDescription(
-                "Patrol size: how many cars every enemy spawn brings, in % of the normal group (100 = as designed: 3 cars, a 5-car super group, " +
-                "a convoy of a truck + 2 junkers + 3-5 small cars at 100 % heat). Lower it on a weak PC - fewer cars means fewer crews, " +
-                "physics bodies and AI drivers at once. A spawn always brings at least one car; a convoy always brings its truck first",
+                "Patrol size: how many cars every enemy spawn brings, in % of the full group (100 = as designed: 3 cars, a 5-car super group, " +
+                "a convoy of a truck + 2 junkers + 3-5 small cars; groups are smaller than that only below 100 % heat, never bigger). " +
+                "Lower it on a weak PC - fewer cars means fewer crews, physics bodies and AI drivers at once. A spawn always brings at least " +
+                "one car; a convoy always brings its truck first",
                 new AcceptableValueList<int>(25, 50, 100, 125, 150)));
 
             RangedCombat = Config.Bind("Combat", "RangedCombat", true,
@@ -270,8 +271,9 @@ namespace Apocapatrol
             const string CS = "Convoy spawner";
             ConvoyEnabled = Config.Bind(CS, "Enabled", true, "Enemy cars and convoys spawn on their own while you play (the Debug menu buttons work regardless)");
             MaxHeat = Config.Bind(CS, "MaxHeat", 3f, new ConfigDescription(
-                "Upper limit of the heat (3 = 300 %). Heat scales the number of cars in every spawn and the chances of the tougher spawn types, " +
-                "and shortens the cooldown a little", new AcceptableValueRange<float>(0f, 5f)));
+                "Upper limit of the heat (3 = 300 %). Below 100 % the heat is how complete a group is; above 100 % it only raises the chances of " +
+                "the tougher spawn types (advanced / super advanced cars, the advanced convoy) and shortens the cooldown a little - group sizes " +
+                "stay at their 100 % values (x PatrolSizePercent)", new AcceptableValueRange<float>(0f, 5f)));
             HeatIntervalKm = Config.Bind(CS, "HeatIntervalKm", 10f, new ConfigDescription(
                 "Every this many km of the game's Distance Travelled add 25 % heat (linear: 10 = 100 % at 40 km)", new AcceptableValueRange<float>(1f, 200f)));
             ConvoySpawnDistance = Config.Bind(CS, "SpawnDistance", 350f, new ConfigDescription(

@@ -1,4 +1,4 @@
-# Apocapatrol 1.3.0
+# Apocapatrol 1.3.1
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -77,8 +77,9 @@ starting area and kill more bosses.
 | Advanced enemy cars | 30 km and 1 boss | 3 cars, at least one advanced, maybe a junker |
 | Super advanced enemy cars | 50 km and 3 bosses | 5 cars, many of them junkers, at least two advanced |
 
-**Heat** rises by 25 % every 10 km you travel from the starting area, up to 300 %. The higher the heat, the more cars in each group, the
-more often the tougher groups turn up, and the shorter the wait between them. Distance and boss kills come from your save, so adding
+**Heat** rises by 25 % every 10 km you travel from the starting area, up to 300 %. Below 100 % heat the groups are still incomplete (one car
+instead of three near the start); from 100 % on they are full size and stay that way, and higher heat only makes the tougher groups turn up
+more often and shortens the wait between them. Distance and boss kills come from your save, so adding
 the mod to a game in progress picks up right where you are.
 
 A group builds up out of sight and then sets off all at once.
