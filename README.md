@@ -157,13 +157,13 @@ A short list, changeable in game through the Apocasetter Mods menu if you have i
 - **RamDamageInCar** (off): ...and also while you sit in your own car.
 
 **Debug**
-- **TemplateSpawnerKey** (F8): opens the spawner menu.
+- **TemplateSpawnerKey** (none): the key for the spawner menu, off by default.
 - **VerboseLog** (off): detailed logging.
 - **AiOverlay** (off): an on-screen readout per raider car.
 
-## F8 menu
+## Spawner menu
 
-Press **F8** to open the spawner. **Enemy cars** and **Enemy patrol** at the top call in a group right away, as if you had already
+For testing: set **TemplateSpawnerKey** to a key (F8, say) and press it to open the spawner. **Enemy cars** and **Enemy patrol** at the top call in a group right away, as if you had already
 travelled far enough. Below them every car and truck is listed, and clicking one builds it with its crew in front of you. It's meant
 for testing and for picking a fight on purpose.
 

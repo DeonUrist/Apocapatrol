@@ -182,7 +182,7 @@ namespace Apocapatrol
             RamDamageInCar = Config.Bind("Combat", "RamDamageInCar", false,
                 "Ram damage also while you sit in your own car (the game's own CrashDamage still applies by your speed). Off = only on foot");
 
-            MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.F8, "Open the template spawner: a list of the park, click a car to build it in front of you. None = off");
+            MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.None, "Key for the template spawner (testing): a list of the park, click a car to build it in front of you. None = off (the default); F8 for example");
             VerboseLog = Config.Bind("Debug", "VerboseLog", false, "Log what the mod does: spawns, builds, crews, the AI's state changes, ram hits. Off = only the load line and warnings, nothing that gives a spawn away");
             AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances");
 
