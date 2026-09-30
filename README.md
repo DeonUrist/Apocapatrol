@@ -1,4 +1,4 @@
-# Apocapatrol 1.6.0
+# Apocapatrol 1.6.2
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -113,16 +113,22 @@ game's texture; the Junkers you find in the world keep theirs. You can repaint i
 (keep the size and the layout, and keep the transparent spots - those are the rust holes). Any other car texture works the same
 way: put a PNG named after the game's texture into `Textures`, and every raider car that uses that texture wears it.
 
-Cargo trucks show what they carry on their container (the box on the back, not the doors or the cab):
+Cargo trucks show what they carry on the two long sides of their container. The roof, the ends and the rear doors keep the
+game's look.
 
-| Load | Container texture |
+| Load | Side picture |
 |---|---|
 | Water, Gasoline, Diesel, Medicine, Weapons, Drugs, Mechanic | `Textures\cargo_water.png`, `cargo_gasoline.png`, `cargo_diesel.png`, `cargo_medicine.png`, `cargo_weapons.png`, `cargo_drugs.png`, `cargo_mechanic.png` |
 | Dog food, rats, corpses | `Textures\cargo_food.png` |
 | Empty truck, or anything else | `Textures\cargo.png` |
 
-A missing file falls back to `cargo.png`, and without that the container keeps the game's own texture. The files follow the
-layout of the game's container texture (1024 x 1024).
+Each file is one side of the container as you see it standing next to the truck: upright, left to right, about twice as wide as
+tall (2048 x 1024 works well). Both sides show the same picture and read the right way round. Transparent pixels let the
+container's own texture show through. A missing file falls back to `cargo.png`; without that the sides stay as they are.
+
+The inside of the container (both walls, floor, roof and the closed front end) can have its own look for every truck:
+`Textures\cargo_inside.png`. It repeats every 2 m, so a square, seamless texture works best (1024 x 1024 = 2 x 2 m of
+wall). Without the file the inside keeps the game's texture.
 
 ## Saving and loading
 

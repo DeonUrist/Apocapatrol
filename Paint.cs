@@ -46,12 +46,24 @@ namespace Apocapatrol
             if (n > 0) Plugin.Verbose("Paint: " + car.name + " repainted (" + n + " material(s))");
         }
 
-        // Cargo trucks: the container (texture shipping_container_6m_1 - not its doors _2/_3, not the cab) wears a texture by its load:
-        // Textures/cargo_<load>.png (water, gasoline, diesel, medicine, weapons, drugs, mechanic), cargo_food.png for dog food, rats and
-        // corpses, cargo.png for an empty truck or any other load, and cargo.png again when the specific file is missing.
+        // Cargo trucks: the container's two long sides show its load. The game's container mesh maps its sides, top and ends onto the same
+        // strip of shipping_container_6m_1 (and it is not readable at runtime), so instead of re-texturing it the mod lays one thin panel over
+        // each outer side (3 mm out, no collider, no shadow) with its own material: Textures/cargo_<load>.png as ONE upright side picture -
+        // left to right along the truck as seen from outside (both sides read the same way), bottom to top = container floor to roof,
+        // about 2:1 (2048 x 1024). cargo_food.png for food, rats and corpses; cargo_<load>.png for water, gasoline, diesel, medicine,
+        // weapons, drugs, mechanic; cargo.png for an empty truck or any other load, and as the fallback. The container itself (roof,
+        // ends) and the rear doors keep the game's texture. Transparent pixels show the container underneath (cutout shader).
+        // Inside: Textures/cargo_inside.png (any load) on the inner walls, floor, roof and the closed front end, tiled once per
+        // InsideTileMeters (a square texture = 2 m x 2 m of surface); without the file the inside keeps the game's texture.
         internal const string ContainerTexture = "shipping_container_6m_1";
-        private static readonly Dictionary<string, Material> _cargoMat = new Dictionary<string, Material>();   // "<orig mat id>|<file>" -> copy
-        private static readonly Dictionary<Material, Material> _cargoOrig = new Dictionary<Material, Material>();   // copy -> original
+        private const string PanelName = "ApocapatrolCargoSide";
+        private const float PanelOffset = 0.003f;
+        private const string InsideFile = "cargo_inside";
+        private const float InsideTileMeters = 2f;
+        // the inner box of the game's container mesh (read from the asset): walls, floor and roof 0.069 m inside the outer box, the closed
+        // end (local +z, the cab side) 0.066 m in, the door end open
+        private const float WallInset = 0.069f, EndInset = 0.066f;
+        private static readonly Dictionary<string, Material> _cargoMat = new Dictionary<string, Material>();   // "<container mat id>|<file>"
 
         internal static string CargoFile(string lootKey)
         {
@@ -74,37 +86,159 @@ namespace Apocapatrol
                 if (tex == null && file != "cargo") { file = "cargo"; tex = Load(file); }
                 if (tex == null) return;
                 int n = 0;
-                foreach (var r in car.GetComponentsInChildren<Renderer>(true))
+                foreach (var r in car.GetComponentsInChildren<MeshRenderer>(true))
                 {
-                    if (r == null || r.GetType().Name == "ParticleSystemRenderer" || !OnFrame(car, r.transform)) continue;
-                    var mats = r.sharedMaterials;
-                    bool changed = false;
-                    for (int i = 0; i < mats.Length; i++)
+                    if (r == null || r.name.StartsWith(PanelName, StringComparison.Ordinal) || !OnFrame(car, r.transform)) continue;
+                    Material container = null;
+                    foreach (var m in r.sharedMaterials)
+                        if (m != null && m.HasProperty("_MainTex") && m.mainTexture != null && m.mainTexture.name == ContainerTexture) { container = m; break; }
+                    if (container == null) continue;
+                    var mf = r.GetComponent<MeshFilter>();
+                    if (mf == null || mf.sharedMesh == null) continue;
+                    var mat = CargoMaterial(container, file, tex);
+                    var inside = Load(InsideFile);
+                    var insideMat = inside != null ? CargoMaterial(container, InsideFile, inside) : null;
+                    foreach (var spec in Panels(mf.sharedMesh, r.transform, car.transform))
                     {
-                        var m = mats[i];
-                        if (m == null) continue;
-                        Material orig;
-                        if (!_cargoOrig.TryGetValue(m, out orig))
-                        {
-                            if (!m.HasProperty("_MainTex") || m.mainTexture == null || m.mainTexture.name != ContainerTexture) continue;
-                            orig = m;
-                        }
-                        string key = orig.GetInstanceID() + "|" + file;
-                        Material copy;
-                        if (!_cargoMat.TryGetValue(key, out copy) || copy == null)
-                        {
-                            copy = new Material(orig) { name = orig.name + " (Apocapatrol " + file + ")" };
-                            copy.mainTexture = tex;
-                            _cargoMat[key] = copy; _cargoOrig[copy] = orig;
-                        }
-                        if (mats[i] != copy) { mats[i] = copy; changed = true; n++; }
+                        bool inner = spec.Inside;
+                        if (inner && insideMat == null) continue;
+                        var panel = Panel(r, spec);
+                        panel.sharedMaterial = inner ? insideMat : mat;
+                        n++;
                     }
-                    if (changed) r.sharedMaterials = mats;
                 }
-                if (n > 0) Plugin.Verbose("Paint: " + car.name + " container = " + file + " (" + (string.IsNullOrEmpty(lootKey) ? "no cargo" : lootKey) + ")");
+                if (n > 0) Plugin.Verbose("Paint: " + car.name + " container sides = " + file + " (" + (string.IsNullOrEmpty(lootKey) ? "no cargo" : lootKey) + "), "
+                    + n + " panel(s)" + (Load(InsideFile) != null ? ", inside = " + InsideFile : ""));
             }
             catch (Exception e) { Plugin.Log.LogWarning("Paint: cargo: " + e.Message); }
         }
+
+        private static Material CargoMaterial(Material container, string file, Texture2D tex)
+        {
+            string key = container.GetInstanceID() + "|" + file;
+            Material m;
+            if (_cargoMat.TryGetValue(key, out m) && m != null) return m;
+            m = new Material(container) { name = container.name + " (Apocapatrol " + file + ")" };
+            m.mainTexture = tex;
+            m.mainTextureScale = Vector2.one; m.mainTextureOffset = Vector2.zero;
+            _cargoMat[key] = m;
+            return m;
+        }
+
+        private sealed class PanelSpec
+        {
+            internal string Name; internal bool Inside;
+            internal Vector3 Center, Right, Up, Normal;   // container-local; Right/Up = the viewer's right/up looking at the face, Normal toward the viewer
+            internal float HalfW, HalfH; internal Vector2 UvScale;
+            internal Mesh Mesh;
+        }
+        private static readonly Dictionary<int, List<PanelSpec>> _panels = new Dictionary<int, List<PanelSpec>>();   // mesh id -> panels
+
+        private static MeshRenderer Panel(MeshRenderer container, PanelSpec spec)
+        {
+            var t = container.transform.Find(spec.Name);
+            if (t == null)
+            {
+                var go = new GameObject(spec.Name);
+                go.layer = container.gameObject.layer;
+                t = go.transform;
+                t.SetParent(container.transform, false);
+                t.localPosition = Vector3.zero; t.localRotation = Quaternion.identity; t.localScale = Vector3.one;
+                go.AddComponent<MeshFilter>();
+                var mr = go.AddComponent<MeshRenderer>();
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                mr.receiveShadows = true;
+            }
+            t.GetComponent<MeshFilter>().sharedMesh = spec.Mesh;
+            return t.GetComponent<MeshRenderer>();
+        }
+
+        // outer long sides (picture 0..1) + inside walls, floor, roof and closed end (tiled), built once per container mesh
+        private static List<PanelSpec> Panels(Mesh mesh, Transform container, Transform car)
+        {
+            List<PanelSpec> list;
+            int id = mesh.GetInstanceID();
+            if (_panels.TryGetValue(id, out list)) return list;
+            list = new List<PanelSpec>();
+            var b = mesh.bounds;   // available even though the game's mesh is not readable
+            var right = Axis(container.InverseTransformDirection(car.right));
+            var up = Axis(container.InverseTransformDirection(car.up));
+            var len = Vector3.Cross(right, up); len = new Vector3(Mathf.Abs(len.x), Mathf.Abs(len.y), Mathf.Abs(len.z));   // + along the length axis
+            var c = b.center;
+            float eS = Along(b.extents, right), eU = Along(b.extents, up), eL = Along(b.extents, len);
+            float cS = Vector3.Dot(c, right), cU = Vector3.Dot(c, up), cL = Vector3.Dot(c, len);
+            Func<float, float, float, Vector3> P = (s, u, l) => right * s + up * u + len * l;
+            // outer sides
+            for (int side = -1; side <= 1; side += 2)
+            {
+                var n = right * side;
+                list.Add(new PanelSpec
+                {
+                    Name = PanelName + (side > 0 ? "_R" : "_L"), Inside = false,
+                    Center = P(cS + side * (eS + PanelOffset), cU, cL), Normal = n, Up = up, Right = Vector3.Cross(up, -n),
+                    HalfW = eL, HalfH = eU, UvScale = Vector2.one
+                });
+            }
+            // inside: the inner box
+            float iS = eS - WallInset, iBot = cU - eU + WallInset, iTop = cU + eU - WallInset;
+            float lOpen = cL - eL, lClosed = cL + eL - EndInset;               // the closed end is at local +length (the cab side)
+            float iCU = (iBot + iTop) * 0.5f, iHU = (iTop - iBot) * 0.5f, iCL = (lOpen + lClosed) * 0.5f, iHL = (lClosed - lOpen) * 0.5f;
+            float tile = 1f / InsideTileMeters;
+            for (int side = -1; side <= 1; side += 2)
+            {
+                var n = -right * side;                                         // facing into the box
+                list.Add(new PanelSpec
+                {
+                    Name = PanelName + "Inside" + (side > 0 ? "_R" : "_L"), Inside = true,
+                    Center = P(side * (iS - PanelOffset) + cS, iCU, iCL), Normal = n, Up = up, Right = Vector3.Cross(up, -n),
+                    HalfW = iHL, HalfH = iHU, UvScale = new Vector2(2f * iHL * tile, 2f * iHU * tile)
+                });
+            }
+            list.Add(new PanelSpec
+            {
+                Name = PanelName + "Inside_Floor", Inside = true,
+                Center = P(cS, iBot + PanelOffset, iCL), Normal = up, Up = len, Right = Vector3.Cross(len, -up),
+                HalfW = iS, HalfH = iHL, UvScale = new Vector2(2f * iS * tile, 2f * iHL * tile)
+            });
+            list.Add(new PanelSpec
+            {
+                Name = PanelName + "Inside_Roof", Inside = true,
+                Center = P(cS, iTop - PanelOffset, iCL), Normal = -up, Up = len, Right = Vector3.Cross(len, up),
+                HalfW = iS, HalfH = iHL, UvScale = new Vector2(2f * iS * tile, 2f * iHL * tile)
+            });
+            list.Add(new PanelSpec
+            {
+                Name = PanelName + "Inside_End", Inside = true,
+                Center = P(cS, iCU, lClosed - PanelOffset), Normal = -len, Up = up, Right = Vector3.Cross(up, len),
+                HalfW = iS, HalfH = iHU, UvScale = new Vector2(2f * iS * tile, 2f * iHU * tile)
+            });
+            foreach (var spec in list) spec.Mesh = Quad(spec);
+            _panels[id] = list;
+            return list;
+        }
+
+        private static Mesh Quad(PanelSpec q)
+        {
+            var r = q.Right.normalized * q.HalfW; var u = q.Up.normalized * q.HalfH;
+            var m = new Mesh { name = q.Name };
+            m.vertices = new[] { q.Center - r - u, q.Center + r - u, q.Center + r + u, q.Center - r + u };
+            m.uv = new[] { new Vector2(0f, 0f), new Vector2(q.UvScale.x, 0f), new Vector2(q.UvScale.x, q.UvScale.y), new Vector2(0f, q.UvScale.y) };
+            m.normals = new[] { q.Normal, q.Normal, q.Normal, q.Normal };
+            m.triangles = new[] { 0, 3, 2, 0, 2, 1 };   // clockwise seen from the viewer (Normal side) = front face in Unity
+            m.RecalculateTangents();
+            m.RecalculateBounds();
+            return m;
+        }
+
+        private static Vector3 Axis(Vector3 local)
+        {
+            float ax = Mathf.Abs(local.x), ay = Mathf.Abs(local.y), az = Mathf.Abs(local.z);
+            if (ax >= ay && ax >= az) return new Vector3(Mathf.Sign(local.x), 0f, 0f);
+            if (ay >= az) return new Vector3(0f, Mathf.Sign(local.y), 0f);
+            return new Vector3(0f, 0f, Mathf.Sign(local.z));
+        }
+
+        private static float Along(Vector3 v, Vector3 axis) { return Mathf.Abs(Vector3.Dot(v, axis)); }
 
         // the frame's own renderers: not the attached parts, occupants, carcasses or cargo
         private static bool OnFrame(GameObject car, Transform t)
