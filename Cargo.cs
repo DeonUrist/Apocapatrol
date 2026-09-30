@@ -12,10 +12,13 @@ namespace Apocapatrol
     // recipe (registered, so the game saves them) and lock them the same way at once.
     internal static class Cargo
     {
-        private class Slot { public GameObject Prefab; public int Count; }
+        private class Slot { public GameObject Prefab; public int Count; public float Condition = -1f; }
+        // items that must keep a set condition (spec "#N"): applied after the build's part-condition roll, which covers the whole car
+        private static readonly Dictionary<GameObject, float> _forcedCondition = new Dictionary<GameObject, float>();
 
         // "prefab:count;prefab:min-max;..." (prefab names or in-game item names). Extras: "a|b|c:3" = each of the 3 a random one of
-        // a, b, c; "prefab:1@50" = this entry only with a 50 % chance (and not scaled by the loot multiplier - a barrel is a barrel).
+        // a, b, c; "prefab:1@50" = this entry only with a 50 % chance (and not scaled by the loot multiplier - a barrel is a barrel);
+        // "@15/30" = 15 % on a basic loot truck, 30 % on an advanced one; "#100" = the item's condition is set to 100 %.
         private static List<Slot> Parse(string spec)
         {
             var slots = new List<Slot>();
@@ -24,11 +27,22 @@ namespace Apocapatrol
             {
                 string part = raw.Trim();
                 if (part.Length == 0) continue;
+                float condition = -1f;
+                int hash = part.LastIndexOf('#');
+                if (hash > 0 && float.TryParse(part.Substring(hash + 1).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out condition))
+                    part = part.Substring(0, hash).Trim();
+                else condition = -1f;
                 float chance = 100f;
                 int at = part.LastIndexOf('@');
-                if (at > 0 && float.TryParse(part.Substring(at + 1).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out chance))
-                    part = part.Substring(0, at).Trim();
-                else chance = 100f;
+                if (at > 0)
+                {
+                    string ct = part.Substring(at + 1).Trim();
+                    int slash = ct.IndexOf('/');
+                    if (slash >= 0) ct = _scale > 1.01f ? ct.Substring(slash + 1) : ct.Substring(0, slash);   // advanced loot truck = template factor > 1
+                    if (float.TryParse(ct.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out chance))
+                        part = part.Substring(0, at).Trim();
+                    else chance = 100f;
+                }
                 if (chance < 100f && UnityEngine.Random.value * 100f >= chance) continue;
                 int colon = part.LastIndexOf(':');
                 string name = colon >= 0 ? part.Substring(0, colon).Trim() : part;
@@ -53,8 +67,8 @@ namespace Apocapatrol
                 if (choices.Count == 0) continue;
                 if (chance >= 100f) count = Scaled(count);
                 count = Mathf.Min(count, 200);
-                if (choices.Count == 1) { if (count > 0) slots.Add(new Slot { Prefab = choices[0], Count = count }); }
-                else for (int i = 0; i < count; i++) slots.Add(new Slot { Prefab = choices[UnityEngine.Random.Range(0, choices.Count)], Count = 1 });
+                if (choices.Count == 1) { if (count > 0) slots.Add(new Slot { Prefab = choices[0], Count = count, Condition = condition }); }
+                else for (int i = 0; i < count; i++) slots.Add(new Slot { Prefab = choices[UnityEngine.Random.Range(0, choices.Count)], Count = 1, Condition = condition });
             }
             return slots;
         }
@@ -67,14 +81,16 @@ namespace Apocapatrol
         };
         private static readonly string[] AmmoBoxes =
         {
-            "ammo_box_12gauge", "ammo_box_20gauge", "ammo_box_22", "ammo_box_3006", "ammo_box_556mm", "ammo_box_762mm", "ammo_box_9mm", "ammo_arrow"
+            // the big boxes (ammo_box_<calibre> are the small everyday ones)
+            "ammo_box_big_12gauge", "ammo_box_big_20gauge", "ammo_box_big_22", "ammo_box_big_3006", "ammo_box_big_556mm", "ammo_box_big_762mm",
+            "ammo_box_big_9mm", "ammo_box_big_arrow"
         };
 
-        // Weapons truck: 0-3 random weapons and 3-8 ammo boxes, each box a random calibre (before the loot multiplier).
+        // Weapons truck: 2-4 random weapons and 3-8 big ammo boxes, each box a random calibre (before the loot multiplier).
         internal static string WeaponsSpec()
         {
             var parts = new List<string>();
-            int guns = UnityEngine.Random.Range(0, 4);
+            int guns = UnityEngine.Random.Range(2, 5);   // 2-4
             for (int i = 0; i < guns; i++) parts.Add(Weapons[UnityEngine.Random.Range(0, Weapons.Length)] + ":1");
             int boxes = UnityEngine.Random.Range(3, 9);
             for (int i = 0; i < boxes; i++) parts.Add(AmmoBoxes[UnityEngine.Random.Range(0, AmmoBoxes.Length)] + ":1");
@@ -206,6 +222,7 @@ namespace Apocapatrol
                     Register.Name(go, slot.Prefab.name); Register.Add(go, false);
                     Lock(go, t);
                     items.Add(go);
+                    if (slot.Condition >= 0f) _forcedCondition[go] = slot.Condition;
                     placed++;
                 }
             }
@@ -242,6 +259,24 @@ namespace Apocapatrol
         }
 
         // after the FSMs have started: park the LockPhysics FSMs in "off" so they do not redo the lock (and warn about a missing Rigidbody)
+        // after Patrol.SetPartConditions (which rolls every Condition FSM under the car, the bed included): "#N" items get their condition back
+        internal static void ApplyForcedConditions(List<GameObject> items)
+        {
+            if (items == null) return;
+            foreach (var go in items)
+            {
+                float c;
+                if (go == null || !_forcedCondition.TryGetValue(go, out c)) continue;
+                _forcedCondition.Remove(go);
+                Explode.SetCondition(go.transform, c);
+                Plugin.Verbose("Cargo: " + go.name + " condition " + c.ToString("0") + " %");
+            }
+            _expired.Clear();
+            foreach (var k in _forcedCondition.Keys) if (k == null) _expired.Add(k);
+            foreach (var k in _expired) _forcedCondition.Remove(k);
+        }
+        private static readonly List<GameObject> _expired = new List<GameObject>();
+
         internal static void SettleFsms(List<GameObject> items)
         {
             foreach (var go in items)

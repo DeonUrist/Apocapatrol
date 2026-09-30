@@ -172,6 +172,7 @@ namespace Apocapatrol
                 if (cargo != null) Cargo.SettleFsms(cargo);
                 if (Explode.IsWreck(car)) yield break;   // crew killed during the build: it already blew up
                 SetPartConditions(car);
+                if (cargo != null) Cargo.ApplyForcedConditions(cargo);   // "#100" items (the mechanic truck's V8) keep their set condition
                 FillParts(car);
 
                 yield return StartUp(car);

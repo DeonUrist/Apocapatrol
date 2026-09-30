@@ -1,4 +1,4 @@
-# Apocapatrol 1.8.0
+# Apocapatrol 1.8.1
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -17,11 +17,11 @@ its crew is dealt with it's yours to take.
 
 ## The crews
 
-Each car carries a driver and a passenger picked from the scrapyard gang: Boltjaw, Flexa, Lugnut, Scrud, Sprokka, Scraffa and Spanna.
+Each car carries a driver and a passenger picked from the scrapyard gang: Boltjaw, Flexa, Lugnut, Scrud, Sprokka and Scraffa.
 
 - They sit in their seats in a proper seated pose and can be shot like any other enemy.
 - **Gunmen** (Boltjaw, Flexa, Lugnut, Scrud, Sprokka) shoot from the moving car at anything in front of it, up to 40 m away. A gunman at
-  the wheel fires in short bursts between stretches of driving. Scraffa and Spanna just ride along.
+  the wheel fires in short bursts between stretches of driving. Scraffa just rides along.
 - **Kill the driver** and the car rolls to a stop, unless his foot stays jammed on the gas (a small chance). The surviving passenger then
   either takes the wheel and keeps coming, or jumps out and fights on foot.
 - While the driver lives you can't get into the car. Once it's empty, it's yours.
@@ -50,16 +50,16 @@ A loot truck carries a random cargo in its bed:
 
 | Cargo | Chance | What's inside |
 |---|---|---|
-| Food | 18 % | 6 cans of dog food |
+| Food | 18 % | 6–10 cans of dog food |
 | Water | 14 % | 4 water cans, half the time a water barrel as well |
 | Gasoline | 11 % | 4 gasoline cans, half the time a gasoline barrel as well |
 | Diesel | 11 % | 4 diesel cans, half the time a diesel barrel as well |
-| Medicine | 11 % | 4 bandages and 2 first aid kits |
-| Weapons | 11 % | up to 3 random guns and 3–8 boxes of ammo |
+| Medicine | 11 % | 5 bandages and 2–3 first aid kits |
+| Weapons | 11 % | 2–4 random guns and 3–8 big boxes of ammo |
 | Drugs | 7 % | alcohol, weed bags and a weed plant |
-| Mechanic | 7 % | 3 repair boxes and a big can of motor oil |
+| Mechanic | 7 % | 3 repair boxes, a big can of motor oil, and a 15 % chance of a brand-new V8 engine (30 % on the advanced truck) |
 | Corpses | 7 % | 3–5 dead Scraffas |
-| Rats | 4 % | 6–8 dead rats |
+| Rats | 3 % | 6–8 dead rats |
 
 The advanced loot truck carries 1.5–2 times as much. Everything in the bed is a real item that you can pick up, use or sell.
 
