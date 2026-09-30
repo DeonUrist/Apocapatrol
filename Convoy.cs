@@ -35,6 +35,16 @@ namespace Apocapatrol
         }
 
         internal static float CurrentCooldown() { return _inst != null ? _inst._cooldown : -1f; }
+
+        // [Debug] AiOverlay with no raider car driving: the real time until the next automatic roll
+        internal static string OverlayLine()
+        {
+            if (_inst == null) return "Raiders: spawner not running";
+            if (!Plugin.ConvoyEnabled.Value || Plugin.MaxConvoyCooldown.Value <= 0f) return "Raiders: automatic spawns off";
+            float s = _inst._cooldown;
+            string clock = s < 0f ? "not rolled yet" : "next roll in " + ((int)(s / 60f)).ToString("0") + ":" + ((int)(s % 60f)).ToString("00");
+            return "Raiders: " + clock + "   (heat " + (_inst._heat * 100f).ToString("0") + " %, " + _inst._km.ToString("0.0") + " km, bosses " + _inst._bosses + ")";
+        }
         internal static void SetCooldown(float seconds)
         {
             if (_inst == null) return;

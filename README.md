@@ -1,4 +1,4 @@
-# Apocapatrol 1.8.5
+# Apocapatrol 1.8.6
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -165,7 +165,7 @@ A short list, changeable in game through the Apocasetter Mods menu if you have i
 **Debug**
 - **TemplateSpawnerKey** (none): the key for the spawner menu, off by default.
 - **VerboseLog** (off): detailed logging.
-- **AiOverlay** (off): an on-screen readout per raider car.
+- **AiOverlay** (off): an on-screen readout per raider car; with no raider car driving, the time until the next spawn roll.
 
 ## Spawner menu
 

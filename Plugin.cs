@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.8.5";
+        public const string VERSION = "1.8.6";
 
         internal static ManualLogSource Log;
 
@@ -184,7 +184,7 @@ namespace Apocapatrol
 
             MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.None, "Key for the template spawner (testing): a list of the park, click a car to build it in front of you. None = off (the default); F8 for example");
             VerboseLog = Config.Bind("Debug", "VerboseLog", false, "Log what the mod does: spawns, builds, crews, the AI's state changes, ram hits. Off = only the load line and warnings, nothing that gives a spawn away");
-            AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances");
+            AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances. With no raider car driving: the time until the next spawn roll");
 
             // ---- hidden settings: bound to an in-memory ConfigFile that is never saved, so they keep their default values and do not
             // appear in the .cfg or the Apocasetter menu. To bring ALL of them back (with their old sections: Combat, Driving,
