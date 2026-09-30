@@ -7,6 +7,7 @@ using System.Text;
 using BepInEx;
 using HutongGames.PlayMaker;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Apocapatrol
 {
@@ -38,6 +39,12 @@ namespace Apocapatrol
         private string _bodyPrefab, _driverPrefab, _passengerPrefab;
         private GameObject _driver, _passenger;
         private RamTargets _rams = RamTargets.Pedestrians;
+
+        // every live marker: the cleanup and the save walk this list instead of FindObjectsOfType (a scan of every MonoBehaviour)
+        internal static readonly List<PatrolMarker> All = new List<PatrolMarker>();
+        private void OnEnable() { if (!All.Contains(this)) All.Add(this); }
+        private void OnDisable() { All.Remove(this); }
+        private void OnDestroy() { All.Remove(this); }
 
         internal RamTargets Rams { get { return _rams; } }
         internal bool PlayerEntered;          // the player has sat in this car: it is theirs, the cleanup never removes it
@@ -190,7 +197,7 @@ namespace Apocapatrol
             {
                 var data = new PatrolSaveData { version = SchemaVersion, saveFile = Path.GetFileName(slot), worldSeed = seed, convoyCooldown = Convoy.CurrentCooldown() };
                 var cars = new List<PatrolCarData>();
-                foreach (var marker in UnityEngine.Object.FindObjectsOfType<PatrolMarker>())
+                foreach (var marker in PatrolMarker.All)
                     if (marker != null) cars.Add(marker.Snapshot());
                 data.cars = cars.ToArray();
                 AtomicWrite(path, data);
@@ -215,11 +222,15 @@ namespace Apocapatrol
             var savedCars = data.cars ?? new PatrolCarData[0];
             var pending = new List<PatrolCarData>(savedCars);
             float until = Time.realtimeSinceStartup + 15f;
+            var roots = new List<GameObject>();
             while (pending.Count > 0 && Time.realtimeSinceStartup < until)
             {
+                // cars are root objects: one pass over the scene roots per round, not a scan of every Transform per car
+                roots.Clear();
+                for (int s = 0; s < SceneManager.sceneCount; s++) { var sc = SceneManager.GetSceneAt(s); if (sc.isLoaded) roots.AddRange(sc.GetRootGameObjects()); }
                 for (int i = pending.Count - 1; i >= 0; i--)
                 {
-                    var car = FindCar(pending[i]);
+                    var car = FindCar(pending[i], roots);
                     if (car == null) continue;
                     try
                     {
@@ -240,11 +251,12 @@ namespace Apocapatrol
             _restoreRunning = false;
         }
 
-        private static GameObject FindCar(PatrolCarData data)
+        private static GameObject FindCar(PatrolCarData data, List<GameObject> roots)
         {
-            foreach (var t in UnityEngine.Object.FindObjectsOfType<Transform>())
+            foreach (var go in roots)
             {
-                if (t.parent != null || t.name != data.carName) continue;
+                if (go == null || go.name != data.carName) continue;
+                var t = go.transform;
                 if (!string.IsNullOrEmpty(data.bodyPrefab)
                     && !t.name.StartsWith(data.bodyPrefab + "(Clone)", StringComparison.OrdinalIgnoreCase)) continue;
                 var saved = new Vector3(data.positionX, data.positionY, data.positionZ);

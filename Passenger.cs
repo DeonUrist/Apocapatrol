@@ -17,8 +17,10 @@ namespace Apocapatrol
         private GameObject _passenger, _car;
         private Transform _anchor;
         private PlayMakerFSM _attack;
-        private PlayMakerFSM[] _combat;
+        private PlayMakerFSM[] _combat, _fsms;
         private GameObject[] _meleeWeapons;
+        private Renderer[] _meleeRenderers = new Renderer[0];
+        private Collider[] _meleeColliders = new Collider[0];
         private Pose _pose;
         private bool _rangedPrefab, _ranged, _targetDiagnosticLogged, _targetAcquired;
         // target sources, resolved once by reflection (was: every frame): FsmGameObject variables and action fields whose
@@ -46,11 +48,16 @@ namespace Apocapatrol
 
         private static void MuteNonCombatAi(GameObject passenger, bool combatAllowed)
         {
-            bool ranged = IsRanged(passenger);
+            MuteNonCombatAi(passenger.GetComponents<PlayMakerFSM>(), IsRanged(passenger), combatAllowed);
+        }
+
+        // the periodic guard: the FSM array and the ranged verdict are resolved once at Attach, not every half second
+        private static void MuteNonCombatAi(PlayMakerFSM[] fsms, bool ranged, bool combatAllowed)
+        {
             if (ranged)
-                foreach (var fsm in passenger.GetComponents<PlayMakerFSM>())
-                    if (fsm.FsmName == "Damage" && fsm.enabled) fsm.enabled = false;
-            Crew.MuteAi(passenger, ranged && combatAllowed ? CombatFsms : null);
+                foreach (var fsm in fsms)
+                    if (fsm != null && fsm.FsmName == "Damage" && fsm.enabled) fsm.enabled = false;
+            Crew.MuteAi(fsms, ranged && combatAllowed ? CombatFsms : null);
         }
 
         private bool CombatAllowed { get { return Plugin.RangedCombat.Value; } }
@@ -154,7 +161,11 @@ namespace Apocapatrol
             guard._ranged = guard._rangedPrefab && Plugin.RangedCombat.Value;
             guard._combat = Array.FindAll(passenger.GetComponents<PlayMakerFSM>(), f => Array.IndexOf(CombatFsms, f.FsmName) >= 0);
             guard._attack = Array.Find(guard._combat, f => f.FsmName == "Attack");
+            guard._fsms = passenger.GetComponents<PlayMakerFSM>();
             guard._meleeWeapons = guard._rangedPrefab ? FindMeleeWeapons(passenger) : new GameObject[0];
+            var rs = new List<Renderer>(); var cs = new List<Collider>();
+            foreach (var w in guard._meleeWeapons) { rs.AddRange(w.GetComponentsInChildren<Renderer>(true)); cs.AddRange(w.GetComponentsInChildren<Collider>(true)); }
+            guard._meleeRenderers = rs.ToArray(); guard._meleeColliders = cs.ToArray();
             guard.IndexTargetSources();
             guard.HideMeleeWeapons();
             guard._pose = passenger.GetComponent<Pose>();
@@ -181,13 +192,8 @@ namespace Apocapatrol
         private float _nextWeaponCheck, _nextGuard;
         private void HideMeleeWeapons()
         {
-            if (_meleeWeapons == null) return;
-            foreach (var weapon in _meleeWeapons)
-            {
-                if (weapon == null) continue;
-                foreach (var r in weapon.GetComponentsInChildren<Renderer>(true)) if (r.enabled) r.enabled = false;
-                foreach (var c in weapon.GetComponentsInChildren<Collider>(true)) if (c.enabled) c.enabled = false;
-            }
+            foreach (var r in _meleeRenderers) if (r != null && r.enabled) r.enabled = false;
+            foreach (var c in _meleeColliders) if (c != null && c.enabled) c.enabled = false;
         }
 
         private void LateUpdate()
@@ -220,7 +226,7 @@ namespace Apocapatrol
                 if (_ranged) foreach (var fsm in _combat) if (fsm != null) fsm.enabled = true;
                 else if (_attack != null) _attack.enabled = false;
             }
-            if (Time.time >= _nextGuard) { _nextGuard = Time.time + 0.5f; MuteNonCombatAi(_passenger, CombatAllowed); }
+            if (Time.time >= _nextGuard) { _nextGuard = Time.time + 0.5f; MuteNonCombatAi(_fsms, _rangedPrefab, CombatAllowed); }
             if (!_ranged)
             {
                 if (_pose != null) _pose.SetAim(Vector3.zero, false);

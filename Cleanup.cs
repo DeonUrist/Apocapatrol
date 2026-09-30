@@ -34,7 +34,7 @@ namespace Apocapatrol
             var player = PlayerRef.Player;
             if (player == null) return;
 
-            var all = FindObjectsOfType<PatrolMarker>();
+            var all = PatrolMarker.All.ToArray();   // copy: Remove() destroys cars, which edits the list
             float minD = Plugin.CleanupDistance.Value;
             float limit = Plugin.CleanupMinutes.Value * 60f;
             var eligible = new List<KeyValuePair<float, PatrolMarker>>();

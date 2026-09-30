@@ -691,8 +691,11 @@ namespace Apocapatrol
     {
         private class Entry { public GameObject Go; public string Name; public string Display; public string Kind; }
         private static List<Entry> _all;
+        private static List<GameObject> _roots;                                   // every asset root with a PlayMaker FSM (crew, carcasses, loot...)
+        private static Dictionary<string, GameObject> _byName;
+        private static float _nextRescan;
 
-        internal static void Invalidate() { _all = null; }
+        internal static void Invalidate() { _all = null; _roots = null; _byName = null; _nextRescan = 0f; }
 
         internal static GameObject Find(string query, string kind)
         {
@@ -715,27 +718,36 @@ namespace Apocapatrol
             return e.Go;
         }
 
-        // Any asset root prefab by name (carcasses, enemies ... anything with a PlayMaker FSM), exact then contains.
+        // Any asset root prefab by name (carcasses, enemies ... anything with a PlayMaker FSM), exact then contains — from the
+        // cached scan. A miss re-scans once (a prefab loaded after the first scan), at most every 30 s.
         internal static GameObject FindAny(string query)
         {
             if (string.IsNullOrEmpty(query)) return null;
             string q = query.Trim();
-            GameObject partial = null;
-            foreach (var f in Resources.FindObjectsOfTypeAll<PlayMakerFSM>())
-            {
-                if (f == null || f.gameObject == null) continue;
-                var go = f.gameObject;
-                if (go.scene.IsValid() || go.transform.parent != null) continue;
-                if (string.Equals(go.name, q, StringComparison.OrdinalIgnoreCase)) return go;
-                if (partial == null && go.name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0) partial = go;
-            }
-            if (partial != null) Plugin.Verbose("Prefab \"" + q + "\" -> " + partial.name + " (partial match)");
-            return partial;
+            if (_all == null) Scan();
+            var hit = Lookup(q);
+            if (hit == null && Time.unscaledTime >= _nextRescan) { _nextRescan = Time.unscaledTime + 30f; Scan(); hit = Lookup(q); }
+            return hit;
+        }
+
+        private static GameObject Lookup(string q)
+        {
+            GameObject go;
+            if (_byName.TryGetValue(q, out go)) return go;
+            foreach (var r in _roots)
+                if (r != null && r.name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    Plugin.Verbose("Prefab \"" + q + "\" -> " + r.name + " (partial match)");
+                    return r;
+                }
+            return null;
         }
 
         private static void Scan()
         {
             _all = new List<Entry>();
+            _roots = new List<GameObject>();
+            _byName = new Dictionary<string, GameObject>(StringComparer.OrdinalIgnoreCase);
             var byGo = new Dictionary<GameObject, List<PlayMakerFSM>>();
             foreach (var f in Resources.FindObjectsOfTypeAll<PlayMakerFSM>())
             {
@@ -743,7 +755,12 @@ namespace Apocapatrol
                 var go = f.gameObject;
                 if (go.scene.IsValid() || go.transform.parent != null) continue;   // assets only, roots only
                 List<PlayMakerFSM> l;
-                if (!byGo.TryGetValue(go, out l)) byGo[go] = l = new List<PlayMakerFSM>();
+                if (!byGo.TryGetValue(go, out l))
+                {
+                    byGo[go] = l = new List<PlayMakerFSM>();
+                    _roots.Add(go);
+                    if (!_byName.ContainsKey(go.name)) _byName[go.name] = go;
+                }
                 l.Add(f);
             }
             foreach (var kv in byGo)
@@ -755,7 +772,7 @@ namespace Apocapatrol
                 else continue;
                 _all.Add(new Entry { Go = kv.Key, Name = kv.Key.name, Display = DisplayOf(kv.Value), Kind = kind });
             }
-            Plugin.Verbose("Prefab scan: " + _all.Count + " vehicles/items");
+            Plugin.Verbose("Prefab scan: " + _all.Count + " vehicles/items, " + _roots.Count + " prefabs with FSMs");
         }
 
         private static string IdOf(List<PlayMakerFSM> fsms)

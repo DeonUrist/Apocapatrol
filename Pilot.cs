@@ -53,8 +53,10 @@ namespace Apocapatrol
         private readonly float[] _feelerLen = new float[5];
         private readonly float[] _feelerHit = new float[5];      // hit distance or -1
         private float _cliffAt = -1f;
-        private readonly Dictionary<Collider, bool> _obstacleCache = new Dictionary<Collider, bool>();
-        private float _cacheClear;
+        private struct Verdict { public bool Obstacle; public float Until; }
+        private readonly Dictionary<Collider, Verdict> _obstacleCache = new Dictionary<Collider, Verdict>();   // per-collider, 5 s each
+        private readonly List<Collider> _expired = new List<Collider>();
+        private float _cachePrune;
         private static readonly List<Transform> _ownRoots = new List<Transform>();
         private static readonly RaycastHit[] _hits = new RaycastHit[24];   // non-allocating cast buffer (shared; casts never nest)
         private int _senseStep;                                            // feelers run every other physics step
@@ -360,7 +362,7 @@ namespace Apocapatrol
             if (_rb != null) origin = _rb.worldCenterOfMass + _tf.forward * Plugin.AiFrontOffset.Value + _tf.up * 0.5f;
             float minSlopeNormalY = Mathf.Cos(Plugin.AiMaxSlopeDeg.Value * Mathf.Deg2Rad);
 
-            if (Time.time > _cacheClear) { _cacheClear = Time.time + 5f; _obstacleCache.Clear(); }
+            if (Time.time > _cachePrune) PruneObstacleCache();
 
             float leftRoom = 0f, rightRoom = 0f;
             for (int i = 0; i < _feelerAngle.Length; i++)
@@ -452,11 +454,21 @@ namespace Apocapatrol
         // wrecks, parked cars) is an obstacle.
         private bool IsObstacle(Collider c)
         {
-            bool obstacle;
-            if (_obstacleCache.TryGetValue(c, out obstacle)) return obstacle;
-            obstacle = Classify(c);
-            _obstacleCache[c] = obstacle;
-            return obstacle;
+            Verdict v;
+            if (_obstacleCache.TryGetValue(c, out v) && Time.time < v.Until) return v.Obstacle;
+            v.Obstacle = Classify(c);
+            v.Until = Time.time + 5f;
+            _obstacleCache[c] = v;
+            return v.Obstacle;
+        }
+
+        // every 30 s: drop verdicts nobody asked for again (destroyed colliders, things passed long ago)
+        private void PruneObstacleCache()
+        {
+            _cachePrune = Time.time + 30f;
+            _expired.Clear();
+            foreach (var kv in _obstacleCache) if (Time.time >= kv.Value.Until) _expired.Add(kv.Key);
+            foreach (var c in _expired) _obstacleCache.Remove(c);
         }
 
         private bool Classify(Collider c)
@@ -560,11 +572,13 @@ namespace Apocapatrol
         private static float _nextFind;
         private static GameObject _playerCar;
         private static PlayMakerFSM _playerCarDrive;
-        private static float _nextCarScan;
+        private static PlayMakerFSM _inCar;             // Player [InCar]: state InCar / OnFoot, var Car = the car the player sits in
+        private static HutongGames.PlayMaker.FsmGameObject _inCarVar;
+        private static Transform _inCarOwner;
         private static Vector3 _lastPos, _vel;
         private static float _lastStamp = -1f;
 
-        internal static void Reset() { _player = null; _playerCar = null; _playerCarDrive = null; _nextFind = 0f; _nextCarScan = 0f; _lastStamp = -1f; }
+        internal static void Reset() { _player = null; _playerCar = null; _playerCarDrive = null; _inCar = null; _inCarVar = null; _inCarOwner = null; _nextFind = 0f; _lastStamp = -1f; }
 
         internal static Transform Player
         {
@@ -580,28 +594,41 @@ namespace Apocapatrol
             }
         }
 
-        // The car the player is driving, or null. The DriveTrigger [Drive] FSM of that car sits in "inCar".
+        // The car the player is driving, or null. The Player's own InCar FSM says so (state InCar, variable Car); nothing is
+        // scanned. Fallback while that FSM is not there yet: the Player object is parented under <car>/DriveTrigger/sitPos while driving.
         internal static GameObject PlayerCar
         {
             get
             {
+                var p = Player;
+                if (p == null) { _playerCar = null; _playerCarDrive = null; return null; }
+                if (InCarFsm(p) && _inCar.Fsm.Initialized)
+                {
+                    if (_inCar.ActiveStateName != "InCar") { _playerCar = null; _playerCarDrive = null; return null; }
+                    if (_inCarVar == null) _inCarVar = _inCar.FsmVariables.GetFsmGameObject("Car");
+                    var car = _inCarVar != null ? _inCarVar.Value : null;
+                    if (car != null)
+                    {
+                        if (car != _playerCar) { _playerCar = car; _playerCarDrive = Patrol.FindFsm(car, "DriveTrigger", "Drive"); }
+                        return _playerCar;
+                    }
+                }
                 if (_playerCar != null && _playerCarDrive != null && _playerCarDrive.Fsm.Initialized && _playerCarDrive.ActiveStateName == "inCar") return _playerCar;
                 _playerCar = null; _playerCarDrive = null;
-                var p = Player;
-                if (p == null) return null;
-                // fast path: the player is parented under the car while driving
                 for (var a = p.parent; a != null; a = a.parent)
                     if (HasVehicleController(a)) { _playerCar = a.gameObject; _playerCarDrive = Patrol.FindFsm(_playerCar, "DriveTrigger", "Drive"); return _playerCar; }
-                if (Time.unscaledTime < _nextCarScan) return null;
-                _nextCarScan = Time.unscaledTime + 2f;
-                foreach (var f in UnityEngine.Object.FindObjectsOfType<PlayMakerFSM>())
-                {
-                    if (f.FsmName != "Drive" || f.gameObject.name != "DriveTrigger" || !f.Fsm.Initialized || f.ActiveStateName != "inCar") continue;
-                    for (var a = f.transform; a != null; a = a.parent)
-                        if (HasVehicleController(a)) { _playerCar = a.gameObject; _playerCarDrive = f; return _playerCar; }
-                }
                 return null;
             }
+        }
+
+        private static bool InCarFsm(Transform p)
+        {
+            if (_inCar != null && _inCarOwner == p) return true;
+            _inCar = null; _inCarVar = null; _inCarOwner = null;
+            foreach (var f in p.GetComponents<PlayMakerFSM>()) if (f.FsmName == "InCar") { _inCar = f; break; }
+            if (_inCar == null) return false;
+            _inCarOwner = p;
+            return true;
         }
 
         internal static bool HasVehicleController(Transform t)
