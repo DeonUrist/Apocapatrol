@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.4.6";
+        public const string VERSION = "1.5.0";
 
         internal static ManualLogSource Log;
 
@@ -101,6 +101,7 @@ namespace Apocapatrol
         private void Awake()
         {
             Log = Logger;
+            Paint.Init(Info.Location);
             bool exposePose = PoseConfigurationEnabled(Config.ConfigFilePath);
 
             Config.Bind("General", "Apocasetter", true,

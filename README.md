@@ -1,4 +1,4 @@
-# Apocapatrol 1.4.6
+# Apocapatrol 1.5.0
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -106,6 +106,13 @@ you're 1000 m away. Trucks are different: they don't turn black, their wheels st
 parked where they stopped, their rear doors still open, and the cargo stays in the bed for you to loot. A car you've sat in never explodes. Turn **SelfDestructingCars** off and vacated cars stay as they were before: driveable,
 strippable, cleaned up by the rules below.
 
+## Paint jobs
+
+The raiders' cars wear their own paint. Every Junker the mod spawns uses `Textures\junker.png` from the mod's folder instead of the
+game's texture; the Junkers you find in the world keep theirs. You can repaint it yourself: edit `junker.png` in any image editor
+(keep the size and the layout, and keep the transparent spots - those are the rust holes). Any other car texture works the same
+way: put a PNG named after the game's texture into `Textures`, and every raider car that uses that texture wears it.
+
 ## Saving and loading
 
 Raider cars, their crews, the crews' health and what they were doing are saved with your game. After a load they start their engines
@@ -140,7 +147,8 @@ for testing and for picking a fight on purpose.
 ## Install
 
 1. Install BepInEx 5 in the game folder.
-2. Copy `Apocapatrol.dll` into `BepInEx\plugins\`.
+2. Copy the `Apocapatrol` folder (with `Apocapatrol.dll` and `Textures`) into `BepInEx\plugins\`. If you have an older
+   `BepInEx\plugins\Apocapatrol.dll` lying loose in `plugins`, delete it.
 3. Optional: install **Apocasetter** to change every setting in game.
 
 Works together with **Apocatremors**, which eases off its own ambushes while this mod is running. It's safe to add to an existing save.
