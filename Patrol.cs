@@ -13,7 +13,9 @@ namespace Apocapatrol
     {
         private PlayMakerFSM _menu, _saveLoad;
         private float _nextRefScan;
-        private bool _busy;
+        private bool _busy;                 // the template spawner's own build (one at a time)
+        private int _building;              // every running Build (spawner + convoy)
+        internal int Building { get { return _building; } }
 
         internal static void ResetForScene() { Prefabs.Invalidate(); }
 
@@ -29,7 +31,15 @@ namespace Apocapatrol
         {
             if (_busy) { Plugin.Log.LogInfo("Spawn: a build is still running"); return; }
             if (!InGame()) return;
-            StartCoroutine(Build(t));
+            _busy = true;
+            StartCoroutine(Build(t, null, Quaternion.identity, true));
+        }
+
+        // builds a template at a given place (convoy spawner); several may run at once
+        internal void SpawnAt(CarTemplate t, Vector3 pos, Quaternion rot)
+        {
+            if (!InGame()) return;
+            StartCoroutine(Build(t, pos, rot, false));
         }
 
         internal bool InGame()
@@ -50,20 +60,27 @@ namespace Apocapatrol
 
         // =============================================================== build
 
-        private IEnumerator Build(CarTemplate tpl)
+        // at == null: SpawnDistance in front of the player, facing the player's way; otherwise exactly there
+        private IEnumerator Build(CarTemplate tpl, Vector3? at, Quaternion rot, bool menu)
         {
-            _busy = true;
+            _building++;
             try
             {
-                Vector3 p, fwd;
-                if (!PlayerPose(out p, out fwd)) { Plugin.Log.LogWarning("No player found"); yield break; }
+                Vector3 pos;
+                if (at.HasValue) pos = at.Value;
+                else
+                {
+                    Vector3 p, fwd;
+                    if (!PlayerPose(out p, out fwd)) { Plugin.Log.LogWarning("No player found"); yield break; }
+                    pos = p + fwd * Plugin.SpawnDistance + Vector3.up * 1.0f;
+                    rot = Quaternion.LookRotation(fwd);
+                }
                 Plugin.Log.LogInfo("Building template " + tpl.Name + ": " + tpl.Describe());
 
                 var body = Prefabs.Find(tpl.Body, "vehicle");
                 if (body == null) { Plugin.Log.LogWarning("Body prefab not found: " + tpl.Body); yield break; }
 
-                var pos = p + fwd * Plugin.SpawnDistance + Vector3.up * 1.0f;
-                var car = UnityEngine.Object.Instantiate(body, pos, Quaternion.LookRotation(fwd));
+                var car = UnityEngine.Object.Instantiate(body, pos, rot);
                 car.SetActive(true);
                 Register.Name(car, body.name); Register.Add(car, true);
                 Plugin.Log.LogInfo("Car frame " + car.name + " at " + pos);
@@ -132,7 +149,7 @@ namespace Apocapatrol
                 if (driver != null && !tpl.Driver.Trim().EndsWith("_Dead", StringComparison.OrdinalIgnoreCase))
                     Plugin.Log.LogInfo("Driver in place; the Crew component takes it from here");
             }
-            finally { _busy = false; }
+            finally { _building--; if (menu) _busy = false; }
         }
 
         private static int AttachAll(GameObject car, string[] hingeNames, string partQuery, string kind)

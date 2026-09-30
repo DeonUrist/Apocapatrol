@@ -80,7 +80,7 @@ namespace Apocapatrol
             Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
             int cars = 0, trucks = 0;
             foreach (var t in CarTemplate.Park) { if (IsTruck(t)) trucks++; else cars++; }
-            float w = 640f, h = Mathf.Min(Screen.height - 80f, 130f + Mathf.Max(cars, trucks) * 32f);
+            float w = 640f, h = Mathf.Min(Screen.height - 80f, 200f + Mathf.Max(cars, trucks) * 32f);
             _rect = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
         }
 
@@ -110,6 +110,16 @@ namespace Apocapatrol
             GUILayout.Label("Template spawner", header ?? GUI.skin.label);
             GUILayout.Label("Click a car to build it " + Plugin.SpawnDistance.ToString("0") + " m in front of you.  [Esc] Close");
             GUILayout.Space(6f);
+            var convoy = GetComponent<Convoy>();
+            int debugSpawn = 0;
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Enemy spawns" + (convoy != null ? " (heat " + (convoy.Heat * 100f).ToString("0") + " %, " + convoy.Km.ToString("0.0") + " km, " + convoy.Bosses + " bosses)" : ""), header ?? GUI.skin.label, GUILayout.Width(300f));
+            if (GUILayout.Button("Enemy cars", GUILayout.Height(28f), GUILayout.Width(150f))) debugSpawn = 1;
+            GUILayout.Space(6f);
+            if (GUILayout.Button("Enemy patrol", GUILayout.Height(28f), GUILayout.Width(150f))) debugSpawn = 2;
+            GUILayout.EndHorizontal();
+            GUILayout.Label("A group " + Plugin.ConvoySpawnDistance.Value.ToString("0") + " m ahead of your car (behind you on foot), as if every distance/boss requirement were met.");
+            GUILayout.Space(6f);
             _scroll = GUILayout.BeginScrollView(_scroll);
             CarTemplate chosen = null;
             GUILayout.BeginHorizontal();
@@ -137,6 +147,11 @@ namespace Apocapatrol
                 Close();                          // the build coroutine waits on scaled time; the blocker sets timeScale 0
                 var patrol = GetComponent<Patrol>();
                 if (patrol != null) patrol.Spawn(chosen);
+            }
+            else if (debugSpawn != 0 && convoy != null)
+            {
+                Close();
+                if (debugSpawn == 1) convoy.DebugCars(); else convoy.DebugConvoy();
             }
         }
 

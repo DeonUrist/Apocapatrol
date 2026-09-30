@@ -1,4 +1,4 @@
-# Apocapatrol (prototype 0.21.1)
+# Apocapatrol (prototype 0.22.0)
 
 BepInEx 5 plugin for **Apocalypter** — AI-driven raider cars. Press `F8` in game for the template spawner: pick a car from the park and a complete
 car (frame + parts + crew, cargo for the trucks) is assembled in front of you with the game's own part-attach recipe, engine started, and its
@@ -7,7 +7,8 @@ driver goes hunting the player.
 Config (all live in the Apocasetter Mods menu): `[Combat]` RangedCombat (one switch for driver and passenger), ShootDistance, FireArcHalfAngle,
 MaxAimPitch, AimTurnSpeed, FireBurstSeconds, FireIntervalMin/Max, RamDamage, RamDamageMultiplier, RamDamageByBody, RamFullSpeedKmh, RamPushStrength,
 RamDamageInCar, RamInCarFactor · `[Driving]` StuckPedalChance, StuckPedalTakeoverSeconds, BailChance, StuckBailChance ·
-`[AI]` the driving AI's tuning · `[Loot]` loot type chances, the loot multiplier and the part condition range · `[Debug]` TemplateSpawnerKey, VerboseLog, AiOverlay. What used to be settings and is
+`[AI]` the driving AI's tuning · `[Loot]` loot type chances, the loot multiplier and the part condition range · `[Convoy spawner]` (see below) ·
+`[Debug]` TemplateSpawnerKey, VerboseLog, AiOverlay. What used to be settings and is
 now fixed: spawn distance 8 m, takeover delay 2 s, carcass eject 0.3 m at 4 m/s, bail-out distance 0.5 m; stale settings from earlier versions are
 removed from the .cfg on load (the hidden `PoseConfiguration` switch is kept).
 
@@ -121,6 +122,28 @@ inside `FireArcHalfAngle`, spine aiming) but only in **bursts**: every `FireInte
 arc, it fires for `FireBurstSeconds`. Between bursts its Attack FSM is off and it sits in the generic driver pose (`[Pose]` ArmAngle / ElbowAngle /
 ArmCloser, hands on the wheel); the per-human `[Pose.<human>]` shooting profile and weapon offsets apply only while it fires. A passenger promoted
 to the wheel switches to this mode.
+
+### Convoy spawner
+Enemy groups spawn on their own while you play, drawn from the park (`<Body>_Basic` / `<Body>_Advanced` cars, `Junker_*`, `Rustcargo_*`
+trucks). **Heat** = 25 % per `HeatIntervalKm` (10) of the game's Distance Travelled, capped at `MaxHeat` (3 = 300 %); it multiplies the
+number of cars in every group (at least 1), the weights of the tougher spawn types, and shortens the cooldown a little (÷ (0.75 + 0.25 × heat)).
+A clock runs in game: `MinConvoyCooldown`..`MaxConvoyCooldown` minutes (5..60; Max 0 = off, `Enabled` = master switch). When it runs out:
+which groups are allowed by Distance Travelled and bosses killed (`<Type>DistanceKm` / `<Type>BossesKilled`) → if both plain cars and a
+convoy are allowed, `JustCarsToConvoyRatio` (0.8) picks plain cars that often → the type is rolled by the `<Type>Chance` weights (the advanced
+ones × heat; the weights are normalised) → nothing allowed = nothing spawns.
+
+| Group | From km / bosses | At 100 % heat |
+|---|---|---|
+| Basic enemy cars (45 %) | 0 / 0 | 3 small basic cars (no junker) |
+| Advanced enemy cars (35 % × heat) | 30 / 1 | 3 cars, each 50 % advanced, at least 1 advanced; 50 % × heat that one is a junker |
+| Super advanced enemy cars (20 % × heat) | 50 / 3 | 5 cars, each 50 % junker, each 50 % advanced, at least 2 advanced |
+| Basic convoy (70 %) | 5 / 0 | 1 basic truck (empty or loaded) + 2 basic junkers + 3–5 small basic cars; 50 %: one of the cars is advanced |
+| Advanced convoy (30 % × heat) | 20 / 3 | 1 advanced truck + 2 junkers + 3–5 small cars, each 50 % advanced, at least 2 advanced |
+
+The group appears `SpawnDistance` (300 m) ahead of your car, up to 45° left or right of your direction of travel — behind you when you
+are on foot — in rows of three facing you on open terrain (the truck first), built 0.6 s apart, and the crews start hunting at once.
+The F8 menu has two debug buttons above the park: **Enemy cars** and **Enemy patrol** (a convoy) — they roll the type as if every
+distance/boss requirement were met, with the real heat but at least 100 %. Log: "Convoy: <type> at heat H % (km, bosses), ahead-left 300 m: <templates>".
 
 ### Ram damage
 The game's own bumper damage (`CarAttack` FSM, a trigger that hurts what it touches) only works against creatures, and the player's car's

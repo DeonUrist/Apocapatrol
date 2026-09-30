@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "0.21.1";
+        public const string VERSION = "0.22.0";
 
         internal static ManualLogSource Log;
 
@@ -59,6 +59,12 @@ namespace Apocapatrol
             AiIgnoreMassBelow, AiGiveUpDistance;
         // [Debug]
         internal static ConfigEntry<bool> VerboseLog;
+        // [Convoy spawner]
+        internal static ConfigEntry<bool> ConvoyEnabled;
+        internal static ConfigEntry<float> MaxHeat, HeatIntervalKm, ConvoySpawnDistance, JustCarsToConvoyRatio, MinConvoyCooldown, MaxConvoyCooldown;
+        internal static ConfigEntry<float> BasicCarsChance, AdvancedCarsChance, SuperCarsChance, BasicConvoyChance, AdvancedConvoyChance;
+        internal static ConfigEntry<float> BasicCarsKm, AdvancedCarsKm, SuperCarsKm, BasicConvoyKm, AdvancedConvoyKm;
+        internal static ConfigEntry<int> BasicCarsBosses, AdvancedCarsBosses, SuperCarsBosses, BasicConvoyBosses, AdvancedConvoyBosses;
         // hidden pose settings (PoseConfiguration = true exposes them)
         internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
         internal static PoseBool PoseEnabled;
@@ -237,13 +243,45 @@ namespace Apocapatrol
             ArmPoseProfile.RemoveHardcodedSettings(Config);
             if (!exposePose) ArmPoseProfile.RemoveStoredConfiguration(Config);
 
+            const string CS = "Convoy spawner";
+            ConvoyEnabled = Config.Bind(CS, "Enabled", true, "Enemy cars and convoys spawn on their own while you play (the Debug menu buttons work regardless)");
+            MaxHeat = Config.Bind(CS, "MaxHeat", 3f, new ConfigDescription(
+                "Upper limit of the heat (3 = 300 %). Heat scales the number of cars in every spawn and the chances of the tougher spawn types, " +
+                "and shortens the cooldown a little", new AcceptableValueRange<float>(0f, 5f)));
+            HeatIntervalKm = Config.Bind(CS, "HeatIntervalKm", 10f, new ConfigDescription(
+                "Every this many km of the game's Distance Travelled add 25 % heat (linear: 10 = 100 % at 40 km)", new AcceptableValueRange<float>(1f, 200f)));
+            ConvoySpawnDistance = Config.Bind(CS, "SpawnDistance", 300f, new ConfigDescription(
+                "How far away a spawn appears (m): ahead of your car, up to 45 degrees left or right; behind you when on foot", new AcceptableValueRange<float>(50f, 1000f)));
+            JustCarsToConvoyRatio = Config.Bind(CS, "JustCarsToConvoyRatio", 0.8f, new ConfigDescription(
+                "When a convoy is allowed, how likely plain enemy cars spawn instead of it (0 = always the convoy, 1 = never)", new AcceptableValueRange<float>(0f, 1f)));
+            MinConvoyCooldown = Config.Bind(CS, "MinConvoyCooldown", 5f, new ConfigDescription(
+                "Shortest time between two spawns (minutes; 0 = can follow immediately)", new AcceptableValueRange<float>(0f, 120f)));
+            MaxConvoyCooldown = Config.Bind(CS, "MaxConvoyCooldown", 60f, new ConfigDescription(
+                "Longest time between two spawns (minutes; 0 = automatic spawning off)", new AcceptableValueRange<float>(0f, 240f)));
+
+            BasicCarsKm = Config.Bind(CS, "BasicCarsDistanceKm", 0f, new ConfigDescription("Basic enemy cars (3 small cars at 100 % heat) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            BasicCarsBosses = Config.Bind(CS, "BasicCarsBossesKilled", 0, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            BasicCarsChance = Config.Bind(CS, "BasicCarsChance", 45f, new ConfigDescription("Weight of basic enemy cars among the allowed car spawns (%)", new AcceptableValueRange<float>(0f, 100f)));
+            AdvancedCarsKm = Config.Bind(CS, "AdvancedCarsDistanceKm", 30f, new ConfigDescription("Advanced enemy cars (3 cars, at least 1 advanced, maybe a junker) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            AdvancedCarsBosses = Config.Bind(CS, "AdvancedCarsBossesKilled", 1, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            AdvancedCarsChance = Config.Bind(CS, "AdvancedCarsChance", 35f, new ConfigDescription("Weight of advanced enemy cars (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
+            SuperCarsKm = Config.Bind(CS, "SuperAdvancedCarsDistanceKm", 50f, new ConfigDescription("Super advanced enemy cars (5 cars, half junkers, at least 2 advanced) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            SuperCarsBosses = Config.Bind(CS, "SuperAdvancedCarsBossesKilled", 3, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            SuperCarsChance = Config.Bind(CS, "SuperAdvancedCarsChance", 20f, new ConfigDescription("Weight of super advanced enemy cars (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
+            BasicConvoyKm = Config.Bind(CS, "BasicConvoyDistanceKm", 5f, new ConfigDescription("Basic convoy (a basic truck + 2 junkers + 3-5 small cars) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            BasicConvoyBosses = Config.Bind(CS, "BasicConvoyBossesKilled", 0, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            BasicConvoyChance = Config.Bind(CS, "BasicConvoyChance", 70f, new ConfigDescription("Weight of the basic convoy among the allowed convoys (%)", new AcceptableValueRange<float>(0f, 100f)));
+            AdvancedConvoyKm = Config.Bind(CS, "AdvancedConvoyDistanceKm", 20f, new ConfigDescription("Advanced convoy (an advanced truck + the same escort, at least 2 advanced) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            AdvancedConvoyBosses = Config.Bind(CS, "AdvancedConvoyBossesKilled", 3, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            AdvancedConvoyChance = Config.Bind(CS, "AdvancedConvoyChance", 30f, new ConfigDescription("Weight of the advanced convoy (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
+
             MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.F8, "Open the template spawner: a list of the park, click a car to build it in front of you. None = off");
             VerboseLog = Config.Bind("Debug", "VerboseLog", true, "Log every build step (prefab lookups, hinge states, engine state) and the AI's state changes");
             AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances");
 
             PurgeStaleEntries();
 
-            SceneManager.sceneLoaded += (s, m) => { EnsureRunner(); Patrol.ResetForScene(); PlayerRef.Reset(); PatrolPersistence.ResetForScene(); };
+            SceneManager.sceneLoaded += (s, m) => { EnsureRunner(); Patrol.ResetForScene(); PlayerRef.Reset(); PatrolPersistence.ResetForScene(); Convoy.ResetForScene(); };
             EnsureRunner();
             Log.LogInfo(NAME + " " + VERSION + " loaded");
         }
@@ -292,6 +330,7 @@ namespace Apocapatrol
             UnityEngine.Object.DontDestroyOnLoad(_runner);
             _runner.AddComponent<Patrol>();
             _runner.AddComponent<TemplateMenu>();
+            _runner.AddComponent<Convoy>();
         }
 
         internal static void Verbose(string msg)
