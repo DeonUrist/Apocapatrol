@@ -90,23 +90,6 @@ namespace Apocapatrol
                 }
 
             Deaden(car, truck);
-
-            // a small car's chassis: once it has come to rest (or after 12 s at most) it is parked for good - kinematic, the same state a
-            // loaded wreck ends up in (DistanceKinematic restarts in KinematicOn before Deaden switches it off). This loop ends; nothing polls later.
-            if (truck) yield break;
-            float until = Time.time + 12f, still = 0f;
-            Rigidbody body = car != null ? car.GetComponent<Rigidbody>() : null;
-            while (body != null && !body.isKinematic && Time.time < until)
-            {
-                yield return new WaitForSeconds(0.25f);
-                if (body == null) yield break;
-                still = body.velocity.sqrMagnitude < 0.04f && body.angularVelocity.sqrMagnitude < 0.04f ? still + 0.25f : 0f;
-                if (still >= 1f) break;
-            }
-            if (body == null || body.isKinematic) yield break;
-            body.velocity = Vector3.zero; body.angularVelocity = Vector3.zero;
-            body.isKinematic = true;
-            Plugin.Verbose("Explode: " + car.name + " chassis settled" + (still >= 1f ? "" : " (timeout)"));
         }
 
         // ------------------------------------------------------------ pieces
@@ -266,6 +249,9 @@ namespace Apocapatrol
                 for (var a = t; a != null && a != car.transform; a = a.parent)
                     if (a.CompareTag("vehPart") || a.name.IndexOf("_Dead", StringComparison.Ordinal) >= 0 || a.name == "PhysicsLock") { occupant = true; break; }
                 if (occupant || (truck && KeptOnTruck(car, t))) continue;
+                // the vanilla far-away freeze stays: dynamic (pushable) near the player, kinematic beyond its distance - also after a load,
+                // where it restarts in KinematicOn and would otherwise stay stuck there
+                if (f.FsmName == "DistanceKinematic") continue;
                 f.Fsm.RestartOnEnable = false;
                 f.enabled = false;
             }
