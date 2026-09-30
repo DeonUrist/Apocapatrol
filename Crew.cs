@@ -109,7 +109,7 @@ namespace Apocapatrol
         // Same start-up as a fresh build, once the car's FSMs are initialized. Safe to call more than once.
         internal void Revive()
         {
-            if (_revived || _done) return;
+            if (_revived || _done || Explode.IsWreck(_car)) return;
             _revived = true;
             StartCoroutine(ReviveRoutine());
         }
@@ -126,7 +126,7 @@ namespace Apocapatrol
                 if (hb != null && hb.Fsm.Initialized && start != null && start.Fsm.Initialized) break;
                 yield return null;
             }
-            if (_car == null) yield break;
+            if (_car == null || _done || Explode.IsWreck(_car)) yield break;
             Patrol.Handbrake(_car, false);
             if (!Nwh.EngineRunning(_car)) yield return Patrol.StartUp(_car);
             if (_car == null) yield break;

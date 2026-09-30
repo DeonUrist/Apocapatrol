@@ -166,6 +166,7 @@ namespace Apocapatrol
                 yield return new WaitForSeconds(1f);
                 if (car == null) yield break;
                 if (cargo != null) Cargo.SettleFsms(cargo);
+                if (Explode.IsWreck(car)) yield break;   // crew killed during the build: it already blew up
                 SetPartConditions(car);
                 FillParts(car);
 
@@ -182,23 +183,24 @@ namespace Apocapatrol
         // Used by the build and when a saved car is revived after a load.
         internal static IEnumerator StartUp(GameObject car)
         {
+            if (Explode.IsWreck(car)) yield break;
             var start = FindFsm(car, "START", "Start");
             if (start == null) { Plugin.Log.LogWarning("No START/Start FSM on " + (car != null ? car.name : "?")); yield break; }
             Plugin.Verbose("START state before: " + start.ActiveStateName);
             start.Fsm.SetState("Ignition");
             yield return null;
             yield return null;
-            if (car == null) yield break;
+            if (Explode.IsWreck(car)) yield break;   // blew up mid-start: no more ignition
             start.Fsm.SetState("Start");
             yield return new WaitForSeconds(1.5f);
-            if (car == null) yield break;
+            if (Explode.IsWreck(car)) yield break;
             bool running = Nwh.EngineRunning(car);
             Plugin.Verbose("START state: " + start.ActiveStateName + "  engine running: " + running);
             if (!running)
             {
                 Nwh.StartEngine(car);
                 yield return new WaitForSeconds(1f);
-                if (car == null) yield break;
+                if (Explode.IsWreck(car)) yield break;
                 Plugin.Verbose("After NWH StartEngine(): running=" + Nwh.EngineRunning(car) + "  START state: " + start.ActiveStateName);
             }
         }
