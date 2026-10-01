@@ -59,6 +59,7 @@ namespace Apocapatrol
                 else kept++;
                 if (truck && OnWheelHinge(car, p)) { wheels++; continue; }   // a truck keeps its wheels (rolled like the rest)
                 parts.Add(p);
+                StopRpm(p);
                 // the wrench's de_Attach: layer Item + tag vehPartRemoved -> the part's CheckTag FSM unparents it and adds a Rigidbody
                 p.gameObject.layer = 9;
                 try { p.tag = "vehPartRemoved"; } catch (Exception e) { Plugin.Log.LogWarning("Explode: tag: " + e.Message); }
@@ -78,7 +79,7 @@ namespace Apocapatrol
             yield return null;   // CheckTag / LockPhysics have run: the Rigidbodies exist
             if (car == null) yield break;
             var centre = car.transform.position;
-            foreach (var t in parts) Shove(t, centre, 3f, 6f);
+            foreach (var t in parts) { StopRpm(t); Shove(t, centre, 3f, 6f); }   // again: CheckTag has re-enabled OnOff / Rotate
             foreach (var t in cargo) Shove(t, centre, 2f, 4f);
             // a part the CheckTag FSM did not free (none expected): free it ourselves
             foreach (var t in parts)
@@ -161,6 +162,21 @@ namespace Apocapatrol
                 if (!f.Fsm.Initialized) continue;
                 var v = f.FsmVariables.GetFsmFloat("Condition");
                 if (v != null) v.Value = value;
+            }
+        }
+
+        // A popped engine kept the raider's running rpm: its OnOff FSM copies RpmGear.rpm only while it sits on a car's hinge, so once loose
+        // the value never drops, and its Rotate FSM (engine rocking) keeps turning the loose engine's transform every frame - it crawled and
+        // tumbled on its own, also after being fitted to another car and taken out again (FSM restarts keep variables). oilDamage,
+        // engineOil_Temperature and the radiator / exhaust FSMs read the same value. Every "rpm" float on the part's FSMs goes to 0.
+        private static void StopRpm(Transform part)
+        {
+            if (part == null) return;
+            foreach (var f in part.GetComponentsInChildren<PlayMakerFSM>(true))
+            {
+                if (f == null || f.Fsm == null || !f.Fsm.Initialized) continue;
+                foreach (var v in f.FsmVariables.FloatVariables)
+                    if (v != null && string.Equals(v.Name, "rpm", StringComparison.OrdinalIgnoreCase)) v.Value = 0f;
             }
         }
 
