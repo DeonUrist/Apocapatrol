@@ -1,4 +1,4 @@
-# Apocapatrol 1.8.8
+# Apocapatrol 1.8.9
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
