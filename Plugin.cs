@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.8.7";
+        public const string VERSION = "1.8.8";
 
         internal static ManualLogSource Log;
 
@@ -63,7 +63,7 @@ namespace Apocapatrol
         internal static ConfigEntry<bool> SelfDestruct;
         internal static ConfigEntry<float> ExplodedLootPercent;
         // [AI]
-        internal static ConfigEntry<bool> AiInvertSteering, AiOverlay;
+        internal static ConfigEntry<bool> AiInvertSteering, AiOverlay, CustomPaintjobs;
         internal static ConfigEntry<float> AiDriveByOffset;
         internal static ConfigEntry<float> AiThrottle, AiLeadTime, AiCommitSeconds, AiSteerRate, AiSteerAngle, AiMaxSteerAtSpeed, AiTurnSafeSpeed,
             AiRamDistance, AiPassWidth, AiRunOutMeters, AiRunOutMaxSeconds, AiReverseSeconds, AiReverseThrottle, AiStuckSeconds,
@@ -171,6 +171,12 @@ namespace Apocapatrol
                 "50 % a barrel too; Medicine bandages x4 + first aid x2; Weapons 0-3 guns + 3-8 ammo boxes; Drugs alcohol x2 + weed x3 + weed plant x1; " +
                 "Mechanic 3 repair boxes + 1 big oil can; Corpses 3-5 dead Scraffa; Rats 6-8 dead rats), 3 = 300 %. The 50 % barrels are not scaled",
                 new AcceptableValueRange<float>(0f, 3f)));
+            MinConvoyCooldown = Config.Bind("Scaling", "MinConvoyCooldown", 5f, new ConfigDescription(
+                "Shortest time between two raider spawns (minutes; 0 = can follow immediately). Each wait is rolled between this and " +
+                "MaxConvoyCooldown, a little shorter at high heat. A change applies from the next roll",
+                new AcceptableValueRange<float>(0f, 120f)));
+            MaxConvoyCooldown = Config.Bind("Scaling", "MaxConvoyCooldown", 60f, new ConfigDescription(
+                "Longest time between two raider spawns (minutes; 0 = automatic spawning off)", new AcceptableValueRange<float>(0f, 240f)));
 
             RangedCombat = Config.Bind("Combat", "RangedCombat", true,
                 "Ranged humans (Boltjaw/Flexa/Lugnut/Scrud/Sprokka) in a car use their vanilla targeting and ranged attack: the passenger whenever a target " +
@@ -185,6 +191,9 @@ namespace Apocapatrol
             MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.None, "Key for the template spawner (testing): a list of the park, click a car to build it in front of you. None = off (the default); F8 for example");
             VerboseLog = Config.Bind("Debug", "VerboseLog", false, "Log what the mod does: spawns, builds, crews, the AI's state changes, ram hits. Off = only the load line and warnings, nothing that gives a spawn away");
             AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances. With no raider car driving: the time until the next spawn roll");
+            CustomPaintjobs = Config.Bind("Debug", "CustomPaintjobs", true,
+                "Raider cars wear the paint jobs from the mod's Textures folder (body textures, truck container sides and inside). " +
+                "Off = they keep the game's own textures (cars spawned from then on; the textures are not loaded at game start)");
 
             // ---- hidden settings: bound to an in-memory ConfigFile that is never saved, so they keep their default values and do not
             // appear in the .cfg or the Apocasetter menu. To bring ALL of them back (with their old sections: Combat, Driving,
@@ -203,7 +212,7 @@ namespace Apocapatrol
             //          DrugsChance 7, MechanicChance 7, CorpsesChance 7, RatsChance 3, MinPartHealth 2, MaxPartHealth 35,
             //          MinPartsFill 15, MaxPartsFill 60
             //   [Convoy spawner] Enabled true, MaxHeat 3, HeatIntervalKm 10, SpawnDistance 350, JustCarsToConvoyRatio 0.8,
-            //          MinConvoyCooldown 5, MaxConvoyCooldown 60, BasicCars 0 km / 0 bosses / 45, AdvancedCars 30 / 1 / 35,
+            //          (MinConvoyCooldown / MaxConvoyCooldown visible again in [Scaling] since 1.8.8) BasicCars 0 km / 0 bosses / 45, AdvancedCars 30 / 1 / 35,
             //          SuperAdvancedCars 50 / 3 / 20, BasicConvoy 5 / 0 / 70, AdvancedConvoy 20 / 3 / 30 (DistanceKm / BossesKilled / Chance)
             //   [Cleanup] Enabled true, RemoveAfterMinutes 10 (was 40), MaxCars 30, MinDistance 800
             //   [Debug] ExitSpeedKmh 30
@@ -370,10 +379,6 @@ namespace Apocapatrol
                 "How far away a spawn appears (m): ahead of your car, up to 45 degrees left or right; behind you when on foot", new AcceptableValueRange<float>(50f, 1000f)));
             JustCarsToConvoyRatio = H.Bind(CS, "JustCarsToConvoyRatio", 0.8f, new ConfigDescription(
                 "When a convoy is allowed, how likely plain enemy cars spawn instead of it (0 = always the convoy, 1 = never)", new AcceptableValueRange<float>(0f, 1f)));
-            MinConvoyCooldown = H.Bind(CS, "MinConvoyCooldown", 5f, new ConfigDescription(
-                "Shortest time between two spawns (minutes; 0 = can follow immediately)", new AcceptableValueRange<float>(0f, 120f)));
-            MaxConvoyCooldown = H.Bind(CS, "MaxConvoyCooldown", 60f, new ConfigDescription(
-                "Longest time between two spawns (minutes; 0 = automatic spawning off)", new AcceptableValueRange<float>(0f, 240f)));
 
             BasicCarsKm = H.Bind(CS, "BasicCarsDistanceKm", 0f, new ConfigDescription("Basic enemy cars (3 small cars at 100 % heat) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
             BasicCarsBosses = H.Bind(CS, "BasicCarsBossesKilled", 0, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));

@@ -56,8 +56,13 @@ namespace Apocapatrol
 
         // Decodes every PNG in Textures once, at plugin load (before the main menu): a PNG decode + mipmaps + GPU upload runs on the main
         // thread and froze the first spawn that needed it. Layout guides (*_uv_layout / *_uv_over_texture) are skipped.
+        // [Debug] CustomPaintjobs: off = raider cars keep the game's textures (and nothing is preloaded). Switched on mid-game, a texture
+        // loads when the first car needs it.
+        private static bool Enabled { get { return Plugin.CustomPaintjobs == null || Plugin.CustomPaintjobs.Value; } }
+
         internal static void Preload()
         {
+            if (!Enabled) { Plugin.Log.LogInfo("Paint: CustomPaintjobs off, no textures loaded"); return; }
             if (_dir == null || !Directory.Exists(_dir)) return;
             var sw = System.Diagnostics.Stopwatch.StartNew();
             int n = 0;
@@ -76,7 +81,7 @@ namespace Apocapatrol
 
         internal static void Apply(GameObject car, string body)
         {
-            if (car == null || _dir == null || !Directory.Exists(_dir)) return;
+            if (car == null || !Enabled || _dir == null || !Directory.Exists(_dir)) return;
             int n = 0;
             string bodyTexName = null, bodyFile = null; Texture2D bodyTex = null;
             if (!string.IsNullOrEmpty(body) && BodyTexture.TryGetValue(body, out bodyTexName))
@@ -148,7 +153,7 @@ namespace Apocapatrol
 
         internal static void ApplyCargo(GameObject car, string lootKey)
         {
-            if (car == null || _dir == null || !Directory.Exists(_dir)) return;
+            if (car == null || !Enabled || _dir == null || !Directory.Exists(_dir)) return;
             try
             {
                 string file = CargoFile(lootKey);

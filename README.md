@@ -1,4 +1,4 @@
-# Apocapatrol 1.8.7
+# Apocapatrol 1.8.8
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -139,6 +139,8 @@ The inside of the container (both walls, floor, roof and the closed front end) c
 `Textures\cargo_inside.png`. It repeats every 2 m, so a square, seamless texture works best (1024 x 1024 = 2 x 2 m of
 wall). Without the file the inside keeps the game's texture.
 
+Turn **CustomPaintjobs** off (under Debug) to skip all of this: raider cars then look like the game's own.
+
 ## Saving and loading
 
 Raider cars, their crews, the crews' health and what they were doing are saved with your game. After a load they start their engines
@@ -155,6 +157,8 @@ A short list, changeable in game through the Apocasetter Mods menu if you have i
   overflows - shots and hits then cut out, your own included. Applied when the game starts; 0 keeps the game's setting.
 - **SelfDestruct** (on): vacated raider cars blow up (see above).
 - **LootMultiplier** (1): how much loot trucks carry, 0–3×.
+- **MinConvoyCooldown** (5 min) / **MaxConvoyCooldown** (60 min): the wait between two raider spawns is rolled between these, a
+  little shorter as the heat rises. 0 as the maximum turns automatic spawns off. A change counts from the next roll.
 
 **Combat**
 - **RangedCombat** (on): gunmen in the cars shoot at you.
@@ -166,6 +170,8 @@ A short list, changeable in game through the Apocasetter Mods menu if you have i
 - **TemplateSpawnerKey** (none): the key for the spawner menu, off by default.
 - **VerboseLog** (off): detailed logging.
 - **AiOverlay** (off): an on-screen readout per raider car; with no raider car driving, the time until the next spawn roll.
+- **CustomPaintjobs** (on): raider cars wear the paint jobs from the `Textures` folder. Off = they keep the game's own look
+  (cars spawned from then on).
 
 ## Spawner menu
 
