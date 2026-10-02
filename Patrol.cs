@@ -127,20 +127,40 @@ namespace Apocapatrol
                 yield return null;   // let the frame's FSMs start (hinges, getEngine, START ...)
 
                 int parts = 0;
-                parts += AttachAll(car, new[] { "hinge_wheel_FL", "hinge_wheel_FR" }, tpl.Wheel, "wheel");
-                yield return null;
-                parts += AttachAll(car, new[] { "hinge_wheel_RL", "hinge_wheel_RR" }, tpl.RearWheel.Length > 0 ? tpl.RearWheel : tpl.Wheel, "wheel");
-                yield return null;
-                string bumper = tpl.RollBumper();
-                if (bumper.Length > 0) { Plugin.Verbose("Front bumper roll: " + bumper); parts += AttachAll(car, new[] { "hinge_bumper_front" }, bumper, "bumper"); }
-                parts += AttachAll(car, new[] { "hinge_engine" }, tpl.Engine, "engine");
-                yield return null;
-                parts += AttachAll(car, new[] { "hinge_radiator" }, tpl.Radiator, "radiator");
-                parts += AttachAll(car, new[] { "hinge_steeringwheel" }, tpl.SteeringWheel, "steeringwheel");
-                parts += AttachAll(car, new[] { "hinge_exhaust" }, tpl.Exhaust, "exhaust");
-                yield return null;
-                parts += AttachAll(car, new[] { "hinge_seat_driver" }, tpl.Seat, "seat");
-                parts += AttachAll(car, new[] { "hinge_seat_passenger" }, tpl.PassengerSeat, "seat");
+                if (tpl.Parts != null)
+                {
+                    // a JSON template: its exact part list, hinge by hinge (parts on parts too), a few per frame
+                    var placed = new GameObject[tpl.Parts.Length];
+                    for (int i = 0; i < tpl.Parts.Length; i++)
+                    {
+                        placed[i] = AttachTemplatePart(car, tpl, i, placed);
+                        if (placed[i] != null) parts++;
+                        if (i % 4 == 3) { yield return null; if (car == null) yield break; }
+                    }
+                    var bumperHinge = FindChild(car.transform, "hinge_bumper_front");
+                    if (bumperHinge != null && !HasPart(bumperHinge))
+                    {
+                        string bumper = tpl.RollBumper();
+                        if (bumper.Length > 0) { Plugin.Verbose("Front bumper roll: " + bumper); parts += AttachAll(car, new[] { "hinge_bumper_front" }, bumper, "bumper"); }
+                    }
+                }
+                else
+                {
+                    parts += AttachAll(car, new[] { "hinge_wheel_FL", "hinge_wheel_FR" }, tpl.Wheel, "wheel");
+                    yield return null;
+                    parts += AttachAll(car, new[] { "hinge_wheel_RL", "hinge_wheel_RR" }, tpl.RearWheel.Length > 0 ? tpl.RearWheel : tpl.Wheel, "wheel");
+                    yield return null;
+                    string bumper = tpl.RollBumper();
+                    if (bumper.Length > 0) { Plugin.Verbose("Front bumper roll: " + bumper); parts += AttachAll(car, new[] { "hinge_bumper_front" }, bumper, "bumper"); }
+                    parts += AttachAll(car, new[] { "hinge_engine" }, tpl.Engine, "engine");
+                    yield return null;
+                    parts += AttachAll(car, new[] { "hinge_radiator" }, tpl.Radiator, "radiator");
+                    parts += AttachAll(car, new[] { "hinge_steeringwheel" }, tpl.SteeringWheel, "steeringwheel");
+                    parts += AttachAll(car, new[] { "hinge_exhaust" }, tpl.Exhaust, "exhaust");
+                    yield return null;
+                    parts += AttachAll(car, new[] { "hinge_seat_driver" }, tpl.Seat, "seat");
+                    parts += AttachAll(car, new[] { "hinge_seat_passenger" }, tpl.PassengerSeat, "seat");
+                }
                 Plugin.Verbose(parts + " parts attached");
 
                 if (tpl.FillFuel) Fuel(car, Plugin.RollPartFill());
@@ -149,8 +169,9 @@ namespace Apocapatrol
                 string lootKey = null;
                 if (!string.IsNullOrEmpty(tpl.Cargo))
                 {
-                    lootKey = tpl.Cargo.Equals("Random", StringComparison.OrdinalIgnoreCase) ? Cargo.RollLootType() : tpl.Cargo;
-                    string spec = Cargo.SpecFor(lootKey);
+                    bool itemSpec = CarTemplates.IsItemSpec(tpl.Cargo);   // a JSON template's fixed bed items ("dogfood_can:6;akms:1")
+                    lootKey = itemSpec ? "Custom" : tpl.Cargo.Equals("Random", StringComparison.OrdinalIgnoreCase) ? Cargo.RollLootType() : tpl.Cargo;
+                    string spec = itemSpec ? tpl.Cargo : Cargo.SpecFor(lootKey);
                     float scale = UnityEngine.Random.Range(Mathf.Min(tpl.LootScaleMin, tpl.LootScaleMax), Mathf.Max(tpl.LootScaleMin, tpl.LootScaleMax));
                     Plugin.Verbose("Loot: " + lootKey + " (" + spec + ") x" + Plugin.LootMultiplier.Value + " x" + scale.ToString("0.00") + " (template)");
                     cargo = new List<GameObject>();
@@ -234,7 +255,7 @@ namespace Apocapatrol
         // The game's vehPart_Attach "Attach" state: destroy the item's Rigidbody, tag vehPart, layer 8,
         // parent to the hinge with local position/rotation reset. Done before the item's own FSMs Start,
         // so CheckTag/LockPhysics see an already-attached part (same as a part loaded from a save).
-        private static void Attach(GameObject prefab, Transform hinge)
+        private static GameObject Attach(GameObject prefab, Transform hinge)
         {
             var part = UnityEngine.Object.Instantiate(prefab, hinge.position, hinge.rotation);
             part.SetActive(true);
@@ -247,6 +268,69 @@ namespace Apocapatrol
             part.transform.localRotation = Quaternion.identity;
             Register.Name(part, prefab.name); Register.Add(part, false);
             Plugin.Verbose("  " + part.name + " -> " + hinge.name);
+            return part;
+        }
+
+        // One part of a JSON template: the hinge is found by its path under the frame or under the part it sits on (by name
+        // anywhere below as a fallback); a hinge that already holds a part (the frame came with one) keeps it, and that part
+        // stands in as the parent for the parts listed on it.
+        private static GameObject AttachTemplatePart(GameObject car, CarTemplate tpl, int index, GameObject[] placed)
+        {
+            var p = tpl.Parts[index];
+            if (string.IsNullOrEmpty(p.prefab)) return null;
+            Transform root = car.transform;
+            if (p.parent >= 0)
+            {
+                var host = placed[p.parent];
+                if (host == null) { Plugin.Log.LogWarning(tpl.Name + ": part [" + index + "] " + p.prefab + " skipped, its parent part [" + p.parent + "] is missing"); return null; }
+                root = host.transform;
+            }
+            var hinge = FindPath(root, p.hinge);
+            if (hinge == null && p.hinge.Length > 0)
+            {
+                int slash = p.hinge.LastIndexOf('/');
+                hinge = FindChild(root, slash >= 0 ? p.hinge.Substring(slash + 1) : p.hinge);
+            }
+            if (hinge == null) { Plugin.Log.LogWarning(tpl.Name + ": hinge " + p.hinge + " not found on " + root.name + " for " + p.prefab); return null; }
+            var existing = PartOn(hinge);
+            if (existing != null) { Plugin.Verbose("  " + hinge.name + " already holds " + existing.name + ", " + p.prefab + " not added"); return existing; }
+            var prefab = Prefabs.FindAny(p.prefab) ?? Prefabs.Find(p.prefab, "item");
+            if (prefab == null) { Plugin.Log.LogWarning(tpl.Name + ": part prefab not found: " + p.prefab); return null; }
+            if (p.hingePos != null && p.hingePos.Length == 3) hinge.localPosition = new Vector3(p.hingePos[0], p.hingePos[1], p.hingePos[2]);
+            if (p.hingeRot != null && p.hingeRot.Length == 3) hinge.localEulerAngles = new Vector3(p.hingeRot[0], p.hingeRot[1], p.hingeRot[2]);
+            var part = Attach(prefab, hinge);
+            if (p.pos != null && p.pos.Length == 3) part.transform.localPosition = new Vector3(p.pos[0], p.pos[1], p.pos[2]);
+            if (p.rot != null && p.rot.Length == 3) part.transform.localEulerAngles = new Vector3(p.rot[0], p.rot[1], p.rot[2]);
+            return part;
+        }
+
+        private static bool HasPart(Transform hinge) { return PartOn(hinge) != null; }
+
+        private static GameObject PartOn(Transform hinge)
+        {
+            for (int i = 0; i < hinge.childCount; i++)
+            {
+                var c = hinge.GetChild(i);
+                bool tagged;
+                try { tagged = c.CompareTag("vehPart"); } catch (Exception) { tagged = false; }
+                if (tagged) return c.gameObject;
+            }
+            return null;
+        }
+
+        internal static Transform FindPath(Transform root, string path)
+        {
+            if (root == null) return null;
+            if (string.IsNullOrEmpty(path)) return root;
+            var t = root;
+            foreach (var seg in path.Split('/'))
+            {
+                Transform next = null;
+                for (int i = 0; i < t.childCount; i++) if (t.GetChild(i).name == seg) { next = t.GetChild(i); break; }
+                if (next == null) return null;
+                t = next;
+            }
+            return t;
         }
 
         // The tank: <car>/Fuel [LiquidAmount] Liquid / LiquidCapacity, filled to pct % of the capacity.

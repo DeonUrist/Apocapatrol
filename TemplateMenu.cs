@@ -71,6 +71,7 @@ namespace Apocapatrol
         private void Open()
         {
             Resolve();
+            CarTemplates.Refresh(false);   // a template dumped a moment ago (Apocatemplater) is in the list now
             _open = true;
             _prevLock = Cursor.lockState; _prevVisible = Cursor.visible;
             if (_hasSetter) { try { _blockerSet.Invoke(null, new object[] { true }); } catch (Exception e) { Plugin.Log.LogWarning("InputBlocker: " + e.Message); } }
@@ -132,7 +133,7 @@ namespace Apocapatrol
                 foreach (var t in CarTemplate.Park)
                 {
                     if (IsTruck(t) != (col == 1)) continue;
-                    if (GUILayout.Button(t.Name, GUILayout.Height(28f))) chosen = t;
+                    if (GUILayout.Button(t.Origin == "built-in" ? t.Name : t.Name + "  [" + t.Origin + "]", GUILayout.Height(28f))) chosen = t;
                     GUILayout.Space(2f);
                 }
                 GUILayout.EndVertical();
@@ -157,11 +158,7 @@ namespace Apocapatrol
             }
         }
 
-        private static bool IsTruck(CarTemplate t)
-        {
-            string b = t.Body ?? "";
-            return b.StartsWith("Rust", StringComparison.OrdinalIgnoreCase) || t.Cargo.Length > 0;
-        }
+        private static bool IsTruck(CarTemplate t) { return t.IsTruck; }
 
         private static string Summary(CarTemplate t)
         {

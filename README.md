@@ -181,6 +181,21 @@ For testing: set **TemplateSpawnerKey** to a key (F8, say) and press it to open 
 travelled far enough. Below them every car and truck is listed, and clicking one builds it with its crew in front of you. It's meant
 for testing and for picking a fight on purpose.
 
+## Your own raider cars
+
+Build a car in game the way you like it (frame, wheels, engine, seats, plates, spikes, roof rack, anything the wrench attaches,
+even items locked in the bed), then save it as a template with **Apocatemplater** (a small companion mod, dump key F9 by
+default): sit in the car or look at it and press the key. The template lands in `BepInEx\plugins\Apocapatrol\CarTemplates\`
+as a `.json` file and shows up in the spawner menu the next time you open it, marked `[file]`.
+
+Every template joins the raider patrols and convoys by its `kind` (`small`, `junker` or `truck`) and `tier` (`basic` or
+`advanced`), with `weight` as its relative chance among the cars of the same role. Open the file in a text editor to change the
+crew (`driver`, `passenger`), what it rams (`None`, `Pedestrians`, `Cars`), the bed (`cargo`: empty, `Random`, a loot type like
+`Food`, or the item list the dump wrote), the front bumper roll (`bumpers`), or set `spawns` to `false` to keep it out of the
+patrols (spawner menu only). A file with the name of a built-in car replaces that car.
+
+Templates in the mod's own `CarTemplates` folder of the source are built into `Apocapatrol.dll`, so they ship with the mod.
+
 ## Install
 
 1. Install BepInEx 5 in the game folder.

@@ -24,6 +24,21 @@ namespace Apocapatrol
         internal float LootScaleMin = 1f, LootScaleMax = 1f;   // per-spawn loot amount factor rolled in this range (on top of [Loot] Multiplier)
         internal bool FillFuel = true, ReleaseHandbrake = true;
 
+        // JSON car templates (CarTemplates.cs; written by the Apocatemplater dumper). Parts != null = this exact part list is
+        // attached hinge by hinge instead of the Wheel/Engine/... fields above.
+        internal TemplatePart[] Parts;
+        internal string Kind = "";            // small | junker | truck; "" = by body / cargo (the built-in rule)
+        internal string Tier = "";            // basic | advanced; "" = by name
+        internal bool Spawns = true;          // false: spawner menu only, never in a patrol / convoy
+        internal float Weight = 1f;           // relative pick chance among the templates a patrol slot accepts
+        internal string Origin = "built-in";  // built-in | embedded | file (for the log and the spawner menu)
+
+        // the spawn roles (Convoy picks, spawner menu column)
+        internal bool IsTruck { get { return Kind.Length > 0 ? Kind.Equals("truck", StringComparison.OrdinalIgnoreCase) : (Body ?? "").StartsWith("Rust", StringComparison.OrdinalIgnoreCase) || Cargo.Length > 0; } }
+        internal bool IsJunker { get { return Kind.Length > 0 ? Kind.Equals("junker", StringComparison.OrdinalIgnoreCase) : string.Equals(Body, "Junker", StringComparison.OrdinalIgnoreCase); } }
+        internal bool IsAdvanced { get { return Tier.Length > 0 ? Tier.Equals("advanced", StringComparison.OrdinalIgnoreCase) : Name.IndexOf("Advanced", StringComparison.OrdinalIgnoreCase) >= 0; } }
+        internal bool IsBasic { get { return Tier.Length > 0 ? Tier.Equals("basic", StringComparison.OrdinalIgnoreCase) : Name.EndsWith("_Basic", StringComparison.OrdinalIgnoreCase) || (!IsAdvanced && IsTruck); } }
+
         // loot types: key, item spec ("prefab:count;prefab:min-max;..."; "@weapons" = rolled by Cargo.WeaponsSpec), default chance (%)
         // (chances: the original 25/20/15/15/15/10 + Diesel 15, Mechanic 10, Corpses 10, Rats 5 = 140, normalised to 100 and rounded to whole numbers:
         //  18/14/11/11/11/11/7/7/7/3 = 100 — whole numbers so the default parses the same under every regional number format)
@@ -66,7 +81,7 @@ namespace Apocapatrol
         // ------------------------------------------------------------ THE PARK
         // name, body, wheel, engine, radiator, steering wheel, driver seat, passenger seat, driver, passenger, ramsTargets
         // (prefab names or in-game item names; "" = no part / nobody)
-        internal static readonly CarTemplate[] Park =
+        internal static readonly CarTemplate[] Builtin =
         {
             // name, body, wheel, engine, radiator, steering wheel, exhaust, driver seat, passenger seat, driver, passenger, ramsTargets
             new CarTemplate("PipeRat_Basic", "PipeRat", "small_wheel_1", "1.2L I4 59HP 87Nm Gasoline", "radiator_small", "steeringwheel_7", "poloska_exhaust",
@@ -96,6 +111,10 @@ namespace Apocapatrol
                 "rustallion_seat_front", "rustallion_seat_front", "Sprokka", "Flexa", RamTargets.Cars) { Cargo = "Random", LootScaleMin = 1.5f, LootScaleMax = 2f, RearWheel = "truck_wheel_2_armored", Bumpers = TruckBumpers },
         };
 
+        // Park = the built-ins above + every JSON template (CarTemplates.Rebuild; a JSON template with a built-in's name replaces it).
+        // Declared after Builtin: static initialisers run in source order.
+        internal static CarTemplate[] Park = Builtin;
+
         internal static RamTargets ParseRams(string s)
         {
             if (string.Equals(s, "None", StringComparison.OrdinalIgnoreCase)) return RamTargets.None;
@@ -120,6 +139,10 @@ namespace Apocapatrol
 
         internal string Describe()
         {
+            if (Parts != null)
+                return Body + " / " + Parts.Length + " part(s) (" + Origin + ") / driver " + (Driver.Length > 0 ? Driver : "-") + " / passenger " + (Passenger.Length > 0 ? Passenger : "-")
+                    + " / rams " + Rams + " / " + (IsTruck ? "truck" : IsJunker ? "junker" : "small") + " " + (IsAdvanced ? "advanced" : "basic") + (Spawns ? "" : " (menu only)")
+                    + (Cargo.Length > 0 ? " / loot " + Cargo : "");
             return Body + " / " + Wheel + (RearWheel.Length > 0 ? " + rear " + RearWheel : "") + " / " + Engine + " / " + Radiator + " / " + SteeringWheel + " / " + (Exhaust.Length > 0 ? Exhaust : "no exhaust") + " / seats " + Seat + " + " + PassengerSeat
                 + " / driver " + (Driver.Length > 0 ? Driver : "-") + " / passenger " + (Passenger.Length > 0 ? Passenger : "-") + " / rams " + Rams
                 + (Cargo.Length > 0 ? " / loot " + Cargo : "");

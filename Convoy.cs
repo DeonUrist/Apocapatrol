@@ -243,15 +243,22 @@ namespace Apocapatrol
 
         // ------------------------------------------------------------ composition
 
-        private static bool IsTruckTpl(CarTemplate t) { return (t.Body ?? "").StartsWith("Rust", StringComparison.OrdinalIgnoreCase) || t.Cargo.Length > 0; }
-        private static bool IsJunkerTpl(CarTemplate t) { return string.Equals(t.Body, "Junker", StringComparison.OrdinalIgnoreCase); }
-        private static bool IsAdvancedTpl(CarTemplate t) { return t.Name.IndexOf("Advanced", StringComparison.OrdinalIgnoreCase) >= 0; }
-        private static bool IsBasicTpl(CarTemplate t) { return t.Name.EndsWith("_Basic", StringComparison.OrdinalIgnoreCase) || (!IsAdvancedTpl(t) && IsTruckTpl(t)); }
+        // roles: a template's own kind / tier when it has one (JSON templates), else the built-in name/body rules (CarTemplate.IsTruck ...)
+        private static bool IsTruckTpl(CarTemplate t) { return t.IsTruck; }
+        private static bool IsJunkerTpl(CarTemplate t) { return t.IsJunker; }
+        private static bool IsAdvancedTpl(CarTemplate t) { return t.IsAdvanced; }
+        private static bool IsBasicTpl(CarTemplate t) { return t.IsBasic; }
 
+        // weighted by CarTemplate.Weight (built-ins 1); templates with Spawns = false never come here
         private static CarTemplate Pick(Func<CarTemplate, bool> match)
         {
-            var list = CarTemplate.Park.Where(match).ToList();
-            return list.Count == 0 ? null : list[UnityEngine.Random.Range(0, list.Count)];
+            var list = CarTemplate.Park.Where(t => t.Spawns && t.Weight > 0f && match(t)).ToList();
+            if (list.Count == 0) return null;
+            float total = 0f;
+            foreach (var t in list) total += t.Weight;
+            float r = UnityEngine.Random.value * total;
+            foreach (var t in list) { r -= t.Weight; if (r <= 0f) return t; }
+            return list[list.Count - 1];
         }
 
         // small = not a junker, not a truck
@@ -275,6 +282,7 @@ namespace Apocapatrol
         // truck never travels completely alone).
         internal static List<CarTemplate> Compose(SpawnKind kind, float heat)
         {
+            CarTemplates.Refresh(false);   // templates dumped since the last check join this group already
             var list = new List<CarTemplate>();
             switch (kind)
             {

@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.9.1";
+        public const string VERSION = "1.10.0";
 
         internal static ManualLogSource Log;
 
@@ -142,6 +142,7 @@ namespace Apocapatrol
         {
             Log = Logger;
             Paint.Init(Info.Location);
+            CarTemplates.Init(Info.Location);
             bool exposePose = PoseConfigurationEnabled(Config.ConfigFilePath);
 
             Config.Bind("General", "Apocasetter", true,
@@ -412,11 +413,12 @@ namespace Apocapatrol
             MigrateMovedSettings();
             ApplyAudioVoices();   // after the migration: an old [General] AudioVoices counts
             Paint.Preload();      // all Textures decoded now, not in the middle of a spawn
+            CarTemplates.Load();  // JSON car templates: embedded in the DLL + plugins\Apocapatrol\CarTemplates\*.json
             PurgeStaleEntries();
 
             SceneManager.sceneLoaded += (s, m) => { EnsureRunner(); Patrol.ResetForScene(); PlayerRef.Reset(); PatrolPersistence.ResetForScene(); Convoy.ResetForScene(); };
             EnsureRunner();
-            Log.LogInfo(NAME + " " + VERSION + " loaded");
+            Log.LogInfo(NAME + " " + VERSION + " loaded (" + CarTemplates.Summary + ")");
         }
 
         // Settings from earlier versions ([Build], [Driver], [Passenger], old keys) stay in the file as orphaned lines and would
