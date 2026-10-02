@@ -92,6 +92,22 @@ namespace Apocapatrol
                 }
 
             Deaden(car, truck);
+            if (truck) yield break;
+
+            // the grip is only for the moment after the blast: once the wreck has come to rest (or after GripMaxSeconds) its colliders
+            // and drag go back to what they were, so it behaves like any parked chassis (pushable, normal friction)
+            var grip = Grip(car);
+            var rb = car != null ? car.GetComponent<Rigidbody>() : null;
+            float t0 = Time.time, still = 0f;
+            while (car != null && rb != null && Time.time - t0 < GripMaxSeconds && still < 1f)
+            {
+                yield return new WaitForSeconds(0.25f);
+                if (rb == null) break;
+                bool rest = rb.isKinematic || (rb.velocity.sqrMagnitude < 0.04f && rb.angularVelocity.sqrMagnitude < 0.04f);
+                still = rest ? still + 0.25f : 0f;
+            }
+            Ungrip(grip);
+            Plugin.Verbose("Explode: " + (car != null ? car.name : "wreck") + " settled, normal physics again");
         }
 
         // ------------------------------------------------------------ pieces
@@ -289,7 +305,6 @@ namespace Apocapatrol
                 string n = c.GetType().Name;
                 if (n == "VehicleController" || n == "WheelController") ((Behaviour)c).enabled = false;
             }
-            if (!truck) Grip(car);
             // engine sound scripts (SkrilStudio RealisticEngineSound, gearbox whine, muffler crackle) and every looping sound on the frame -
             // the START FSM's cranking loop kept playing when the car blew up mid-start
             foreach (var b in car.GetComponentsInChildren<Behaviour>(true))
@@ -308,16 +323,24 @@ namespace Apocapatrol
         // A small car's chassis without its wheels and with the NWH controllers off rests on its frame colliders and the wheel hubs' sphere
         // colliders (wheel_hub/collider, added by the AddSphereCollider FSM) - built for the wheel simulation, with next to no friction, so the
         // wreck kept sliding over the ground. One-time: a high-friction, no-bounce material on every solid frame collider plus a little drag.
+        private const float GripMaxSeconds = 15f;
         private static PhysicMaterial _grip;
-        private static void Grip(GameObject car)
+        private class GripState
         {
+            public Rigidbody Rb; public float Drag, AngularDrag;
+            public List<KeyValuePair<Collider, PhysicMaterial>> Cols = new List<KeyValuePair<Collider, PhysicMaterial>>();
+        }
+
+        private static GripState Grip(GameObject car)
+        {
+            var st = new GripState();
+            if (car == null) return st;
             if (_grip == null)
                 _grip = new PhysicMaterial("ApocapatrolWreckGrip")
                 {
                     dynamicFriction = 1f, staticFriction = 1f, frictionCombine = PhysicMaterialCombine.Maximum,
                     bounciness = 0f, bounceCombine = PhysicMaterialCombine.Minimum
                 };
-            int n = 0;
             foreach (var col in car.GetComponentsInChildren<Collider>(true))
             {
                 if (col == null || col.isTrigger) continue;
@@ -325,12 +348,27 @@ namespace Apocapatrol
                 for (var a = col.transform; a != null && a != car.transform; a = a.parent)
                     if (a.CompareTag("vehPart") || a.name.IndexOf("_Dead", StringComparison.Ordinal) >= 0 || a.name == "PhysicsLock") { skip = true; break; }
                 if (skip) continue;
+                st.Cols.Add(new KeyValuePair<Collider, PhysicMaterial>(col, col.sharedMaterial));
                 col.sharedMaterial = _grip;
-                n++;
             }
-            var rb = car.GetComponent<Rigidbody>();
-            if (rb != null) { rb.drag = Mathf.Max(rb.drag, 0.5f); rb.angularDrag = Mathf.Max(rb.angularDrag, 1f); }
-            Plugin.Verbose("Explode: grip on " + n + " frame collider(s)");
+            st.Rb = car.GetComponent<Rigidbody>();
+            if (st.Rb != null)
+            {
+                st.Drag = st.Rb.drag; st.AngularDrag = st.Rb.angularDrag;
+                st.Rb.drag = Mathf.Max(st.Rb.drag, 0.5f); st.Rb.angularDrag = Mathf.Max(st.Rb.angularDrag, 1f);
+            }
+            Plugin.Verbose("Explode: grip on " + st.Cols.Count + " frame collider(s) while the wreck settles");
+            return st;
+        }
+
+        // back to the colliders' own materials and the body's drag (the runtime grip material must not stay: Easy Save would store it
+        // as a reference it cannot resolve on load)
+        private static void Ungrip(GripState st)
+        {
+            if (st == null) return;
+            foreach (var kv in st.Cols)
+                if (kv.Key != null && kv.Key.sharedMaterial == _grip) kv.Key.sharedMaterial = kv.Value;
+            if (st.Rb != null) { st.Rb.drag = st.Drag; st.Rb.angularDrag = st.AngularDrag; }
         }
 
         private static void StopLoops(GameObject car)
