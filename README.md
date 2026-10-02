@@ -1,4 +1,4 @@
-# Apocapatrol 1.8.9
+# Apocapatrol 1.9.0
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -144,7 +144,9 @@ Turn **CustomPaintjobs** off (under Debug) to skip all of this: raider cars then
 ## Saving and loading
 
 Raider cars, their crews, the crews' health and what they were doing are saved with your game. After a load they start their engines
-and carry on. The timer until the next convoy is saved too.
+and carry on. The timer until the next convoy is saved too. All of it is stored inside the game's own save file, so it travels with
+Steam Cloud and copied saves; paint jobs come back after a load as well. (Saves made with versions before 1.9.0 keep their raider data in
+`BepInEx\config\Apocapatrol\Saves`, which is still read; their cars get their paint back on the next load.)
 
 ## Settings
 

@@ -21,6 +21,7 @@ namespace Apocapatrol
         private const float Delay = 1f;                        // after the vacate, so the last carcass has left the seat
         private const string BlastPrefab = "Explosion_BlastZombie";   // what the exploder zombie's Health FSM spawns when it dies
         private static readonly Color Charred = new Color(0.06f, 0.06f, 0.06f, 1f);
+        private static readonly int ColorId = Shader.PropertyToID("_Color"), EmissionId = Shader.PropertyToID("_EmissionColor");
         private static GameObject _blast; private static bool _blastLooked;
         // the blast prefab's harmful half: ExplosionRadius grows its trigger sphere, ExplosionDamage sends distance-scaled Damage to every
         // Bodypart its Range/LOS sensors detect. Switched off right after Instantiate, before they Start.
@@ -209,11 +210,18 @@ namespace Apocapatrol
                 if (skip) continue;
                 try
                 {
-                    foreach (var m in r.materials)
+                    // a property block, not r.materials: instanced materials went into the save as references Easy Save can't resolve
+                    // on load (a pink wreck); the block is not saved and keeps the paint's _MainTex
+                    var mats = r.sharedMaterials;
+                    var b = Paint.Block;
+                    for (int i = 0; i < mats.Length; i++)
                     {
+                        var m = mats[i];
                         if (m == null) continue;
-                        if (m.HasProperty("_Color")) { var c = m.color; m.color = new Color(Charred.r, Charred.g, Charred.b, c.a); }
-                        if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", Color.black);
+                        r.GetPropertyBlock(b, i);
+                        if (m.HasProperty("_Color")) { var c = m.color; b.SetColor(ColorId, new Color(Charred.r, Charred.g, Charred.b, c.a)); }
+                        if (m.HasProperty("_EmissionColor")) b.SetColor(EmissionId, Color.black);
+                        r.SetPropertyBlock(b, i);
                         n++;
                     }
                 }

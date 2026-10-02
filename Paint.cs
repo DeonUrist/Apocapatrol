@@ -8,14 +8,15 @@ namespace Apocapatrol
     // Custom paint for the mod's own cars: BepInEx/plugins/Apocapatrol/Textures/<texture name>.png replaces the frame texture of that name
     // on every car the mod spawns (and on its saved cars after a load). Textures/junker.png = the Junker body's "junker" texture.
     // The file must follow the original texture's layout; its alpha is kept (the body shader cuts out pixels below 50 % alpha = rust holes).
-    // One replacement material per original material, shared by every mod car that uses it; vanilla cars keep the original.
+    // The paint is a MaterialPropertyBlock (_MainTex per material slot) on the frame renderers - the materials themselves stay the game's own.
+    // Easy Save stores the car's renderers with their sharedMaterials as references: a runtime material copy (what 1.5.0-1.8.9 used) went
+    // into the save as a reference it can't resolve on load, so the paint was lost or the body rendered pink. Property blocks are not saved.
     internal static class Paint
     {
         internal const string Folder = "Textures";
         private static string _dir;
         private static readonly Dictionary<string, Texture2D> _tex = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);   // null = no file
-        private static readonly Dictionary<int, Material> _mat = new Dictionary<int, Material>();   // original material id -> painted copy
-
+        
         internal static void Init(string pluginDll)
         {
             _dir = Path.Combine(Path.GetDirectoryName(pluginDll) ?? ".", Folder);   // called early in Awake: no logging here
@@ -41,18 +42,9 @@ namespace Apocapatrol
                     { "dashboard.010", "piperat_dashboard" },
                 } },
         };
-        private static readonly Dictionary<string, Material> _bodyMat = new Dictionary<string, Material>();   // "<orig mat id>|<file>"
-
-        private static Material Copy(Material m, string file, Texture2D tex)
-        {
-            string key = m.GetInstanceID() + "|" + file;
-            Material painted;
-            if (_bodyMat.TryGetValue(key, out painted) && painted != null) return painted;
-            painted = new Material(m) { name = m.name + " (Apocapatrol " + file + ")" };
-            painted.mainTexture = tex;
-            _bodyMat[key] = painted;
-            return painted;
-        }
+        private static MaterialPropertyBlock _block;
+        internal static MaterialPropertyBlock Block { get { if (_block == null) _block = new MaterialPropertyBlock(); return _block; } }
+        private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
 
         // Decodes every PNG in Textures once, at plugin load (before the main menu): a PNG decode + mipmaps + GPU upload runs on the main
         // thread and froze the first spawn that needed it. Layout guides (*_uv_layout / *_uv_over_texture) are skipped.
@@ -103,18 +95,20 @@ namespace Apocapatrol
                         if (mf != null && mf.sharedMesh != null && meshFiles.TryGetValue(mf.sharedMesh.name, out meshFile)) meshTex = Load(meshFile);
                     }
                     var mats = r.sharedMaterials;
-                    bool changed = false;
                     for (int i = 0; i < mats.Length; i++)
                     {
                         var m = mats[i];
                         if (m == null || !m.HasProperty("_MainTex")) continue;
-                        Material painted;
-                        if (meshTex != null) painted = Copy(m, meshFile, meshTex);
-                        else if (bodyTex != null && m.mainTexture != null && m.mainTexture.name == bodyTexName) painted = Copy(m, bodyFile, bodyTex);
-                        else painted = Painted(m);
-                        if (painted != null && painted != m) { mats[i] = painted; changed = true; n++; }
+                        Texture2D tex = null;
+                        if (meshTex != null) tex = meshTex;
+                        else if (bodyTex != null && m.mainTexture != null && m.mainTexture.name == bodyTexName) tex = bodyTex;
+                        else if (m.mainTexture != null) tex = Load(m.mainTexture.name);
+                        if (tex == null) continue;
+                        r.GetPropertyBlock(Block, i);
+                        Block.SetTexture(MainTexId, tex);
+                        r.SetPropertyBlock(Block, i);
+                        n++;
                     }
-                    if (changed) r.sharedMaterials = mats;
                 }
             }
             catch (Exception e) { Plugin.Log.LogWarning("Paint: " + e.Message); }
@@ -325,22 +319,44 @@ namespace Apocapatrol
             return true;
         }
 
-        private static Material Painted(Material m)
+        // After a load: frame material slots that a pre-1.9.0 save broke (an unresolvable reference to the old runtime paint copy or
+        // the charred instance -> null = pink, or a leftover "(Apocapatrol ...)" copy) get the body prefab's own material back, by the
+        // renderer's path under the car. Runs before the paint; harmless on cars saved by 1.9.0+ (nothing to fix).
+        internal static int RepairFrame(GameObject car, GameObject prefab)
         {
-            Material cached;
-            int id = m.GetInstanceID();
-            if (_mat.TryGetValue(id, out cached)) return cached;
-            foreach (var kv in _mat) if (kv.Value == m) return m;   // already one of ours
-            var main = m.mainTexture;
-            var tex = main != null ? Load(main.name) : null;
-            Material result = null;
-            if (tex != null)
+            if (car == null || prefab == null) return 0;
+            int n = 0;
+            try
             {
-                result = new Material(m) { name = m.name + " (Apocapatrol paint)" };
-                result.mainTexture = tex;
+                foreach (var r in car.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null || r.GetType().Name == "ParticleSystemRenderer" || !OnFrame(car, r.transform)) continue;
+                    var mats = r.sharedMaterials;
+                    bool broken = false;
+                    foreach (var m in mats) if (m == null || m.name.IndexOf("(Apocapatrol", StringComparison.Ordinal) >= 0) { broken = true; break; }
+                    if (!broken) continue;
+                    var twin = PathFrom(car.transform, r.transform);
+                    var src = twin == null ? null : (twin.Length == 0 ? prefab.transform : prefab.transform.Find(twin));
+                    var pr = src != null ? src.GetComponent<Renderer>() : null;
+                    if (pr == null) continue;
+                    var orig = pr.sharedMaterials;
+                    for (int i = 0; i < mats.Length && i < orig.Length; i++)
+                        if (mats[i] == null || mats[i].name.IndexOf("(Apocapatrol", StringComparison.Ordinal) >= 0) { mats[i] = orig[i]; n++; }
+                    r.sharedMaterials = mats;
+                }
             }
-            _mat[id] = result;
-            return result;
+            catch (Exception e) { Plugin.Log.LogWarning("Paint: repair: " + e.Message); }
+            if (n > 0) Plugin.Log.LogInfo("Paint: " + car.name + ": " + n + " broken material slot(s) from an older save restored");
+            return n;
+        }
+
+        private static string PathFrom(Transform root, Transform t)
+        {
+            if (t == root) return "";
+            var parts = new List<string>();
+            for (var a = t; a != null && a != root; a = a.parent) parts.Add(a.name);
+            parts.Reverse();
+            return string.Join("/", parts.ToArray());
         }
 
         private static Texture2D Load(string name)
