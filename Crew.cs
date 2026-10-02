@@ -28,6 +28,8 @@ namespace Apocapatrol
         private float _delayOverride = -1f;   // a promoted passenger drives off after TakeoverSeconds instead of DriveDelaySeconds
         private float _deadFor;               // seconds since the driver died
         private bool _paxDecided, _paxBails;  // the surviving passenger's decision (rolled once)
+        private bool _doorOpened; private float _doorWait;   // the door is opened before the passenger gets out / throws the driver out
+        private const float DoorSeconds = 0.6f;              // time for a car door to swing open before anyone goes through it
         private float _nextIgnore;            // periodic re-apply of occupant-vs-car collision ignores
         private Patrol.CorpseEject _eject;           // the dead driver being thrown out; the passenger climbs over once it is Done
         private bool _promoting;
@@ -369,6 +371,14 @@ namespace Apocapatrol
                 Nwh.SetInput(_car, 0f, 0f, 0f);
                 Plugin.Verbose("Crew: passenger kicked the dead driver's foot off the pedal");
             }
+            // the door on that side opens first (passenger's own door to bail, the driver's door to throw the dead driver out)
+            if (!_doorOpened)
+            {
+                _doorOpened = true;
+                var seat = _paxBails ? pax.transform.position : Patrol.DriverSeatPos(_car);
+                if (Patrol.OpenDoorAt(_car, seat)) { _doorWait = Time.time + DoorSeconds; return true; }
+            }
+            if (Time.time < _doorWait) return true;
             if (_paxBails)
             {
                 Patrol.BailOut(_car, pax, marker);
@@ -401,16 +411,28 @@ namespace Apocapatrol
             if (_ctl != null && _ctl.Taken) _ctl.Release();
             SeatLocked(false);
             var pax = marker != null ? marker.Passenger : null;
-            if (pax != null && PassengerAlive(marker, pax)) Patrol.BailOut(_car, pax, marker);
-            if (_driver != null && DriverAlive())
-            {
-                if (marker != null) marker.DriverLeft();
-                Patrol.BailOut(_car, _driver, marker != null ? marker.DriverPrefab : _driver.name.Replace("(Driver)", ""), -1f);
-            }
+            bool paxGoes = pax != null && PassengerAlive(marker, pax), driverGoes = _driver != null && DriverAlive();
+            // both doors open first; the crew gets out once they have swung open
+            bool opened = false;
+            if (paxGoes) opened |= Patrol.OpenDoorAt(_car, pax.transform.position);
+            if (driverGoes) opened |= Patrol.OpenDoorAt(_car, Patrol.DriverSeatPos(_car));
+            StartCoroutine(BailAfter(opened ? DoorSeconds : 0f, marker, paxGoes ? pax : null, driverGoes ? _driver : null));
             _driver = null; _health = null;
             _dead = true; _done = true; _driving = false;    // Phase = Released: saved as an empty car
             Vacated("crew bailed out");
             return true;
+        }
+
+        private IEnumerator BailAfter(float wait, PatrolMarker marker, GameObject pax, GameObject driver)
+        {
+            if (wait > 0f) yield return new WaitForSeconds(wait);
+            if (_car == null) yield break;
+            if (pax != null) Patrol.BailOut(_car, pax, marker);
+            if (driver != null)
+            {
+                if (marker != null) marker.DriverLeft();
+                Patrol.BailOut(_car, driver, marker != null ? marker.DriverPrefab : driver.name.Replace("(Driver)", ""), -1f);
+            }
         }
 
         // Step 2: the passenger climbs onto the driver seat and Crew starts over with it as the driver.
@@ -423,7 +445,7 @@ namespace Apocapatrol
             if (drv == null) { Plugin.Log.LogWarning("Crew: could not seat the passenger as driver"); _paxBails = true; return; }
             marker.Promote(drv);
             _dead = false; _stuck = false; _done = false; _driving = false;
-            _rolling = 0f; _deadFor = 0f; _paxDecided = false; _paxBails = false;
+            _rolling = 0f; _deadFor = 0f; _paxDecided = false; _paxBails = false; _doorOpened = false; _doorWait = 0f;
             _delayOverride = Plugin.TakeoverSeconds;
             Init(_car, drv);
             _seated = 0f;

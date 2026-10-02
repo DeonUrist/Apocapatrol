@@ -54,6 +54,7 @@ namespace Apocapatrol
             // the hinges' engine wobble (Shake FSM: iTweenRotateTo on the part while the car's rpm is up) stops before anything pops,
             // so it cannot start a new tween on a part that is about to be loose
             QuietHinges(car);
+            Patrol.Headlights(car, false);   // popped headlights would keep shining on the ground
             var parts = new List<Transform>();
             int kept = 0, wheels = 0;
             foreach (var p in Parts(car))

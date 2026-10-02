@@ -114,10 +114,7 @@ namespace Apocapatrol
                 "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Sprokka", RamTargets.Pedestrians) { Bumpers = SmallBumpers },
             new CarTemplate("TinyTyrant_Advanced", "TinyTyrant", "small_wheel_2", "2.8L V6 115HP 183Nm Gasoline", "Medium Radiator", "steeringwheel_7", "poloska_exhaust",
                 "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Lugnut", RamTargets.Pedestrians) { Bumpers = SmallBumpers },
-            new CarTemplate("Junker_Basic", "Junker", "small_wheel_1", "2.3L I4 89HP 165Nm Gasoline", "Medium Radiator", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Sprokka", "Lugnut", RamTargets.Pedestrians) { Bumpers = JunkerBumpers, Kind = "medium", Kinds = new[] { "medium" }, Tier = "basic" },
-            new CarTemplate("Junker_Advanced", "Junker", "small_wheel_1", "2.3L I4 89HP 165Nm Gasoline", "Medium Radiator", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Sprokka", "Flexa", RamTargets.Pedestrians) { Bumpers = JunkerBumpers, Kind = "medium", Kinds = new[] { "medium" }, Tier = "advanced" },
+            // Junker_Basic / Junker_Advanced: JSON templates built into the DLL (CarTemplates/Junker_*.json, kind medium) since 1.12.0
             new CarTemplate("Rustcargo_Basic", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
                 "rustallion_seat_front", "rustallion_seat_front", "Scraffa", "Flexa", RamTargets.Cars) { RearWheel = "truck_wheel_2", Bumpers = TruckBumpers },
             new CarTemplate("Rustcargo_Advanced", "Rustcargo", "truck_wheel_1_armored", "7L I6 165HP 542Nm Diesel", "radiator_truck_big", "steeringwheel_3", "exhaust_single",

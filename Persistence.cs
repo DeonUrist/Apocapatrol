@@ -290,7 +290,12 @@ namespace Apocapatrol
             // a second, cheap pass a few seconds later: anything the game's own load applied after us (materials) is fixed again
             yield return new WaitForSecondsRealtime(3f);
             foreach (var kv in restored)
-                if (kv.Key != null) { RepairFrame(kv.Key, kv.Value.bodyPrefab); Paint.Apply(kv.Key, kv.Value.bodyPrefab); }
+                if (kv.Key != null)
+                {
+                    RepairFrame(kv.Key, kv.Value.bodyPrefab); Paint.Apply(kv.Key, kv.Value.bodyPrefab);
+                    var crew = kv.Key.GetComponent<Crew>();
+                    if (crew != null && crew.CrewAlive && !Explode.IsWreck(kv.Key)) Patrol.Headlights(kv.Key, true);   // raiders drive with their lights on
+                }
         }
 
         private static GameObject FindCar(PatrolCarData data, List<GameObject> roots)

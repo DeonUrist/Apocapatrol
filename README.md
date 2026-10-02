@@ -1,4 +1,4 @@
-# Apocapatrol 1.11.3
+# Apocapatrol 1.12.0
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -10,9 +10,11 @@ Every raider vehicle is built from the game's own frames and parts, so it looks,
 its crew is dealt with it's yours to take.
 
 - **Small cars**: PipeRat, Poloska and TinyTyrant, each in a basic and an advanced (stronger engine, better wheels) version.
-- **Junkers**: heavier, harder-hitting cars, basic and advanced.
+- **Junkers**: heavier, harder-hitting cars with doors, plates and a full body kit, basic and advanced.
+- **Motorcycles**: the Halfbreed, basic and advanced, ridden by bikers.
 - **Trucks**: the Rustcargo, with dual rear wheels, as a plain truck or a loot truck. The advanced truck has armored wheels and a big diesel.
 - Every car rolls a random look: small cars and junkers may carry a front bumper, and trucks always have one of four heavy bumpers.
+- They drive with their headlights on.
 - Nothing is brand new. Parts are worn (2–35 % condition), and the tank, engine oil and radiator are only partly filled (15–60 %).
 
 ## The crews
@@ -24,6 +26,8 @@ Each car carries a driver and a passenger picked from the scrapyard gang: Boltja
   the wheel fires in short bursts between stretches of driving. Scraffa just rides along.
 - **Kill the driver** and the car comes to a stop, unless his foot stays jammed on the gas (a small chance). Four seconds later the
   surviving passenger acts, whatever the car is doing: takes the wheel and keeps coming, or jumps out and fights on foot.
+- A car with doors opens the right door first: the passenger's own door before he jumps out, the driver's door before a dead
+  driver is thrown out.
 - While the driver lives you can't get into the car. Once it's empty, it's yours.
 - If a car gets stuck a third time in a row, the crew climbs out and comes after you on foot. A car that runs out of fuel is left the
   same way.

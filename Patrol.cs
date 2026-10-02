@@ -199,6 +199,7 @@ namespace Apocapatrol
                 SetPartConditions(car);
                 if (cargo != null) Cargo.ApplyForcedConditions(cargo);   // "#100" items (the mechanic truck's V8) keep their set condition
                 FillParts(car);
+                Headlights(car, true);
 
                 yield return StartUp(car);
             }
@@ -207,6 +208,52 @@ namespace Apocapatrol
                 if (menu) _busy = false;
                 if (onDone != null) onDone(car);
             }
+        }
+
+        // Headlights: the car's light switch (switch_panel/switch_lights, LightOff FSM "useDoor" = the player's click: click sound,
+        // switch turned, HeadlightsON sent to the car) when it is off, and HeadlightsON / OFF straight to every Headlight FSM (the
+        // headlight items and the dashboard gauges' backlight: global events HeadlightsON / HeadlightsOFF) for cars without a switch.
+        internal static void Headlights(GameObject car, bool on)
+        {
+            if (car == null) return;
+            int n = 0;
+            foreach (var f in car.GetComponentsInChildren<PlayMakerFSM>(true))
+            {
+                if (f == null || f.Fsm == null || !f.Fsm.Initialized) continue;
+                if (f.FsmName == (on ? "LightOff" : "LightOn") && f.enabled && f.gameObject.name == "switch_lights" && f.ActiveStateName == "idle")
+                    f.SendEvent("useDoor");
+                else if (f.FsmName == "Headlight") { f.SendEvent(on ? "HeadlightsON" : "HeadlightsOFF"); n++; }
+            }
+            Plugin.Verbose("Lights " + (on ? "on" : "off") + ": " + car.name + " (" + n + " light FSM(s))");
+        }
+
+        internal static Vector3 DriverSeatPos(GameObject car)
+        {
+            var sit = FindChild(car.transform, "sitPos") ?? FindChild(car.transform, "hinge_seat_driver");
+            return sit != null ? sit.position : car.transform.position;
+        }
+
+        // Opens the fitted car door nearest to a seat (same side of the car, within 2.2 m): the door item's DoorOpen FSM, "useDoor"
+        // = the player's click (it swings the hinge open, then hands over to DoorClose). Only door items (vehPart) count - a truck's
+        // container doors are part of the frame. Returns true when a closed door started to open; false = no door there or already open.
+        internal static bool OpenDoorAt(GameObject car, Vector3 seat)
+        {
+            if (car == null) return false;
+            var ct = car.transform;
+            float seatX = ct.InverseTransformPoint(seat).x;
+            PlayMakerFSM best = null; float bd = 2.2f * 2.2f;
+            foreach (var f in car.GetComponentsInChildren<PlayMakerFSM>(true))
+            {
+                if (f == null || f.FsmName != "DoorOpen" || !f.gameObject.CompareTag("vehPart")) continue;
+                float x = ct.InverseTransformPoint(f.transform.position).x;
+                if (Mathf.Abs(seatX) > 0.1f && Mathf.Abs(x) > 0.05f && Mathf.Sign(x) != Mathf.Sign(seatX)) continue;
+                float d = (f.transform.position - seat).sqrMagnitude;
+                if (d < bd) { bd = d; best = f; }
+            }
+            if (best == null || !best.enabled || best.Fsm == null || !best.Fsm.Initialized || best.ActiveStateName != "off") return false;
+            best.SendEvent("useDoor");
+            Plugin.Verbose("Door: " + best.gameObject.name + " opened on " + car.name);
+            return true;
         }
 
         // The game's own ignition: START [Start] FSM Ignition -> Start (engine sound, RPM, IsRunning), NWH StartEngine() as a fallback.
