@@ -336,6 +336,7 @@ namespace Apocapatrol
             part.transform.SetParent(hinge, true);
             part.transform.localPosition = Vector3.zero;
             part.transform.localRotation = Quaternion.identity;
+            HingeOffset(hinge, part.transform);
             Register.Name(part, prefab.name); Register.Add(part, false);
             Plugin.Verbose("  " + part.name + " -> " + hinge.name);
             return part;
@@ -376,6 +377,64 @@ namespace Apocapatrol
             if (p.pos != null && p.pos.Length == 3) part.transform.localPosition = new Vector3(p.pos[0], p.pos[1], p.pos[2]);
             if (p.rot != null && p.rot.Length == 3) part.transform.localEulerAngles = new Vector3(p.rot[0], p.rot[1], p.rot[2]);
             return part;
+        }
+
+        // The hinge's own attach (vehPart_Attach FSM, state "Attach") does more than parent + reset for some parts: a door, hood or trunk
+        // hinge follows its SetParent with a SetPosition on the item (Self space, e.g. z = -0.513 on the Poloska's hinge_door_R), and may
+        // set a rotation. Those actions are replayed on the part, in order, so it sits exactly where the player's click would put it.
+        // Only actions aimed at the item (not at the hinge itself) count.
+        private static void HingeOffset(Transform hinge, Transform part)
+        {
+            try
+            {
+                PlayMakerFSM fsm = null;
+                foreach (var f in hinge.GetComponents<PlayMakerFSM>()) if (f != null && f.FsmName == "vehPart_Attach") { fsm = f; break; }
+                if (fsm == null || fsm.Fsm == null) return;
+                FsmState state = null;
+                foreach (var st in fsm.Fsm.States) if (st.Name == "Attach") { state = st; break; }
+                if (state == null) return;
+                var actions = state.Actions;
+                if (actions == null || actions.Length == 0) { state.LoadActions(); actions = state.Actions; }
+                if (actions == null) return;
+                bool moved = false;
+                foreach (var a in actions)
+                {
+                    var sp = a as HutongGames.PlayMaker.Actions.SetPosition;
+                    if (sp != null && OnItem(sp.gameObject))
+                    {
+                        bool local = sp.space == Space.Self;
+                        Vector3 v = sp.vector != null && !sp.vector.IsNone ? sp.vector.Value : (local ? part.localPosition : part.position);
+                        if (sp.x != null && !sp.x.IsNone) v.x = sp.x.Value;
+                        if (sp.y != null && !sp.y.IsNone) v.y = sp.y.Value;
+                        if (sp.z != null && !sp.z.IsNone) v.z = sp.z.Value;
+                        if (local) part.localPosition = v; else part.position = v;
+                        moved = true;
+                        continue;
+                    }
+                    var sr = a as HutongGames.PlayMaker.Actions.SetRotation;
+                    if (sr != null && OnItem(sr.gameObject))
+                    {
+                        bool local = sr.space == Space.Self;
+                        Vector3 e;
+                        if (sr.quaternion != null && !sr.quaternion.IsNone) e = sr.quaternion.Value.eulerAngles;
+                        else if (sr.vector != null && !sr.vector.IsNone) e = sr.vector.Value;
+                        else e = local ? part.localEulerAngles : part.eulerAngles;
+                        if (sr.xAngle != null && !sr.xAngle.IsNone) e.x = sr.xAngle.Value;
+                        if (sr.yAngle != null && !sr.yAngle.IsNone) e.y = sr.yAngle.Value;
+                        if (sr.zAngle != null && !sr.zAngle.IsNone) e.z = sr.zAngle.Value;
+                        if (local) part.localEulerAngles = e; else part.eulerAngles = e;
+                        moved = true;
+                    }
+                }
+                if (moved) Plugin.Verbose("  " + part.name + " placed like the game's attach on " + hinge.name + ": local " + part.localPosition.ToString("F3") + " / " + part.localEulerAngles.ToString("F1"));
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("Hinge offset on " + hinge.name + ": " + e.Message); }
+        }
+
+        // the action targets the attached item (a GameObject variable such as {Item}), not the hinge that owns the FSM
+        private static bool OnItem(FsmOwnerDefault go)
+        {
+            return go != null && go.OwnerOption != OwnerDefaultOption.UseOwner;
         }
 
         private static bool HasPart(Transform hinge) { return PartOn(hinge) != null; }
