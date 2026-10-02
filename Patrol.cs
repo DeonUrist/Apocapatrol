@@ -161,6 +161,7 @@ namespace Apocapatrol
                     parts += AttachAll(car, new[] { "hinge_seat_driver" }, tpl.Seat, "seat");
                     parts += AttachAll(car, new[] { "hinge_seat_passenger" }, tpl.PassengerSeat, "seat");
                 }
+                parts += AttachMissingHeadlights(car);
                 Plugin.Verbose(parts + " parts attached");
 
                 if (tpl.FillFuel) Fuel(car, Plugin.RollPartFill());
@@ -208,6 +209,28 @@ namespace Apocapatrol
                 if (menu) _busy = false;
                 if (onDone != null) onDone(car);
             }
+        }
+
+        // Every raider car has its headlights: each empty hinge_headlight on the frame (two same-named ones on the Junker, the one on the
+        // Halfbreed's fork) gets the game's basic "Headlight" unless the template already fitted one there.
+        private const string DefaultHeadlight = "Headlight";
+        private static int AttachMissingHeadlights(GameObject car)
+        {
+            var empty = new List<Transform>();
+            foreach (var t in car.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name != "hinge_headlight") continue;
+                bool onPart = false, full = false;
+                for (var a = t.parent; a != null && a != car.transform; a = a.parent) if (a.CompareTag("vehPart")) { onPart = true; break; }
+                for (int i = 0; i < t.childCount; i++) if (t.GetChild(i).CompareTag("vehPart")) { full = true; break; }
+                if (!onPart && !full) empty.Add(t);
+            }
+            if (empty.Count == 0) return 0;
+            var prefab = Prefabs.Find(DefaultHeadlight, "headlight");
+            if (prefab == null) { Plugin.Log.LogWarning("Headlight prefab not found: " + DefaultHeadlight); return 0; }
+            foreach (var h in empty) Attach(prefab, h);
+            Plugin.Verbose("Headlights: " + empty.Count + " fitted on " + car.name);
+            return empty.Count;
         }
 
         // Headlights: the car's light switch (switch_panel/switch_lights, LightOff FSM "useDoor" = the player's click: click sound,
