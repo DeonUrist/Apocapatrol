@@ -1,4 +1,4 @@
-# Apocapatrol 1.13.0
+# Apocapatrol 1.20.0
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -15,6 +15,9 @@ its crew is dealt with it's yours to take.
 - **Trucks**: the Rustcargo, with dual rear wheels, as a plain truck or a loot truck. The advanced truck has armored wheels and a big diesel.
 - Every car rolls a random look: small cars and junkers may carry a front bumper, and trucks always have one of four heavy bumpers.
 - They drive with their headlights on.
+- Knives and other melee weapons can slash the wheels of any car, raider or not. In the game itself a knife only cuts a loose wheel
+  and passes straight through one fitted to a car. (With Apocaraider installed, its wheel rules apply instead: the wheel damage
+  multiplier, hit numbers and wheels popping off.)
 - Nothing is brand new. Parts are worn (2–35 % condition), and the tank, engine oil and radiator are only partly filled (15–60 %).
 
 ## The crews

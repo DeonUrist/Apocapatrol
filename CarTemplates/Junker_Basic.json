@@ -42,39 +42,9 @@
             "prefab": "junker_door_RL"
         },
         {
-            "parent": 4,
-            "hinge": "colliders/collider#3",
-            "prefab": "metal_plate_1",
-            "pos": [
-                0.3681,
-                0.3637,
-                -0.0377
-            ],
-            "rot": [
-                3.2977,
-                90.1296,
-                173.4456
-            ]
-        },
-        {
             "parent": -1,
             "hinge": "hinge_door_RR",
             "prefab": "junker_door_RR"
-        },
-        {
-            "parent": 6,
-            "hinge": "colliders/collider#4",
-            "prefab": "metal_plate_1",
-            "pos": [
-                0.0366,
-                0.3762,
-                -0.0059
-            ],
-            "rot": [
-                83.8372,
-                329.3068,
-                239.0709
-            ]
         },
         {
             "parent": -1,

@@ -18,21 +18,6 @@
     "parts": [
         {
             "parent": -1,
-            "hinge": "parts/Junker/colliders/collider#107",
-            "prefab": "metal_plate_1",
-            "pos": [
-                0.3553,
-                0.1426,
-                -0.0328
-            ],
-            "rot": [
-                87.3753,
-                146.1849,
-                55.9665
-            ]
-        },
-        {
-            "parent": -1,
             "hinge": "hinge_bumper_front",
             "prefab": "bumper_12"
         },
@@ -99,21 +84,6 @@
                 320,
                 0,
                 0
-            ]
-        },
-        {
-            "parent": 12,
-            "hinge": "",
-            "prefab": "metal_plate_1",
-            "pos": [
-                0.7708,
-                -0.6418,
-                0.2479
-            ],
-            "rot": [
-                324.6379,
-                181.3168,
-                175.8918
             ]
         },
         {

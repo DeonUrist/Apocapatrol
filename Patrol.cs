@@ -17,7 +17,7 @@ namespace Apocapatrol
         private int _inGameFrame = -1;      // InGame() is asked by four runner components every frame: evaluated once per frame
         private bool _inGame;
 
-        internal static void ResetForScene() { Prefabs.Invalidate(); Register.Invalidate(); }
+        internal static void ResetForScene() { Prefabs.Invalidate(); Register.Invalidate(); MeleeWheels.Reset(); }
 
         private void Update()
         {
@@ -25,6 +25,7 @@ namespace Apocapatrol
             if (!InGame()) return;
             Ram.Tick();
             ExitSpeed.Tick();
+            MeleeWheels.Tick();
             if (Time.unscaledTime >= _nextPrune) { _nextPrune = Time.unscaledTime + 30f; PruneIgnoreSignatures(); }
         }
 
