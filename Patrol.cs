@@ -168,7 +168,9 @@ namespace Apocapatrol
                 if (tpl.ReleaseHandbrake) Handbrake(car, false);
                 List<GameObject> cargo = null;
                 string lootKey = null;
-                if (!string.IsNullOrEmpty(tpl.Cargo))
+                // a template's "cargo" loads only into trucks: on a car it is what happened to lie in the cabin at dump time
+                // (a dead passenger's drops...) - kept in the file, not spawned. Cars get the back-seat roll instead (below).
+                if (!string.IsNullOrEmpty(tpl.Cargo) && tpl.IsTruck)
                 {
                     bool itemSpec = CarTemplates.IsItemSpec(tpl.Cargo);   // a JSON template's fixed bed items ("dogfood_can:6;akms:1")
                     lootKey = itemSpec ? "Custom" : tpl.Cargo.Equals("Random", StringComparison.OrdinalIgnoreCase) ? Cargo.RollLootType() : tpl.Cargo;
@@ -178,6 +180,12 @@ namespace Apocapatrol
                     cargo = new List<GameObject>();
                     yield return Cargo.Load(car, spec, scale, cargo);   // a few items per frame, not the whole bed in one
                     if (car == null) yield break;
+                }
+
+                if (!tpl.IsTruck && !tpl.IsMotorcycle)
+                {
+                    if (cargo == null) cargo = new List<GameObject>();
+                    Cargo.BackSeatLoot(car, tpl.IsAdvanced, cargo);
                 }
 
                 yield return null;

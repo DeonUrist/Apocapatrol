@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.12.5";
+        public const string VERSION = "1.13.0";
 
         internal static ManualLogSource Log;
 

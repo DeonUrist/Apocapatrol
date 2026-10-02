@@ -1,4 +1,4 @@
-# Apocapatrol 1.12.5
+# Apocapatrol 1.13.0
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -48,6 +48,12 @@ hits on foot count. Hits while you sit in your own car are optional.
 
 When a truck keeps shoving your car you can still bail out: with this mod you can leave a car at up to 30 km/h instead of the game's
 usual 21 km/h.
+
+## Loot in the cars
+
+Raider cars (not trucks or motorcycles) may carry something on the back seat: a box of ammo of a random calibre (70 %) or a bandage
+(30 %). With **LootMultiplier** at 1 a basic car always has one item; an advanced car rolls twice that (two items). Each full 100 %
+is a sure item and the rest is the chance of one more (1.5 = one item and a 50 % chance of a second; advanced: three items).
 
 ## Loot trucks
 
@@ -165,7 +171,7 @@ A short list, changeable in game through the Apocasetter Mods menu if you have i
 - **AudioVoices** (64): how many sounds the game may play at once. The game ships with 32, which a firefight with several raider cars
   overflows - shots and hits then cut out, your own included. Applied when the game starts; 0 keeps the game's setting.
 - **SelfDestruct** (on): vacated raider cars blow up (see above).
-- **LootMultiplier** (1): how much loot trucks carry, 0–3×.
+- **LootMultiplier** (1): how much loot trucks carry, 0–3×, and the chance of a back-seat item in the cars (× 2 in advanced cars).
 - **MinConvoyCooldown** (5 min) / **MaxConvoyCooldown** (60 min): the wait between two raider spawns is rolled between these, a
   little shorter as the heat rises. 0 as the maximum turns automatic spawns off. A change counts from the next roll.
 

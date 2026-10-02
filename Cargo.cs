@@ -137,6 +137,80 @@ namespace Apocapatrol
 
         // Fills the car's PhysicsLock volume with the items of the spec, a few items per frame (a coroutine step of the build).
         // The spawned items (already locked) are appended to `items`.
+        // ------------------------------------------------------------ back-seat loot (cars, 1.13.0)
+        // Every raider car (not trucks, not motorcycles) may carry a box of ammo or a bandage on its back seat. Chance = [Scaling]
+        // LootMultiplier as a % (1 = 100 %), doubled for an advanced car; every full 100 % is one sure item, the rest the chance of one
+        // more (1.5 = one item + 50 % for a second). Each item: 30 % a bandage, 70 % a small ammo box of a random calibre.
+        private const string BackSeatBandage = "bandage_1";
+        private static readonly string[] SmallAmmo =
+            { "ammo_box_12gauge", "ammo_box_20gauge", "ammo_box_22", "ammo_box_3006", "ammo_box_556mm", "ammo_box_762mm", "ammo_box_9mm", "ammo_arrow" };
+        private const int BackSeatMax = 6;
+
+        internal static void BackSeatLoot(GameObject car, bool advanced, List<GameObject> items)
+        {
+            float chance = Mathf.Max(0f, Plugin.LootMultiplier.Value) * (advanced ? 2f : 1f);
+            int n = Mathf.FloorToInt(chance);
+            if (UnityEngine.Random.value < chance - n) n++;
+            n = Mathf.Min(n, BackSeatMax);
+            if (n <= 0) return;
+            var lockGo = Patrol.FindChild(car.transform, "PhysicsLock");
+            if (lockGo == null) { Plugin.Verbose("Back seat: " + car.name + " has no PhysicsLock, no loot"); return; }
+            var ct = car.transform;
+            // where the back seat is: the rear seat hinge if the frame has one, else behind the middle of the two front seats
+            Vector3 spot;
+            var rear = Patrol.FindChild(ct, "hinge_seat_rear");
+            var drv = Patrol.FindChild(ct, "hinge_seat_driver");
+            var pax = Patrol.FindChild(ct, "hinge_seat_passenger");
+            if (rear != null) spot = rear.position;
+            else if (drv != null && pax != null) spot = (drv.position + pax.position) * 0.5f - ct.forward * 0.65f;
+            else if (drv != null) spot = drv.position - ct.forward * 0.6f;
+            else { Plugin.Verbose("Back seat: " + car.name + " has no seat hinges, no loot"); return; }
+            float halfWidth = (drv != null && pax != null) ? Mathf.Max(0.15f, Vector3.Distance(drv.position, pax.position) * 0.5f) : 0.2f;
+            int placed = 0;
+            for (int i = 0; i < n; i++)
+            {
+                string name = UnityEngine.Random.value < 0.3f ? BackSeatBandage : SmallAmmo[UnityEngine.Random.Range(0, SmallAmmo.Length)];
+                var prefab = Prefabs.FindAny(name);
+                if (prefab == null) { Plugin.Log.LogWarning("Back seat: prefab not found: " + name); continue; }
+                // spread across the seat, a little back and forth
+                var p = spot + ct.right * UnityEngine.Random.Range(-halfWidth, halfWidth) + ct.forward * UnityEngine.Random.Range(-0.12f, 0.12f);
+                var go = UnityEngine.Object.Instantiate(prefab, p + ct.up * 1.5f, ct.rotation);
+                go.SetActive(true);
+                // random rotation: any heading, a quarter of them lying on a side
+                var rot = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
+                if (UnityEngine.Random.value < 0.25f) rot = rot * Quaternion.Euler(0f, 0f, UnityEngine.Random.value < 0.5f ? 90f : -90f);
+                go.transform.rotation = ct.rotation * rot;
+                // drop it onto the seat / floor: the highest of the car's own solid colliders under the spot (not the occupants)
+                float floor = SeatSurface(car, p);
+                var b = Bounds(go);
+                float lift = go.transform.position.y - b.min.y;                // pivot height above the box's bottom
+                var centre = go.transform.position - b.center; centre.y = 0f;     // the renderer centred on the spot
+                go.transform.position = new Vector3(p.x, floor + lift + 0.01f, p.z) + centre;
+                Register.Name(go, prefab.name); Register.Add(go, false);
+                Lock(go, lockGo);
+                items.Add(go);
+                placed++;
+            }
+            Plugin.Verbose("Back seat: " + placed + " item(s) in " + car.name + " (chance " + (chance * 100f).ToString("0") + " %" + (advanced ? ", advanced" : "") + ")");
+        }
+
+        // the top of the car's own solid geometry under a point: a ray from 1.2 m above, down 2.5 m, ignoring triggers, the crew and loose items
+        private static float SeatSurface(GameObject car, Vector3 p)
+        {
+            float best = float.MinValue;
+            foreach (var h in Physics.RaycastAll(p + car.transform.up * 1.2f, -car.transform.up, 2.5f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                if (h.collider == null || !h.collider.transform.IsChildOf(car.transform)) continue;
+                bool occupant = false;
+                for (var a = h.collider.transform; a != null && a != car.transform; a = a.parent)
+                    if (a.name.IndexOf("(Driver)", StringComparison.Ordinal) >= 0 || a.name.IndexOf("(Passenger)", StringComparison.Ordinal) >= 0
+                        || a.name.IndexOf("_Dead", StringComparison.Ordinal) >= 0 || a.name == "PhysicsLock") { occupant = true; break; }
+                if (occupant) continue;
+                if (h.point.y > best) best = h.point.y;
+            }
+            return best > float.MinValue ? best : p.y;
+        }
+
         internal static IEnumerator Load(GameObject car, string spec, float factor, List<GameObject> items)
         {
             if (Plugin.LootMultiplier.Value <= 0f) { Plugin.Verbose("Cargo: loot multiplier 0, nothing loaded"); yield break; }
