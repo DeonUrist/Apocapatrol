@@ -100,8 +100,10 @@ namespace Apocapatrol
             if (km < 0f) return;
             _km = km;
             _bosses = BossKills();
-            _heat = Mathf.Clamp(km / Mathf.Max(1f, Plugin.HeatIntervalKm.Value) * 0.25f, 0f, Mathf.Max(0f, Plugin.MaxHeat.Value));
+            _heat = HeatFor(km);
         }
+
+        internal static float HeatFor(float km) { return Mathf.Clamp(km / Mathf.Max(1f, Plugin.HeatIntervalKm.Value) * 0.25f, 0f, Mathf.Max(0f, Plugin.MaxHeat.Value)); }
 
         internal static int BossKills()
         {
@@ -126,7 +128,9 @@ namespace Apocapatrol
             Plugin.Verbose("Convoy: next roll in " + (_cooldown / 60f).ToString("0.0") + " min (" + why + ", heat " + (_heat * 100f).ToString("0") + " %)");
         }
 
-        private bool Allowed(SpawnKind k)
+        private bool Allowed(SpawnKind k) { return Allowed(k, _km, _bosses); }
+
+        private static bool Allowed(SpawnKind k, float _km, int _bosses)
         {
             switch (k)
             {
@@ -234,26 +238,48 @@ namespace Apocapatrol
 
         internal static bool IsConvoy(SpawnKind k) { return k == SpawnKind.BasicConvoy || k == SpawnKind.AdvancedConvoy; }
 
-        internal void DebugBikers()
+        // ------------------------------------------------------------ debug (spawner menu)
+
+        // The allowed groups for a distance / boss count, split like the automatic roll: patrols (cars + bikers) and convoys.
+        private static void Pools(float km, int bosses, List<SpawnKind> patrols, List<SpawnKind> convoys)
         {
-            UpdateHeat();
-            var kind = Roll(new List<SpawnKind> { SpawnKind.BasicBikers, SpawnKind.AdvancedBikers, SpawnKind.SuperBikers }, Mathf.Max(1f, _heat));
-            if (kind != null) Launch(kind.Value, Mathf.Max(1f, _heat), true);
+            foreach (SpawnKind k in Enum.GetValues(typeof(SpawnKind)))
+                if (Allowed(k, km, bosses)) { if (IsConvoy(k)) convoys.Add(k); else patrols.Add(k); }
         }
 
-        // Debug buttons: every requirement counts as met; the real heat, but at least 100 % so a full group appears.
-        internal void DebugCars()
+        // "Basic enemy cars 64 %, Basic bikers 36 %" - each group's chance within its pool at this heat
+        internal static string Odds(float km, int bosses, bool convoy)
         {
-            UpdateHeat();
-            var kind = Roll(new List<SpawnKind> { SpawnKind.BasicCars, SpawnKind.AdvancedCars, SpawnKind.SuperCars }, Mathf.Max(1f, _heat));
-            if (kind != null) Launch(kind.Value, Mathf.Max(1f, _heat), true);
+            var p = new List<SpawnKind>(); var c = new List<SpawnKind>();
+            Pools(km, bosses, p, c);
+            var pool = convoy ? c : p;
+            if (pool.Count == 0) return "none unlocked";
+            float heat = HeatFor(km), total = 0f;
+            foreach (var k in pool) total += Mathf.Max(0f, Weight(k, heat));
+            var parts = new List<string>();
+            foreach (var k in pool)
+                parts.Add(Label(k) + " " + (total > 0f ? Mathf.Max(0f, Weight(k, heat)) / total * 100f : 100f / pool.Count).ToString("0") + " %");
+            return string.Join(", ", parts.ToArray());
         }
 
-        internal void DebugConvoy()
+        // Spawner menu buttons: the automatic spawner's own roll for a simulated distance / boss count (the heat follows from the
+        // distance, so group sizes are smaller below 100 % heat too). mode 0 = the full game roll (patrol or convoy by
+        // JustCarsToConvoyRatio), 1 = a patrol, 2 = a convoy. The spawn clock and the older-group check are left alone.
+        internal void DebugSpawn(int mode, float km, int bosses)
         {
-            UpdateHeat();
-            var kind = Roll(new List<SpawnKind> { SpawnKind.BasicConvoy, SpawnKind.AdvancedConvoy }, Mathf.Max(1f, _heat));
-            if (kind != null) Launch(kind.Value, Mathf.Max(1f, _heat), true);
+            var patrols = new List<SpawnKind>(); var convoys = new List<SpawnKind>();
+            Pools(km, bosses, patrols, convoys);
+            List<SpawnKind> pool;
+            if (mode == 1) pool = patrols;
+            else if (mode == 2) pool = convoys;
+            else if (patrols.Count > 0 && convoys.Count > 0) pool = UnityEngine.Random.value < Plugin.JustCarsToConvoyRatio.Value ? patrols : convoys;
+            else pool = convoys.Count > 0 ? convoys : patrols;
+            float heat = HeatFor(km);
+            if (pool.Count == 0) { Plugin.Log.LogInfo("Debug spawn: nothing unlocked at " + km.ToString("0") + " km / " + bosses + " bosses"); return; }
+            var kind = Roll(pool, heat);
+            if (kind == null) return;
+            Plugin.Log.LogInfo("Debug spawn: " + Label(kind.Value) + " at " + km.ToString("0") + " km, " + bosses + " bosses, heat " + (heat * 100f).ToString("0") + " %");
+            Launch(kind.Value, heat, true);
         }
 
         // ------------------------------------------------------------ composition

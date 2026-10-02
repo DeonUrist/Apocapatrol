@@ -17,6 +17,11 @@ namespace Apocapatrol
         private bool _prevVisible;
         private Rect _rect;
         private Patrol _patrol;   // sibling on the runner (was a GetComponent every frame)
+        // simulated progress for the spawn buttons (starts at the save's real values, kept while the game runs)
+        private bool _simInit;
+        private float _simKm;
+        private int _simBosses;
+        private string _simKmText = "0";
 
         // Apocasetter, if present
         private static bool _resolved, _hasSetter;
@@ -83,7 +88,9 @@ namespace Apocapatrol
             Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
             int cars = 0, trucks = 0;
             foreach (var t in CarTemplate.Park) { if (IsTruck(t)) trucks++; else cars++; }
-            float w = 640f, h = Mathf.Min(Screen.height - 80f, 200f + Mathf.Max(cars, trucks) * 32f);
+            var conv = GetComponent<Convoy>();
+            if (!_simInit && conv != null) { _simInit = true; SetSim(conv.Km, conv.Bosses); }
+            float w = 680f, h = Mathf.Min(Screen.height - 80f, 330f + Mathf.Max(cars, trucks) * 32f);
             _rect = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
         }
 
@@ -114,16 +121,40 @@ namespace Apocapatrol
             GUILayout.Label("Click a car to build it " + Plugin.SpawnDistance.ToString("0") + " m in front of you.  [Esc] Close");
             GUILayout.Space(6f);
             var convoy = GetComponent<Convoy>();
-            int debugSpawn = 0;
+            int debugSpawn = -1;
+            GUILayout.Label("Enemy spawns, rolled like the game does" + (convoy != null ? "  (this save: " + convoy.Km.ToString("0.0") + " km, " + convoy.Bosses + " bosses, heat " + (convoy.Heat * 100f).ToString("0") + " %)" : ""), header ?? GUI.skin.label);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Enemy spawns" + (convoy != null ? " (heat " + (convoy.Heat * 100f).ToString("0") + " %, " + convoy.Km.ToString("0.0") + " km, " + convoy.Bosses + " bosses)" : ""), header ?? GUI.skin.label, GUILayout.Width(300f));
-            if (GUILayout.Button("Enemy cars", GUILayout.Height(28f), GUILayout.Width(150f))) debugSpawn = 1;
-            GUILayout.Space(6f);
-            if (GUILayout.Button("Enemy patrol", GUILayout.Height(28f), GUILayout.Width(150f))) debugSpawn = 2;
-            GUILayout.Space(6f);
-            if (GUILayout.Button("Bikers", GUILayout.Height(28f), GUILayout.Width(150f))) debugSpawn = 3;
+            GUILayout.Label("Distance travelled", GUILayout.Width(130f));
+            float km = GUILayout.HorizontalSlider(_simKm, 0f, 200f, GUILayout.Width(260f));
+            if (Mathf.Abs(km - _simKm) > 0.01f) SetSim(Mathf.Round(km), _simBosses);
+            string txt = GUILayout.TextField(_simKmText, GUILayout.Width(60f));
+            if (txt != _simKmText)
+            {
+                _simKmText = txt;
+                float parsed;
+                if (float.TryParse(txt, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out parsed)) _simKm = Mathf.Clamp(parsed, 0f, 10000f);
+            }
+            GUILayout.Label("km", GUILayout.Width(30f));
+            GUILayout.Label("heat " + (Convoy.HeatFor(_simKm) * 100f).ToString("0") + " %", GUILayout.Width(90f));
             GUILayout.EndHorizontal();
-            GUILayout.Label("A group " + Plugin.ConvoySpawnDistance.Value.ToString("0") + " m ahead of your car (behind you on foot), as if every distance/boss requirement were met.");
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Bosses killed", GUILayout.Width(130f));
+            if (GUILayout.Button("-", GUILayout.Width(30f))) _simBosses = Mathf.Max(0, _simBosses - 1);
+            GUILayout.Label(_simBosses.ToString(), GUILayout.Width(30f));
+            if (GUILayout.Button("+", GUILayout.Width(30f))) _simBosses = Mathf.Min(7, _simBosses + 1);
+            GUILayout.Space(20f);
+            if (convoy != null && GUILayout.Button("Use this save's values", GUILayout.Width(200f))) SetSim(convoy.Km, convoy.Bosses);
+            GUILayout.EndHorizontal();
+            GUILayout.Label("Patrols: " + Convoy.Odds(_simKm, _simBosses, false));
+            GUILayout.Label("Convoys: " + Convoy.Odds(_simKm, _simBosses, true));
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Spawn (game roll)", GUILayout.Height(28f), GUILayout.Width(200f))) debugSpawn = 0;
+            GUILayout.Space(6f);
+            if (GUILayout.Button("Patrol", GUILayout.Height(28f), GUILayout.Width(150f))) debugSpawn = 1;
+            GUILayout.Space(6f);
+            if (GUILayout.Button("Convoy", GUILayout.Height(28f), GUILayout.Width(150f))) debugSpawn = 2;
+            GUILayout.EndHorizontal();
+            GUILayout.Label("A group " + Plugin.ConvoySpawnDistance.Value.ToString("0") + " m ahead of your car (behind you on foot). The spawn clock and live raiders are left alone.");
             GUILayout.Space(6f);
             _scroll = GUILayout.BeginScrollView(_scroll);
             CarTemplate chosen = null;
@@ -153,14 +184,20 @@ namespace Apocapatrol
                 if (_patrol == null) _patrol = GetComponent<Patrol>();
                 if (_patrol != null) _patrol.Spawn(chosen);
             }
-            else if (debugSpawn != 0 && convoy != null)
+            else if (debugSpawn >= 0 && convoy != null)
             {
                 Close();
-                if (debugSpawn == 1) convoy.DebugCars(); else if (debugSpawn == 3) convoy.DebugBikers(); else convoy.DebugConvoy();
+                convoy.DebugSpawn(debugSpawn, _simKm, _simBosses);
             }
         }
 
         private static bool IsTruck(CarTemplate t) { return t.IsTruck; }
+
+        private void SetSim(float km, int bosses)
+        {
+            _simKm = Mathf.Max(0f, km); _simBosses = Mathf.Clamp(bosses, 0, 7);
+            _simKmText = _simKm.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
+        }
 
         private static string Summary(CarTemplate t)
         {

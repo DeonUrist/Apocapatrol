@@ -1,4 +1,4 @@
-# Apocapatrol 1.11.0
+# Apocapatrol 1.11.1
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -180,8 +180,11 @@ A short list, changeable in game through the Apocasetter Mods menu if you have i
 
 ## Spawner menu
 
-For testing: set **TemplateSpawnerKey** to a key (F8, say) and press it to open the spawner. **Enemy cars** and **Enemy patrol** at the top call in a group right away, as if you had already
-travelled far enough. Below them every car and truck is listed, and clicking one builds it with its crew in front of you. It's meant
+For testing: set **TemplateSpawnerKey** to a key (F8, say) and press it to open the spawner. At the top, set a **distance travelled**
+(the heat it gives is shown next to it) and a number of **bosses killed** - they start at your save's values - and see which patrols and
+convoys that unlocks and how likely each is. **Spawn (game roll)** calls in a group exactly as the game would at that point (patrol or
+convoy, then which one, at that heat - smaller groups below 100 % heat); **Patrol** and **Convoy** roll only among the patrols or the
+convoys. The spawn timer and raiders already out are left alone. Below them every car and truck is listed, and clicking one builds it with its crew in front of you. It's meant
 for testing and for picking a fight on purpose.
 
 ## Your own raider cars
