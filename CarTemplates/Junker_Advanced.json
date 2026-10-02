@@ -33,11 +33,6 @@
         },
         {
             "parent": -1,
-            "hinge": "hinge_windshield",
-            "prefab": "windshield_2_grid"
-        },
-        {
-            "parent": -1,
             "hinge": "hinge_bumper_front",
             "prefab": "bumper_12"
         },
@@ -107,7 +102,7 @@
             ]
         },
         {
-            "parent": 13,
+            "parent": 12,
             "hinge": "",
             "prefab": "metal_plate_1",
             "pos": [
