@@ -51,6 +51,9 @@ namespace Apocapatrol
             if (!truck) Darken(car);
             Blast(car);
 
+            // the hinges' engine wobble (Shake FSM: iTweenRotateTo on the part while the car's rpm is up) stops before anything pops,
+            // so it cannot start a new tween on a part that is about to be loose
+            QuietHinges(car);
             var parts = new List<Transform>();
             int kept = 0, wheels = 0;
             foreach (var p in Parts(car))
@@ -61,6 +64,7 @@ namespace Apocapatrol
                 if (truck && OnWheelHinge(car, p)) { wheels++; continue; }   // a truck keeps its wheels (rolled like the rest)
                 parts.Add(p);
                 StopRpm(p);
+                StopTweens(p);
                 // the wrench's de_Attach: layer Item + tag vehPartRemoved -> the part's CheckTag FSM unparents it and adds a Rigidbody
                 p.gameObject.layer = 9;
                 try { p.tag = "vehPartRemoved"; } catch (Exception e) { Plugin.Log.LogWarning("Explode: tag: " + e.Message); }
@@ -80,7 +84,7 @@ namespace Apocapatrol
             yield return null;   // CheckTag / LockPhysics have run: the Rigidbodies exist
             if (car == null) yield break;
             var centre = car.transform.position;
-            foreach (var t in parts) { StopRpm(t); Shove(t, centre, 3f, 6f); }   // again: CheckTag has re-enabled OnOff / Rotate
+            foreach (var t in parts) { StopRpm(t); StopTweens(t); Shove(t, centre, 3f, 6f); }   // again: CheckTag has re-enabled OnOff / Rotate
             foreach (var t in cargo) Shove(t, centre, 2f, 4f);
             // a part the CheckTag FSM did not free (none expected): free it ourselves
             foreach (var t in parts)
@@ -186,6 +190,34 @@ namespace Apocapatrol
         // the value never drops, and its Rotate FSM (engine rocking) keeps turning the loose engine's transform every frame - it crawled and
         // tumbled on its own, also after being fitted to another car and taken out again (FSM restarts keep variables). oilDamage,
         // engineOil_Temperature and the radiator / exhaust FSMs read the same value. Every "rpm" float on the part's FSMs goes to 0.
+        // A running engine wobbles on its hinge: the hinge's Shake FSM runs iTweenRotateTo (looping) on the attached part. That puts an
+        // iTween component ON THE PART, which keeps rotating it after it pops off - the loose engine kept moving and could not be turned
+        // by hand (the tween overwrites its rotation every frame), also after being fitted to another car and taken out again. The game's
+        // own exhaust CheckTag does an iTweenStop when removed; the engine's does not, and the player only removes engines from parked
+        // cars. Every iTween on the part and its children is removed (what iTween.Stop does), found by type name (no compile reference).
+        private static void StopTweens(Transform part)
+        {
+            if (part == null) return;
+            int n = 0;
+            foreach (var b in part.GetComponentsInChildren<MonoBehaviour>(true))
+                if (b != null && b.GetType().Name == "iTween") { b.enabled = false; UnityEngine.Object.Destroy(b); n++; }
+            if (n > 0) Plugin.Verbose("Explode: " + n + " iTween(s) stopped on " + part.name);
+        }
+
+        // the Shake FSMs on the car's hinges (engine, exhaust, radiator ... wobble): off for good before the parts pop
+        private static void QuietHinges(GameObject car)
+        {
+            foreach (var f in car.GetComponentsInChildren<PlayMakerFSM>(true))
+            {
+                if (f == null || f.FsmName != "Shake") continue;
+                bool onPart = false;
+                for (var a = f.transform; a != null && a != car.transform; a = a.parent) if (a.CompareTag("vehPart")) { onPart = true; break; }
+                if (onPart) continue;
+                f.Fsm.RestartOnEnable = false;
+                f.enabled = false;
+            }
+        }
+
         private static void StopRpm(Transform part)
         {
             if (part == null) return;
