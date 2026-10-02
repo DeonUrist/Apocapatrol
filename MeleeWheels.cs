@@ -26,7 +26,7 @@ namespace Apocapatrol
         private static readonly RaycastHit[] _hits = new RaycastHit[24];
         private static int _raider = -1;
 
-        internal static void Reset() { _parent = null; _cam = null; _swing = null; _done = false; _attack.Clear(); _damage.Clear(); }
+        internal static void Reset() { _parent = null; _cam = null; _swing = null; _done = false; _attack.Clear(); _damage.Clear(); _prevState.Clear(); }
 
         // Apocaraider's own version is there: leave it to that one
         private static bool RaiderHandles()
@@ -50,6 +50,7 @@ namespace Apocapatrol
         private static string _lastStates = "";
         private static bool _logged;
         private static float _nextNoArm;
+        private static readonly Dictionary<int, string> _prevState = new Dictionary<int, string>();
 
         internal static void Tick()
         {
@@ -71,7 +72,11 @@ namespace Apocapatrol
                     }
                     Plugin.Verbose("Melee wheels: weapons under " + _parent.name + " (" + _parent.childCount + ")");
                 }
+                // a swing: the Attack FSM in "fire", or (1.20.3) one that just left "on" for "hit" / "wait" - when the game's own cast meets
+                // something at once (the wheel hub around a fitted tyre), on -> fire -> hit -> wait runs within ONE frame and "fire" is never
+                // seen from here
                 PlayMakerFSM active = null;
+                bool fresh = false;
                 string states = V ? "" : null;
                 for (int i = 0; i < _parent.childCount; i++)
                 {
@@ -80,7 +85,14 @@ namespace Apocapatrol
                     var f = Attack(w.gameObject);
                     if (f == null || f.Fsm == null) continue;
                     if (states != null) states += (states.Length > 0 ? ", " : "") + w.name + ":" + (f.Fsm.Initialized ? f.ActiveStateName : "(not initialised)") + (f.enabled ? "" : "(off)");
-                    if (active == null && f.Fsm.Initialized && f.ActiveStateName == "fire") active = f;
+                    if (!f.Fsm.Initialized) continue;
+                    string cur = f.ActiveStateName, prev;
+                    int fid = f.GetInstanceID();
+                    _prevState.TryGetValue(fid, out prev);
+                    _prevState[fid] = cur;
+                    if (active != null) continue;
+                    if (cur == "fire") active = f;
+                    else if (prev == "on" && (cur == "hit" || cur == "wait")) { active = f; fresh = true; }
                 }
                 if (states != null && states != _lastStates) { _lastStates = states; Plugin.Verbose("Melee wheels: weapons in hand: " + (states.Length > 0 ? states : "none with an Attack FSM")); }
                 if (active == null)
@@ -88,7 +100,7 @@ namespace Apocapatrol
                     if (_swing != null && V && !_logged) Plugin.Verbose("Melee wheels: swing of " + _swing.gameObject.name + " ended - the cast (triggers included, " + Reach + " m) met nothing");
                     _swing = null; _done = false; return;
                 }
-                if (active != _swing)
+                if (active != _swing || fresh)
                 {
                     _swing = active; _done = false; _logged = false;
                     if (V) Plugin.Verbose("Melee wheels: swing of " + active.gameObject.name + " (damage " + MeleeDamage(active) + ", " + (raider ? "Apocaraider applies it" : "applied here") + ")");
