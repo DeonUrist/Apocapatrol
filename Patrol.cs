@@ -289,10 +289,14 @@ namespace Apocapatrol
             if (hinge == null && p.hinge.Length > 0)
             {
                 int slash = p.hinge.LastIndexOf('/');
-                hinge = FindChild(root, slash >= 0 ? p.hinge.Substring(slash + 1) : p.hinge);
+                string last = slash >= 0 ? p.hinge.Substring(slash + 1) : p.hinge;
+                int hash = last.LastIndexOf('#');
+                hinge = FindChild(root, hash > 0 ? last.Substring(0, hash) : last);
             }
             if (hinge == null) { Plugin.Log.LogWarning(tpl.Name + ": hinge " + p.hinge + " not found on " + root.name + " for " + p.prefab); return null; }
-            var existing = PartOn(hinge);
+            // only a real hinge holds one part; colliders and parts carry any number of attachables (plates, spikes)
+            bool realHinge = hinge.name.StartsWith("hinge", StringComparison.OrdinalIgnoreCase);
+            var existing = realHinge ? PartOn(hinge) : null;
             if (existing != null) { Plugin.Verbose("  " + hinge.name + " already holds " + existing.name + ", " + p.prefab + " not added"); return existing; }
             var prefab = Prefabs.FindAny(p.prefab) ?? Prefabs.Find(p.prefab, "item");
             if (prefab == null) { Plugin.Log.LogWarning(tpl.Name + ": part prefab not found: " + p.prefab); return null; }
@@ -323,10 +327,14 @@ namespace Apocapatrol
             if (root == null) return null;
             if (string.IsNullOrEmpty(path)) return root;
             var t = root;
-            foreach (var seg in path.Split('/'))
+            foreach (var raw in path.Split('/'))
             {
-                Transform next = null;
-                for (int i = 0; i < t.childCount; i++) if (t.GetChild(i).name == seg) { next = t.GetChild(i); break; }
+                string seg = raw; int want = 0;   // "name#k" = the k-th (0-based) of several same-named siblings (Apocatemplater writes it)
+                int hash = raw.LastIndexOf('#');
+                if (hash > 0 && int.TryParse(raw.Substring(hash + 1), out want)) seg = raw.Substring(0, hash); else want = 0;
+                Transform next = null; int seen = 0;
+                for (int i = 0; i < t.childCount; i++)
+                    if (t.GetChild(i).name == seg) { if (seen == want) { next = t.GetChild(i); break; } seen++; }
                 if (next == null) return null;
                 t = next;
             }
