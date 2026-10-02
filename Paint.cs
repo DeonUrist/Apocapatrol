@@ -41,6 +41,13 @@ namespace Apocapatrol
                     { "roofrack.004", "piperat" }, { "roofrack.001", "piperat" }, { "roofrack.003", "piperat" }, { "roofrack.022", "piperat" },
                     { "dashboard.010", "piperat_dashboard" },
                 } },
+            // Halfbreed: the rear trunk/trailer body (body rear.001, metal_rusted_22) -> halfbreed_trunk.png; the bike frame, front mudguard and
+            // the small panel under parts/model/part (motorbike.001, front mudguard, Plane.233 - every metal_rusted_30 mesh) -> halfbreed_body.png
+            { "Halfbreed", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "body rear.001", "halfbreed_trunk" },
+                    { "motorbike.001", "halfbreed_body" }, { "front mudguard", "halfbreed_body" }, { "Plane.233", "halfbreed_body" },
+                } },
         };
         private static MaterialPropertyBlock _block;
         internal static MaterialPropertyBlock Block { get { if (_block == null) _block = new MaterialPropertyBlock(); return _block; } }
