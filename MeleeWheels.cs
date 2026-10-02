@@ -45,44 +45,79 @@ namespace Apocapatrol
             return _raider == 1;
         }
 
+        // [Debug] VerboseLog: what a swing sees (1.20.2 diagnostics) - also while Apocaraider handles the damage
+        private static bool V { get { return Plugin.VerboseLog != null && Plugin.VerboseLog.Value; } }
+        private static string _lastStates = "";
+        private static bool _logged;
+        private static float _nextNoArm;
+
         internal static void Tick()
         {
             try
             {
-                if (RaiderHandles()) return;
+                bool raider = RaiderHandles();
+                if (raider && !V) return;
                 if (_parent == null)
                 {
                     if (Time.unscaledTime < _nextFind) return;
                     _nextFind = Time.unscaledTime + 2f;
                     var holder = GameObject.Find("PlayerCameraHolder");
-                    if (holder == null) return;
-                    _cam = holder.transform.Find("PlayerCamera");
+                    _cam = holder != null ? holder.transform.Find("PlayerCamera") : null;
                     _parent = _cam != null ? _cam.Find("WeaponsArm/Parent") : null;
-                    if (_parent == null) return;
+                    if (_parent == null)
+                    {
+                        if (V && Time.unscaledTime >= _nextNoArm) { _nextNoArm = Time.unscaledTime + 30f; Plugin.Verbose("Melee wheels: no PlayerCameraHolder/PlayerCamera/WeaponsArm/Parent (holder " + (holder != null) + ", camera " + (_cam != null) + ")"); }
+                        return;
+                    }
+                    Plugin.Verbose("Melee wheels: weapons under " + _parent.name + " (" + _parent.childCount + ")");
                 }
                 PlayMakerFSM active = null;
+                string states = V ? "" : null;
                 for (int i = 0; i < _parent.childCount; i++)
                 {
                     var w = _parent.GetChild(i);
                     if (!w.gameObject.activeInHierarchy) continue;
                     var f = Attack(w.gameObject);
-                    if (f != null && f.Fsm != null && f.Fsm.Initialized && f.ActiveStateName == "fire") { active = f; break; }
+                    if (f == null || f.Fsm == null) continue;
+                    if (states != null) states += (states.Length > 0 ? ", " : "") + w.name + ":" + (f.Fsm.Initialized ? f.ActiveStateName : "(not initialised)") + (f.enabled ? "" : "(off)");
+                    if (active == null && f.Fsm.Initialized && f.ActiveStateName == "fire") active = f;
                 }
-                if (active == null) { _swing = null; _done = false; return; }
-                if (active != _swing) { _swing = active; _done = false; }
+                if (states != null && states != _lastStates) { _lastStates = states; Plugin.Verbose("Melee wheels: weapons in hand: " + (states.Length > 0 ? states : "none with an Attack FSM")); }
+                if (active == null)
+                {
+                    if (_swing != null && V && !_logged) Plugin.Verbose("Melee wheels: swing of " + _swing.gameObject.name + " ended - the cast (triggers included, " + Reach + " m) met nothing");
+                    _swing = null; _done = false; return;
+                }
+                if (active != _swing)
+                {
+                    _swing = active; _done = false; _logged = false;
+                    if (V) Plugin.Verbose("Melee wheels: swing of " + active.gameObject.name + " (damage " + MeleeDamage(active) + ", " + (raider ? "Apocaraider applies it" : "applied here") + ")");
+                }
                 if (_done) return;
                 float dmg = MeleeDamage(active);
-                if (float.IsNaN(dmg)) return;
+                if (float.IsNaN(dmg))
+                {
+                    if (V && !_logged) { _logged = true; Plugin.Verbose("Melee wheels: " + active.gameObject.name + " is not a melee weapon here (a Reload FSM, or no Bodypart.Damage in its \"hit\" state)"); }
+                    return;
+                }
                 var bodypart = WheelInReach();
                 if (bodypart == null) return;
+                if (raider) { _done = true; Plugin.Verbose("Melee wheels: would hit " + bodypart.gameObject.name + " - Apocaraider applies the damage"); return; }
                 var v = bodypart.FsmVariables.GetFsmFloat("Damage");
-                if (v == null) return;
+                if (v == null) { Plugin.Verbose("Melee wheels: " + bodypart.gameObject.name + " Bodypart has no Damage variable"); return; }
                 v.Value = dmg;
                 bodypart.SendEvent("Damage");
                 _done = true;
                 Plugin.Verbose("Melee wheels: " + active.gameObject.name + " hit " + bodypart.gameObject.name + " (" + dmg + ")");
             }
-            catch (Exception e) { Plugin.Log.LogWarning("Melee wheels: " + e.Message); _parent = null; }
+            catch (Exception e) { Plugin.Log.LogWarning("Melee wheels: " + e); _parent = null; }
+        }
+
+        private static string Path(Transform t)
+        {
+            string p = t.name;
+            for (int k = 0; k < 3 && t.parent != null; k++) { t = t.parent; p = t.name + "/" + p; }
+            return p;
         }
 
         private static PlayMakerFSM Attack(GameObject w)
@@ -132,6 +167,22 @@ namespace Apocapatrol
             if (n <= 0) return null;
             Array.Sort(_hits, 0, n, HitOrder.Instance);
             var player = PlayerRef.Player;
+            if (V && !_logged)
+            {
+                _logged = true;
+                var sb = new System.Text.StringBuilder("Melee wheels: swing cast met " + n + ":");
+                for (int i = 0; i < n && i < 10; i++)
+                {
+                    var c = _hits[i].collider;
+                    if (c == null) continue;
+                    var wheel = FittedWheel(c.transform);
+                    bool own = (player != null && c.transform.IsChildOf(player)) || c.transform.IsChildOf(_cam);
+                    sb.Append("\n    ").Append(_hits[i].distance.ToString("0.00")).Append(" m  ").Append(Path(c.transform)).Append("  [").Append(c.GetType().Name)
+                      .Append(c.isTrigger ? ", trigger" : ", solid").Append(", layer ").Append(c.gameObject.layer).Append(c.enabled ? "" : ", disabled").Append("]")
+                      .Append(own ? "  (player, skipped)" : wheel != null ? "  -> wheel " + wheel.name : "");
+                }
+                Plugin.Verbose(sb.ToString());
+            }
             for (int i = 0; i < n; i++)
             {
                 var col = _hits[i].collider;
