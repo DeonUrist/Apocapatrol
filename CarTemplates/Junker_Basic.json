@@ -29,7 +29,7 @@
         {
             "parent": -1,
             "hinge": "hinge_door_FL",
-            "prefab": "junker_door_RL"
+            "prefab": "junker_door_FL"
         },
         {
             "parent": -1,
@@ -39,7 +39,7 @@
         {
             "parent": -1,
             "hinge": "hinge_door_RL",
-            "prefab": "junker_door_FL"
+            "prefab": "junker_door_RL"
         },
         {
             "parent": 4,
