@@ -18,7 +18,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.10.2";
+        public const string VERSION = "1.11.0";
 
         internal static ManualLogSource Log;
 
@@ -80,6 +80,8 @@ namespace Apocapatrol
         internal static ConfigEntry<bool> ConvoyEnabled;
         internal static ConfigEntry<float> MaxHeat, HeatIntervalKm, ConvoySpawnDistance, JustCarsToConvoyRatio, MinConvoyCooldown, MaxConvoyCooldown;
         internal static ConfigEntry<float> BasicCarsChance, AdvancedCarsChance, SuperCarsChance, BasicConvoyChance, AdvancedConvoyChance;
+        internal static ConfigEntry<float> BasicBikersChance, AdvancedBikersChance, SuperBikersChance, BasicBikersKm, AdvancedBikersKm, SuperBikersKm, ConvoyBikerChance;
+        internal static ConfigEntry<int> BasicBikersBosses, AdvancedBikersBosses, SuperBikersBosses;
         internal static ConfigEntry<float> BasicCarsKm, AdvancedCarsKm, SuperCarsKm, BasicConvoyKm, AdvancedConvoyKm;
         internal static ConfigEntry<int> BasicCarsBosses, AdvancedCarsBosses, SuperCarsBosses, BasicConvoyBosses, AdvancedConvoyBosses;
         // hidden pose settings (PoseConfiguration = true exposes them)
@@ -390,6 +392,17 @@ namespace Apocapatrol
             SuperCarsKm = H.Bind(CS, "SuperAdvancedCarsDistanceKm", 50f, new ConfigDescription("Super advanced enemy cars (5 cars, half junkers, at least 2 advanced) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
             SuperCarsBosses = H.Bind(CS, "SuperAdvancedCarsBossesKilled", 3, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
             SuperCarsChance = H.Bind(CS, "SuperAdvancedCarsChance", 20f, new ConfigDescription("Weight of super advanced enemy cars (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
+            // bikers (1.11.0): motorcycle patrols, same unlocks as the car patrols, weighed in the same patrol roll
+            BasicBikersKm = H.Bind(CS, "BasicBikersDistanceKm", 0f, new ConfigDescription("Basic bikers (3 basic motorcycles) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            BasicBikersBosses = H.Bind(CS, "BasicBikersBossesKilled", 0, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            BasicBikersChance = H.Bind(CS, "BasicBikersChance", 25f, new ConfigDescription("Weight of basic bikers among the allowed patrols (%)", new AcceptableValueRange<float>(0f, 100f)));
+            AdvancedBikersKm = H.Bind(CS, "AdvancedBikersDistanceKm", 30f, new ConfigDescription("Advanced bikers (3 basic + 2 advanced motorcycles) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            AdvancedBikersBosses = H.Bind(CS, "AdvancedBikersBossesKilled", 1, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            AdvancedBikersChance = H.Bind(CS, "AdvancedBikersChance", 20f, new ConfigDescription("Weight of advanced bikers (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
+            SuperBikersKm = H.Bind(CS, "SuperBikersDistanceKm", 50f, new ConfigDescription("Super bikers (a medium car leading 3 basic + 3 advanced motorcycles) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
+            SuperBikersBosses = H.Bind(CS, "SuperBikersBossesKilled", 3, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
+            SuperBikersChance = H.Bind(CS, "SuperBikersChance", 10f, new ConfigDescription("Weight of super bikers (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
+            ConvoyBikerChance = H.Bind(CS, "ConvoyBikerEscortChance", 30f, new ConfigDescription("% of convoys whose small escort cars are motorcycles instead", new AcceptableValueRange<float>(0f, 100f)));
             BasicConvoyKm = H.Bind(CS, "BasicConvoyDistanceKm", 5f, new ConfigDescription("Basic convoy (a basic truck + 2 junkers + 3-5 small cars) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
             BasicConvoyBosses = H.Bind(CS, "BasicConvoyBossesKilled", 0, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
             BasicConvoyChance = H.Bind(CS, "BasicConvoyChance", 70f, new ConfigDescription("Weight of the basic convoy among the allowed convoys (%)", new AcceptableValueRange<float>(0f, 100f)));

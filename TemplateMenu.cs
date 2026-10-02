@@ -120,6 +120,8 @@ namespace Apocapatrol
             if (GUILayout.Button("Enemy cars", GUILayout.Height(28f), GUILayout.Width(150f))) debugSpawn = 1;
             GUILayout.Space(6f);
             if (GUILayout.Button("Enemy patrol", GUILayout.Height(28f), GUILayout.Width(150f))) debugSpawn = 2;
+            GUILayout.Space(6f);
+            if (GUILayout.Button("Bikers", GUILayout.Height(28f), GUILayout.Width(150f))) debugSpawn = 3;
             GUILayout.EndHorizontal();
             GUILayout.Label("A group " + Plugin.ConvoySpawnDistance.Value.ToString("0") + " m ahead of your car (behind you on foot), as if every distance/boss requirement were met.");
             GUILayout.Space(6f);
@@ -154,7 +156,7 @@ namespace Apocapatrol
             else if (debugSpawn != 0 && convoy != null)
             {
                 Close();
-                if (debugSpawn == 1) convoy.DebugCars(); else convoy.DebugConvoy();
+                if (debugSpawn == 1) convoy.DebugCars(); else if (debugSpawn == 3) convoy.DebugBikers(); else convoy.DebugConvoy();
             }
         }
 

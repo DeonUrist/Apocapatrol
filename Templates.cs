@@ -44,15 +44,16 @@ namespace Apocapatrol
             switch (kind.Trim().ToLowerInvariant())
             {
                 case "truck": return (Body ?? "").StartsWith("Rust", StringComparison.OrdinalIgnoreCase) || Cargo.Length > 0;
-                case "junker": return string.Equals(Body, "Junker", StringComparison.OrdinalIgnoreCase);
-                case "small": return !HasKind("truck") && !HasKind("junker");
+                case "medium": case "junker": return string.Equals(Body, "Junker", StringComparison.OrdinalIgnoreCase);
+                case "small": return !HasKind("truck") && !HasKind("medium");
                 default: return false;
             }
         }
         internal bool IsTruck { get { return HasKind("truck"); } }
-        internal bool IsJunker { get { return HasKind("junker"); } }
+        internal bool IsJunker { get { return HasKind("medium") || HasKind("junker"); } }   // the medium car role ("junker" still read from older files)
+        internal bool IsMotorcycle { get { return HasKind("motorcycle"); } }
         internal bool IsSmall { get { return HasKind("small"); } }
-        internal string KindLabel { get { return Kinds != null && Kinds.Length > 0 ? string.Join(";", Kinds) : (IsTruck ? "truck" : IsJunker ? "junker" : "small"); } }
+        internal string KindLabel { get { return Kinds != null && Kinds.Length > 0 ? string.Join(";", Kinds) : (IsTruck ? "truck" : IsJunker ? "medium" : "small"); } }
         internal bool IsAdvanced { get { return Tier.Length > 0 ? Tier.Equals("advanced", StringComparison.OrdinalIgnoreCase) : Name.IndexOf("Advanced", StringComparison.OrdinalIgnoreCase) >= 0; } }
         internal bool IsBasic { get { return Tier.Length > 0 ? Tier.Equals("basic", StringComparison.OrdinalIgnoreCase) : Name.EndsWith("_Basic", StringComparison.OrdinalIgnoreCase) || (!IsAdvanced && IsTruck); } }
 
@@ -114,9 +115,9 @@ namespace Apocapatrol
             new CarTemplate("TinyTyrant_Advanced", "TinyTyrant", "small_wheel_2", "2.8L V6 115HP 183Nm Gasoline", "Medium Radiator", "steeringwheel_7", "poloska_exhaust",
                 "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Lugnut", RamTargets.Pedestrians) { Bumpers = SmallBumpers },
             new CarTemplate("Junker_Basic", "Junker", "small_wheel_1", "2.3L I4 89HP 165Nm Gasoline", "Medium Radiator", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Sprokka", "Lugnut", RamTargets.Pedestrians) { Bumpers = JunkerBumpers },
+                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Sprokka", "Lugnut", RamTargets.Pedestrians) { Bumpers = JunkerBumpers, Kind = "medium", Kinds = new[] { "medium" }, Tier = "basic" },
             new CarTemplate("Junker_Advanced", "Junker", "small_wheel_1", "2.3L I4 89HP 165Nm Gasoline", "Medium Radiator", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Sprokka", "Flexa", RamTargets.Pedestrians) { Bumpers = JunkerBumpers },
+                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Sprokka", "Flexa", RamTargets.Pedestrians) { Bumpers = JunkerBumpers, Kind = "medium", Kinds = new[] { "medium" }, Tier = "advanced" },
             new CarTemplate("Rustcargo_Basic", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
                 "rustallion_seat_front", "rustallion_seat_front", "Scraffa", "Flexa", RamTargets.Cars) { RearWheel = "truck_wheel_2", Bumpers = TruckBumpers },
             new CarTemplate("Rustcargo_Advanced", "Rustcargo", "truck_wheel_1_armored", "7L I6 165HP 542Nm Diesel", "radiator_truck_big", "steeringwheel_3", "exhaust_single",

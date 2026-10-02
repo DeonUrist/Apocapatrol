@@ -11,7 +11,7 @@ namespace Apocapatrol
     // the group composition (drawn from the template park by name: <Body>_Basic / <Body>_Advanced, Junker_*, Rustcargo_*),
     // the spot ahead of (or behind) the player, and the staggered builds. Spawned cars are ordinary patrol cars: the Crew drives
     // off as soon as the engine runs and the Pilot hunts the player.
-    internal enum SpawnKind { BasicCars, AdvancedCars, SuperCars, BasicConvoy, AdvancedConvoy }
+    internal enum SpawnKind { BasicCars, AdvancedCars, SuperCars, BasicConvoy, AdvancedConvoy, BasicBikers, AdvancedBikers, SuperBikers }
 
     internal class Convoy : MonoBehaviour
     {
@@ -135,6 +135,9 @@ namespace Apocapatrol
                 case SpawnKind.SuperCars: return _km >= Plugin.SuperCarsKm.Value && _bosses >= Plugin.SuperCarsBosses.Value;
                 case SpawnKind.BasicConvoy: return _km >= Plugin.BasicConvoyKm.Value && _bosses >= Plugin.BasicConvoyBosses.Value;
                 case SpawnKind.AdvancedConvoy: return _km >= Plugin.AdvancedConvoyKm.Value && _bosses >= Plugin.AdvancedConvoyBosses.Value;
+                case SpawnKind.BasicBikers: return _km >= Plugin.BasicBikersKm.Value && _bosses >= Plugin.BasicBikersBosses.Value;
+                case SpawnKind.AdvancedBikers: return _km >= Plugin.AdvancedBikersKm.Value && _bosses >= Plugin.AdvancedBikersBosses.Value;
+                case SpawnKind.SuperBikers: return _km >= Plugin.SuperBikersKm.Value && _bosses >= Plugin.SuperBikersBosses.Value;
             }
             return false;
         }
@@ -148,6 +151,9 @@ namespace Apocapatrol
                 case SpawnKind.SuperCars: return Plugin.SuperCarsChance.Value * heat;
                 case SpawnKind.BasicConvoy: return Plugin.BasicConvoyChance.Value;
                 case SpawnKind.AdvancedConvoy: return Plugin.AdvancedConvoyChance.Value * heat;
+                case SpawnKind.BasicBikers: return Plugin.BasicBikersChance.Value;
+                case SpawnKind.AdvancedBikers: return Plugin.AdvancedBikersChance.Value * heat;
+                case SpawnKind.SuperBikers: return Plugin.SuperBikersChance.Value * heat;
             }
             return 0f;
         }
@@ -174,7 +180,7 @@ namespace Apocapatrol
             var cars = new List<SpawnKind>();
             var convoys = new List<SpawnKind>();
             foreach (SpawnKind k in Enum.GetValues(typeof(SpawnKind)))
-                if (Allowed(k)) { if (k >= SpawnKind.BasicConvoy) convoys.Add(k); else cars.Add(k); }
+                if (Allowed(k)) { if (IsConvoy(k)) convoys.Add(k); else cars.Add(k); }
             if (cars.Count == 0 && convoys.Count == 0) { Plugin.Verbose("Convoy: nothing allowed yet (km " + _km.ToString("0.0") + ", bosses " + _bosses + ")"); ResetCooldown("nothing allowed"); return; }
 
             List<SpawnKind> pool;
@@ -226,6 +232,15 @@ namespace Apocapatrol
             Plugin.Verbose("Convoy: spawn postponed (" + why + "), next roll in " + (_cooldown / 60f).ToString("0.0") + " min");
         }
 
+        internal static bool IsConvoy(SpawnKind k) { return k == SpawnKind.BasicConvoy || k == SpawnKind.AdvancedConvoy; }
+
+        internal void DebugBikers()
+        {
+            UpdateHeat();
+            var kind = Roll(new List<SpawnKind> { SpawnKind.BasicBikers, SpawnKind.AdvancedBikers, SpawnKind.SuperBikers }, Mathf.Max(1f, _heat));
+            if (kind != null) Launch(kind.Value, Mathf.Max(1f, _heat), true);
+        }
+
         // Debug buttons: every requirement counts as met; the real heat, but at least 100 % so a full group appears.
         internal void DebugCars()
         {
@@ -263,7 +278,8 @@ namespace Apocapatrol
 
         // small = kind "small" (built-ins: not a junker, not a truck); a template with only other kinds ("motorcycle") is not a small car
         private static CarTemplate Small(bool advanced) { return Pick(t => t.IsSmall && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }
-        private static CarTemplate Junker(bool advanced) { return Pick(t => IsJunkerTpl(t) && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }
+        private static CarTemplate Junker(bool advanced) { return Pick(t => IsJunkerTpl(t) && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }   // the medium car role
+        private static CarTemplate Moto(bool advanced) { return Pick(t => t.IsMotorcycle && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }
         // a convoy's truck is always a loot truck (a template with cargo); a plain truck only if the park had no loot truck of that tier
         private static CarTemplate Truck(bool advanced)
         {
@@ -316,6 +332,27 @@ namespace Apocapatrol
                     }
                     break;
                 }
+                case SpawnKind.BasicBikers:
+                {
+                    int n = Scaled(3, heat);
+                    for (int i = 0; i < n; i++) Add(list, Moto(false));
+                    break;
+                }
+                case SpawnKind.AdvancedBikers:
+                {
+                    int b = Scaled(3, heat), a = Scaled(2, heat);
+                    for (int i = 0; i < a; i++) Add(list, Moto(true) ?? Moto(false));
+                    for (int i = 0; i < b; i++) Add(list, Moto(false));
+                    break;
+                }
+                case SpawnKind.SuperBikers:
+                {
+                    Add(list, Junker(true) ?? Junker(false));                                     // the medium car leads (first in the formation)
+                    int b = Scaled(3, heat), a = Scaled(3, heat);
+                    for (int i = 0; i < a; i++) Add(list, Moto(true) ?? Moto(false));
+                    for (int i = 0; i < b; i++) Add(list, Moto(false));
+                    break;
+                }
                 case SpawnKind.BasicConvoy:
                 case SpawnKind.AdvancedConvoy:
                 {
@@ -332,8 +369,10 @@ namespace Apocapatrol
                         EnsureAdvanced(adv, 2);                                                 // ... and at least two
                     }
                     else if (UnityEngine.Random.value < 0.5f) adv[UnityEngine.Random.Range(0, n)] = true;   // 50 %: one advanced car
+                    // ConvoyBikerEscortChance (30 %): the small escort cars are motorcycles of the same tier (a small car when none exists)
+                    bool bikers = UnityEngine.Random.value * 100f < Plugin.ConvoyBikerChance.Value;
                     for (int i = 0; i < n; i++)
-                        Add(list, i < junkers ? Junker(adv[i]) ?? Small(adv[i]) : Small(adv[i]));
+                        Add(list, i < junkers ? Junker(adv[i]) ?? Small(adv[i]) : bikers ? Moto(adv[i]) ?? Small(adv[i]) : Small(adv[i]));
                     break;
                 }
             }
@@ -357,6 +396,9 @@ namespace Apocapatrol
                 case SpawnKind.AdvancedCars: return "Advanced enemy cars";
                 case SpawnKind.SuperCars: return "Super advanced enemy cars";
                 case SpawnKind.BasicConvoy: return "Basic convoy";
+                case SpawnKind.BasicBikers: return "Basic bikers";
+                case SpawnKind.AdvancedBikers: return "Advanced bikers";
+                case SpawnKind.SuperBikers: return "Super bikers";
                 default: return "Advanced convoy";
             }
         }

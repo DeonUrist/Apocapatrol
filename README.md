@@ -1,4 +1,4 @@
-# Apocapatrol 1.10.1
+# Apocapatrol 1.11.0
 
 A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
 you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
@@ -73,10 +73,13 @@ starting area and kill more bosses.
 | Group | Appears from | What comes |
 |---|---|---|
 | Basic enemy cars | the start | 3 small cars |
-| Basic convoy | 5 km | a loot truck, 2 junkers and 3–5 small cars, sometimes one advanced car among them |
+| Basic bikers | the start | 3 motorcycles |
+| Basic convoy | 5 km | a loot truck, 2 junkers and 3–5 small cars, sometimes one advanced car among them (in 30 % of convoys the small cars are motorcycles) |
 | Advanced convoy | 20 km and 3 bosses | an advanced loot truck with the same escort, half of it advanced |
 | Advanced enemy cars | 30 km and 1 boss | 3 cars, at least one advanced, maybe a junker |
+| Advanced bikers | 30 km and 1 boss | 3 motorcycles and 2 advanced ones |
 | Super advanced enemy cars | 50 km and 3 bosses | 5 cars, many of them junkers, at least two advanced |
+| Super bikers | 50 km and 3 bosses | a junker leading 3 motorcycles and 3 advanced ones |
 
 **Heat** rises by 25 % every 10 km you travel from the starting area, up to 300 %. Below 100 % heat the groups are still incomplete (one car
 instead of three near the start); from 100 % on they are full size and stay that way, and higher heat only makes the tougher groups turn up
@@ -188,10 +191,9 @@ even items locked in the bed), then save it as a template with **Apocatemplater*
 default): sit in the car or look at it and press the key. The template lands in `BepInEx\plugins\Apocapatrol\CarTemplates\`
 as a `.json` file and shows up in the spawner menu the next time you open it, marked `[file]`.
 
-Every template joins the raider patrols and convoys by its `kind` (`small`, `junker` or `truck`) and `tier` (`basic` or
-`advanced`), with `weight` as its relative chance among the cars of the same role. A car can have several kinds, separated by
-`;` (for example `"kind": "small;motorcycle"`): it counts as each of them. Patrols and convoys only use `small`, `junker` and
-`truck` so far; a car with none of those (only `"motorcycle"`) stays out of them. Open the file in a text editor to change the
+Every template joins the raider patrols and convoys by its `kind` (`small`, `medium` - the junker's role, `junker` still
+works -, `truck` or `motorcycle`) and `tier` (`basic` or `advanced`), with `weight` as its relative chance among the cars of the
+same role. A car can have several kinds, separated by `;` (for example `"kind": "small;motorcycle"`): it counts as each of them. Open the file in a text editor to change the
 crew (`driver`, `passenger`), what it rams (`None`, `Pedestrians`, `Cars`), the bed (`cargo`: empty, `Random`, a loot type like
 `Food`, or the item list the dump wrote), the front bumper roll (`bumpers`), or set `spawns` to `false` to keep it out of the
 patrols (spawner menu only). A file with the name of a built-in car replaces that car.

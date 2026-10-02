@@ -1,0 +1,29 @@
+{
+    "schema": 1,
+    "name": "Halfbreed_Basic",
+    "body": "Halfbreed",
+    "kind": "motorcycle",
+    "tier": "basic",
+    "spawns": true,
+    "weight": 1,
+    "rams": "Pedestrians",
+    "driver": "Scrud",
+    "passenger": "",
+    "cargo": "",
+    "lootScaleMin": 1,
+    "lootScaleMax": 1,
+    "bumpers": [],
+    "fillFuel": true,
+    "releaseHandbrake": true,
+    "parts": [
+        { "parent": -1, "hinge": "parts/model/steering_parent_F/steering_hinge/hinge_headlight", "prefab": "Headlight" },
+        { "parent": -1, "hinge": "hinge_exhaust", "prefab": "exhaust_the_six", "hingePos": [0, -0.1, -0.95], "hingeRot": [319, 0, 0] },
+        { "parent": -1, "hinge": "hinge_seat_driver", "prefab": "seat_motorcycle" },
+        { "parent": -1, "hinge": "hinge_engine", "prefab": "2.8L V6 115HP 183Nm Gasoline", "hingePos": [0, -0.355, 0.67], "hingeRot": [0, 0, 0] },
+        { "parent": -1, "hinge": "hinge_wheel_F", "prefab": "motorcycle_wheel" },
+        { "parent": -1, "hinge": "hinge_wheel_M", "prefab": "motorcycle_wheel" },
+        { "parent": -1, "hinge": "hinge_wheel_RL", "prefab": "motorcycle_wheel" },
+        { "parent": -1, "hinge": "hinge_wheel_RR", "prefab": "motorcycle_wheel" }
+    ],
+    "source": "Apocatemplater 1.0.3, 2026-10-02 17:19, from Halfbreed(Clone)26"
+}
