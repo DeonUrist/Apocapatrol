@@ -128,12 +128,13 @@ namespace Apocapatrol
         internal static CarTemplate Parse(string json, string fallbackName, string origin, string where)
         {
             TemplateFile f;
-            try { f = JsonUtility.FromJson<TemplateFile>(json); }
+            try { f = TemplateFile.FromJson(json); }
             catch (Exception e) { Plugin.Log.LogWarning("Car template " + where + ": not valid JSON (" + e.Message + ")"); return null; }
             if (f == null) { Plugin.Log.LogWarning("Car template " + where + ": empty"); return null; }
             if (S(f.body).Length == 0) { Plugin.Log.LogWarning("Car template " + where + ": no \"body\""); return null; }
 
             var parts = (f.parts ?? new TemplatePart[0]).Where(p => p != null).ToArray();
+            if (parts.Length == 0) { Plugin.Log.LogWarning("Car template " + where + ": no \"parts\" - skipped (a frame without parts would not drive)"); return null; }
             for (int i = 0; i < parts.Length; i++)
             {
                 if (parts[i].parent >= i) { Plugin.Log.LogWarning("Car template " + where + ": part [" + i + "] " + parts[i].prefab + " names parent [" + parts[i].parent + "], which is not an earlier part - attached to the frame instead"); parts[i].parent = -1; }
@@ -144,7 +145,8 @@ namespace Apocapatrol
             {
                 Name = S(f.name).Length > 0 ? S(f.name) : fallbackName,
                 Body = S(f.body),
-                Kind = S(f.kind).ToLowerInvariant(),
+                Kind = S(f.kind),
+                Kinds = ParseKinds(f.kind),
                 Tier = S(f.tier).ToLowerInvariant(),
                 Spawns = f.spawns,
                 Weight = Mathf.Max(0f, f.weight),
@@ -168,6 +170,14 @@ namespace Apocapatrol
             }
             if (t.Driver.Length > 0 && t.Seat.Length == 0) Plugin.Log.LogWarning("Car template " + t.Name + ": a driver but no part on hinge_seat_driver");
             return t;
+        }
+
+        // "small;motorcycle" / "small, motorcycle" / "small motorcycle" -> { "small", "motorcycle" }
+        internal static string[] ParseKinds(string kind)
+        {
+            if (string.IsNullOrEmpty(kind)) return new string[0];
+            return kind.Split(new[] { ';', ',', ' ', '\t', '|' }, StringSplitOptions.RemoveEmptyEntries)
+                       .Select(k => k.Trim().ToLowerInvariant()).Where(k => k.Length > 0).Distinct().ToArray();
         }
 
         // A "cargo" value that is an item spec ("dogfood_can:6;akms:1") rather than "Random" or a [Loot] key

@@ -27,15 +27,32 @@ namespace Apocapatrol
         // JSON car templates (CarTemplates.cs; written by the Apocatemplater dumper). Parts != null = this exact part list is
         // attached hinge by hinge instead of the Wheel/Engine/... fields above.
         internal TemplatePart[] Parts;
-        internal string Kind = "";            // small | junker | truck; "" = by body / cargo (the built-in rule)
+        internal string Kind = "";            // as written: "small", "small;motorcycle" ...; "" = by body / cargo (the built-in rule)
+        internal string[] Kinds = new string[0];   // Kind split on ';' / ',' / spaces, lower case, no duplicates (CarTemplates.ParseKinds)
         internal string Tier = "";            // basic | advanced; "" = by name
         internal bool Spawns = true;          // false: spawner menu only, never in a patrol / convoy
         internal float Weight = 1f;           // relative pick chance among the templates a patrol slot accepts
         internal string Origin = "built-in";  // built-in | embedded | file (for the log and the spawner menu)
 
         // the spawn roles (Convoy picks, spawner menu column)
-        internal bool IsTruck { get { return Kind.Length > 0 ? Kind.Equals("truck", StringComparison.OrdinalIgnoreCase) : (Body ?? "").StartsWith("Rust", StringComparison.OrdinalIgnoreCase) || Cargo.Length > 0; } }
-        internal bool IsJunker { get { return Kind.Length > 0 ? Kind.Equals("junker", StringComparison.OrdinalIgnoreCase) : string.Equals(Body, "Junker", StringComparison.OrdinalIgnoreCase); } }
+        // A template may have several kinds ("small;motorcycle"): it counts as each of them. Without any kind the built-in rule decides:
+        // truck = Rust* body or cargo, junker = Junker body, small = everything else.
+        internal bool HasKind(string kind)
+        {
+            if (string.IsNullOrEmpty(kind)) return false;
+            if (Kinds != null && Kinds.Length > 0) return Array.IndexOf(Kinds, kind.Trim().ToLowerInvariant()) >= 0;
+            switch (kind.Trim().ToLowerInvariant())
+            {
+                case "truck": return (Body ?? "").StartsWith("Rust", StringComparison.OrdinalIgnoreCase) || Cargo.Length > 0;
+                case "junker": return string.Equals(Body, "Junker", StringComparison.OrdinalIgnoreCase);
+                case "small": return !HasKind("truck") && !HasKind("junker");
+                default: return false;
+            }
+        }
+        internal bool IsTruck { get { return HasKind("truck"); } }
+        internal bool IsJunker { get { return HasKind("junker"); } }
+        internal bool IsSmall { get { return HasKind("small"); } }
+        internal string KindLabel { get { return Kinds != null && Kinds.Length > 0 ? string.Join(";", Kinds) : (IsTruck ? "truck" : IsJunker ? "junker" : "small"); } }
         internal bool IsAdvanced { get { return Tier.Length > 0 ? Tier.Equals("advanced", StringComparison.OrdinalIgnoreCase) : Name.IndexOf("Advanced", StringComparison.OrdinalIgnoreCase) >= 0; } }
         internal bool IsBasic { get { return Tier.Length > 0 ? Tier.Equals("basic", StringComparison.OrdinalIgnoreCase) : Name.EndsWith("_Basic", StringComparison.OrdinalIgnoreCase) || (!IsAdvanced && IsTruck); } }
 
@@ -141,7 +158,7 @@ namespace Apocapatrol
         {
             if (Parts != null)
                 return Body + " / " + Parts.Length + " part(s) (" + Origin + ") / driver " + (Driver.Length > 0 ? Driver : "-") + " / passenger " + (Passenger.Length > 0 ? Passenger : "-")
-                    + " / rams " + Rams + " / " + (IsTruck ? "truck" : IsJunker ? "junker" : "small") + " " + (IsAdvanced ? "advanced" : "basic") + (Spawns ? "" : " (menu only)")
+                    + " / rams " + Rams + " / " + KindLabel + " " + (IsAdvanced ? "advanced" : "basic") + (Spawns ? "" : " (menu only)")
                     + (Cargo.Length > 0 ? " / loot " + Cargo : "");
             return Body + " / " + Wheel + (RearWheel.Length > 0 ? " + rear " + RearWheel : "") + " / " + Engine + " / " + Radiator + " / " + SteeringWheel + " / " + (Exhaust.Length > 0 ? Exhaust : "no exhaust") + " / seats " + Seat + " + " + PassengerSeat
                 + " / driver " + (Driver.Length > 0 ? Driver : "-") + " / passenger " + (Passenger.Length > 0 ? Passenger : "-") + " / rams " + Rams

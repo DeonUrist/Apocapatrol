@@ -261,8 +261,8 @@ namespace Apocapatrol
             return list[list.Count - 1];
         }
 
-        // small = not a junker, not a truck
-        private static CarTemplate Small(bool advanced) { return Pick(t => !IsTruckTpl(t) && !IsJunkerTpl(t) && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }
+        // small = kind "small" (built-ins: not a junker, not a truck); a template with only other kinds ("motorcycle") is not a small car
+        private static CarTemplate Small(bool advanced) { return Pick(t => t.IsSmall && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }
         private static CarTemplate Junker(bool advanced) { return Pick(t => IsJunkerTpl(t) && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }
         // a convoy's truck is always a loot truck (a template with cargo); a plain truck only if the park had no loot truck of that tier
         private static CarTemplate Truck(bool advanced)
