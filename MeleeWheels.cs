@@ -12,7 +12,7 @@ namespace Apocapatrol
     // While a melee weapon's Attack FSM is in its "fire" state (the swing, ~0.35 s) the same cast is repeated including triggers;
     // if the first thing it meets is a fitted wheel (before anything solid), the wheel's own Bodypart FSM gets the weapon's damage
     // (the value its "hit" state would have written) and the Damage event - exactly what a hit on a loose wheel does. One hit per swing.
-    // Apocaraider (1.5.1+) has its own version with its wheel rules (multiplier, hit numbers, pop-off): this one then stays out.
+    // Apocaraider (1.5.1+; the hub fix in 1.5.3) has its own version with its wheel rules (multiplier, hit numbers, pop-off): this one then stays out.
     internal static class MeleeWheels
     {
         private const float Radius = 0.02f, Reach = 1.8f;
@@ -144,20 +144,33 @@ namespace Apocapatrol
                     foreach (var f in part.GetComponents<PlayMakerFSM>()) if (f != null && f.FsmName == "Bodypart") return f;
                     return null;
                 }
-                if (!col.isTrigger) return null;   // something solid first: the game's own cast handles it
+                if (!col.isTrigger) return null;   // something solid first (a body panel, a door, the ground): the game's own cast handles it
             }
             return null;
         }
 
-        // a wheel item fitted to a car (tag vehPart, on a hinge_wheel*)
+        // The wheel a collider belongs to (1.20.1): the wheel item itself (tag vehPart on a hinge_wheel*), or anything else under a wheel
+        // hinge - the solid sphere collider of hinge_wheel*/wheel_hub (the game's AddSphereCollider, about the tyre's size, part of the
+        // FRAME) wraps the fitted wheel, so a swing meets it before the tyre's own trigger and 1.20.0 stopped there as "solid first".
+        // The hub now counts as the wheel on its hinge. Another part on the way up (a fender, a plate) = not a wheel.
         private static Transform FittedWheel(Transform t)
         {
             for (var a = t; a != null; a = a.parent)
             {
                 bool tagged;
                 try { tagged = a.CompareTag("vehPart"); } catch (Exception) { tagged = false; }
-                if (!tagged) continue;
-                return a.parent != null && a.parent.name.StartsWith("hinge_wheel", StringComparison.Ordinal) ? a : null;
+                if (tagged) return a.parent != null && a.parent.name.StartsWith("hinge_wheel", StringComparison.Ordinal) ? a : null;
+                if (a.name.StartsWith("hinge_wheel", StringComparison.Ordinal))
+                {
+                    for (int i = 0; i < a.childCount; i++)
+                    {
+                        var c = a.GetChild(i);
+                        bool part;
+                        try { part = c.CompareTag("vehPart"); } catch (Exception) { part = false; }
+                        if (part) return c;
+                    }
+                    return null;                     // a bare hub: no wheel fitted
+                }
             }
             return null;
         }
