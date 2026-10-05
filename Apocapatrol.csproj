@@ -15,9 +15,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Reference Include="0Harmony"><HintPath>$(BepInExCore)\0Harmony.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="NWH.Common"><HintPath>$(ManagedDir)\NWH.Common.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="NWH.VehiclePhysics2"><HintPath>$(ManagedDir)\NWH.VehiclePhysics2.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="NWH.WheelController"><HintPath>$(ManagedDir)\NWH.WheelController.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="BepInEx"><HintPath>$(BepInExCore)\BepInEx.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine"><HintPath>$(ManagedDir)\UnityEngine.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.TextRenderingModule"><HintPath>$(ManagedDir)\UnityEngine.TextRenderingModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.PhysicsModule"><HintPath>$(ManagedDir)\UnityEngine.PhysicsModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.TerrainPhysicsModule"><HintPath>$(ManagedDir)\UnityEngine.TerrainPhysicsModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.TerrainModule"><HintPath>$(ManagedDir)\UnityEngine.TerrainModule.dll</HintPath><Private>false</Private></Reference>
@@ -33,13 +38,18 @@
 
   <ItemGroup>
     <!-- the "hardcoded" JSON car templates (Apocatemplater dumps), read by CarTemplates.LoadEmbedded -->
-    <EmbeddedResource Include="CarTemplates\*.json" LogicalName="Apocapatrol.CarTemplates.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="BaseTemplates\*.json" LogicalName="Apocapatrol.DefaultTemplates.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="EditorDefaults.json" LogicalName="Apocapatrol.EditorDefaults.json" />
   </ItemGroup>
 
-  <Target Name="DeployToGame" AfterTargets="Build">
+  <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(DeployToGame)' != 'false'">
     <Copy SourceFiles="$(OutDir)$(AssemblyName).dll" DestinationFolder="$(GameDir)\BepInEx\plugins\Apocapatrol" />
     <ItemGroup><TextureFiles Include="Textures\**\*" /></ItemGroup>
     <Copy SourceFiles="@(TextureFiles)" DestinationFolder="$(GameDir)\BepInEx\plugins\Apocapatrol\Textures" />
+    <ItemGroup><ThemeFiles Include="theme\game\*" /><LedgerFiles Include="theme\ledger\*" /><BaseFiles Include="BaseTemplates\*.json" /></ItemGroup>
+    <Copy SourceFiles="@(ThemeFiles)" DestinationFolder="$(GameDir)\BepInEx\plugins\Apocapatrol\theme\game" />
+    <Copy SourceFiles="@(LedgerFiles)" DestinationFolder="$(GameDir)\BepInEx\plugins\Apocapatrol\theme\ledger" />
+    <!-- Default JSON is copied only if absent by the loader, preserving existing disk edits. -->
     <Message Importance="high" Text="Deployed $(AssemblyName).dll + Textures to $(GameDir)\BepInEx\plugins\Apocapatrol" />
   </Target>
 

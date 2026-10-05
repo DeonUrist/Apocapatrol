@@ -14,27 +14,19 @@ namespace Apocapatrol
     // AI-driven raider cars: templates assembled from the game's own frames and parts, live crews with a driving AI, ranged
     // passengers, ram damage, loot trucks, a convoy spawner driven by the game's Distance Travelled, and a save sidecar.
     [BepInPlugin(GUID, NAME, VERSION)]
+    [BepInDependency("com.denis.apocalypter.motorcyclemod", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "1.20.3";
+        public const string VERSION = "2.0.6";
 
         internal static ManualLogSource Log;
 
-        // [General] PatrolSizePercent: scales how many cars every spawn brings (25 / 50 / 100 / 125 / 150 %)
-        internal static ConfigEntry<int> PatrolSizePercent;
-        internal static float SizeFactor { get { return Mathf.Clamp(PatrolSizePercent != null ? PatrolSizePercent.Value : 100, 25, 150) / 100f; } }
-
         internal static ConfigEntry<Key> MenuKey;
-        internal static readonly Dictionary<string, ConfigEntry<float>> LootChances = new Dictionary<string, ConfigEntry<float>>(StringComparer.OrdinalIgnoreCase);
-        internal static ConfigEntry<float> MinPartHealth, MaxPartHealth, MinPartsFill, MaxPartsFill, LootMultiplier;
-
-        internal static float LootChance(string key)
-        {
-            ConfigEntry<float> e;
-            return key != null && LootChances.TryGetValue(key, out e) ? e.Value : 0f;
-        }
+        internal static ConfigEntry<bool> AllowDebugSpawns;
+        internal static ConfigEntry<float> PatrolSpawnChancePercent;
+        internal static ConfigEntry<float> MinPartHealth, MaxPartHealth, MinPartsFill, MaxPartsFill;
 
         // Condition of a spawned part: min..max, weighted toward two thirds of the way up (triangular distribution)
         internal static float RollPartHealth() { return Triangular(MinPartHealth.Value, MaxPartHealth.Value); }
@@ -78,12 +70,7 @@ namespace Apocapatrol
         internal static ConfigEntry<int> CleanupMaxCars;
         // [Convoy spawner]
         internal static ConfigEntry<bool> ConvoyEnabled;
-        internal static ConfigEntry<float> MaxHeat, HeatIntervalKm, ConvoySpawnDistance, JustCarsToConvoyRatio, MinConvoyCooldown, MaxConvoyCooldown;
-        internal static ConfigEntry<float> BasicCarsChance, AdvancedCarsChance, SuperCarsChance, BasicConvoyChance, AdvancedConvoyChance;
-        internal static ConfigEntry<float> BasicBikersChance, AdvancedBikersChance, SuperBikersChance, BasicBikersKm, AdvancedBikersKm, SuperBikersKm, ConvoyBikerChance;
-        internal static ConfigEntry<int> BasicBikersBosses, AdvancedBikersBosses, SuperBikersBosses;
-        internal static ConfigEntry<float> BasicCarsKm, AdvancedCarsKm, SuperCarsKm, BasicConvoyKm, AdvancedConvoyKm;
-        internal static ConfigEntry<int> BasicCarsBosses, AdvancedCarsBosses, SuperCarsBosses, BasicConvoyBosses, AdvancedConvoyBosses;
+        internal static ConfigEntry<float> MaxHeat, HeatIntervalKm, ConvoySpawnDistance, MinConvoyCooldown, MaxConvoyCooldown;
         // hidden pose settings (PoseConfiguration = true exposes them)
         internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
         internal static PoseBool PoseEnabled;
@@ -121,10 +108,8 @@ namespace Apocapatrol
                 if (orphans == null || orphans.Count == 0) return;
                 var moves = new List<KeyValuePair<ConfigDefinition, ConfigEntryBase>>
                 {
-                    new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("General", "PatrolSizePercent"), PatrolSizePercent),
                     new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("General", "AudioVoices"), AudioVoices),
                     new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Self-destruct", "SelfDestructingCars"), SelfDestruct),
-                    new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Loot", "Multiplier"), LootMultiplier),
                 };
                 int n = 0;
                 foreach (var mv in moves)
@@ -140,10 +125,35 @@ namespace Apocapatrol
             catch (Exception e) { Log.LogWarning("Config migration: " + e.Message); }
         }
 
+        internal static ConfigEntry<Key> BindEditorConfigKey(ConfigFile config)
+        {
+            var definition = new ConfigDefinition("Debug", "ApocaPatrol Config Key");
+            bool alreadyPresent = false;
+            foreach (var key in config.Keys) if (key.Equals(definition)) alreadyPresent = true;
+            var property = typeof(ConfigFile).GetProperty("OrphanedEntries", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            var orphaned = property != null ? property.GetValue(config, null) as Dictionary<ConfigDefinition, string> : null;
+            alreadyPresent |= orphaned != null && orphaned.ContainsKey(definition);
+            bool save = config.SaveOnConfigSet; config.SaveOnConfigSet = false;
+            try
+            {
+                var oldDefinition = new ConfigDefinition("Debug", "TemplateSpawnerKey");
+                Key old = config.Bind(oldDefinition, Key.None).Value;
+                config.Remove(oldDefinition);
+                var entry = config.Bind(definition, Key.None, new ConfigDescription("Open the ApocaPatrol Patrols, Convoys and Loot configuration window. None = unbound. Existing editor bindings are preserved"));
+                if (!alreadyPresent) entry.Value = old;
+                return entry;
+            }
+            finally { config.SaveOnConfigSet = save; }
+        }
+
         private void Awake()
         {
             Log = Logger;
+            MotorcycleIntegration.Install();
             Paint.Init(Info.Location);
+            PatrolSkin.Init(Info.Location);
+            var fixedSettings = HiddenConfig();
+            EditorStore.Load(Path.GetDirectoryName(Info.Location));
             CarTemplates.Init(Info.Location);
             bool exposePose = PoseConfigurationEnabled(Config.ConfigFilePath);
 
@@ -153,12 +163,6 @@ namespace Apocapatrol
                 "PoseConfiguration = true");
 
             // ---- the settings players see (Denis, 1.8.0): [Scaling], [Combat], [Debug]. Everything else is fixed at the defaults below.
-            PatrolSizePercent = Config.Bind("Scaling", "PatrolSizePercent", 100, new ConfigDescription(
-                "Patrol size: how many cars every enemy spawn brings, in % of the full group (100 = as designed: 3 cars, a 5-car super group, " +
-                "a convoy of a truck + 2 junkers + 3-5 small cars; groups are smaller than that only below 100 % heat, never bigger). " +
-                "Lower it on a weak PC - fewer cars means fewer crews, physics bodies and AI drivers at once. A spawn always brings at least " +
-                "one car; a convoy always brings its truck first",
-                new AcceptableValueList<int>(25, 50, 100, 125, 150)));
             AudioVoices = Config.Bind("Scaling", "AudioVoices", 64, new ConfigDescription(
                 "How many sounds the game can play at once (Unity's real voices; the game ships with 32). A firefight with several raider cars needs " +
                 "more: every shot and every hit is a sound, and beyond the limit sounds - the player's own shots too - cut out. 64 is a good value; " +
@@ -169,11 +173,6 @@ namespace Apocapatrol
                 "goes black (trucks stay a lootable wreck), every part pops off with 0 condition and the dead chassis cannot be entered, " +
                 "fuelled or fitted with parts any more; it is removed once you are 1000 m away. Off = vacated cars stay as they are now. " +
                 "A car you have sat in never explodes");
-            LootMultiplier = Config.Bind("Scaling", "LootMultiplier", 1f, new ConfigDescription(
-                "Scales the amount of loot in a truck: 0 = nothing, 1 = the built-in amounts (Food dogfood x6; Water / Gasoline / Diesel cans x4, " +
-                "50 % a barrel too; Medicine bandages x4 + first aid x2; Weapons 0-3 guns + 3-8 ammo boxes; Drugs alcohol x2 + weed x3 + weed plant x1; " +
-                "Mechanic 3 repair boxes + 1 big oil can; Corpses 3-5 dead Scraffa; Rats 6-8 dead rats), 3 = 300 %. The 50 % barrels are not scaled",
-                new AcceptableValueRange<float>(0f, 3f)));
             MinConvoyCooldown = Config.Bind("Scaling", "MinConvoyCooldown", 5f, new ConfigDescription(
                 "Shortest time between two raider spawns (minutes; 0 = can follow immediately). Each wait is rolled between this and " +
                 "MaxConvoyCooldown, a little shorter at high heat. A change applies from the next roll",
@@ -191,7 +190,10 @@ namespace Apocapatrol
             RamDamageInCar = Config.Bind("Combat", "RamDamageInCar", false,
                 "Ram damage also while you sit in your own car (the game's own CrashDamage still applies by your speed). Off = only on foot");
 
-            MenuKey = Config.Bind("Debug", "TemplateSpawnerKey", Key.None, "Key for the template spawner (testing): a list of the park, click a car to build it in front of you. None = off (the default); F8 for example");
+            MenuKey = BindEditorConfigKey(Config);
+            AllowDebugSpawns = Config.Bind("Debug", "AllowDebugSpawns", false, "Show Spawn Template, S group buttons and SPAWN in the editor");
+            TemplateExporter.Configure(Config);
+            PatrolSpawnChancePercent = Config.Bind("Scaling", "PatrolSpawnChancePercent", 80f, new ConfigDescription("Global patrol/convoy distribution: 80 = 80 % patrols and 20 % convoys when both have eligible types", new AcceptableValueRange<float>(0f, 100f)));
             VerboseLog = Config.Bind("Debug", "VerboseLog", false, "Log what the mod does: spawns, builds, crews, the AI's state changes, ram hits. Off = only the load line and warnings, nothing that gives a spawn away");
             AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances. With no raider car driving: the time until the next spawn roll");
             CustomPaintjobs = Config.Bind("Debug", "CustomPaintjobs", true,
@@ -211,12 +213,6 @@ namespace Apocapatrol
             //        ReverseThrottle 0.6, StuckSeconds 2, RecoverWindow 30 (was 12), MaxRecovers 2 (was 4), WaitSeconds 4, FeelerRange 10,
             //        FeelerSpeedFactor 0.6, FrontOffset 2, MaxSlopeDeg 35, AvoidGain 1.2, IgnoreMassBelow 40, GiveUpDistance 700,
             //        InvertSteering false
-            //   [Loot] FoodChance 18, WaterChance 14, GasolineChance 11, DieselChance 11, MedicineChance 11, WeaponsChance 11,
-            //          DrugsChance 7, MechanicChance 7, CorpsesChance 7, RatsChance 3, MinPartHealth 2, MaxPartHealth 35,
-            //          MinPartsFill 15, MaxPartsFill 60
-            //   [Convoy spawner] Enabled true, MaxHeat 3, HeatIntervalKm 10, SpawnDistance 350, JustCarsToConvoyRatio 0.8,
-            //          (MinConvoyCooldown / MaxConvoyCooldown visible again in [Scaling] since 1.8.8) BasicCars 0 km / 0 bosses / 45, AdvancedCars 30 / 1 / 35,
-            //          SuperAdvancedCars 50 / 3 / 20, BasicConvoy 5 / 0 / 70, AdvancedConvoy 20 / 3 / 30 (DistanceKm / BossesKilled / Chance)
             //   [Cleanup] Enabled true, RemoveAfterMinutes 10 (was 40), MaxCars 30, MinDistance 800
             //   [Debug] ExitSpeedKmh 30
             var H = ExposeAllSettings ? Config : HiddenConfig();
@@ -334,9 +330,6 @@ namespace Apocapatrol
             AiInvertSteering = H.Bind("AI", "InvertSteering", false,
                 "Flip the steering sign if the car turns away from the target instead of toward it");
 
-                        foreach (var d in CarTemplate.LootDefaults)
-                LootChances[d[0]] = H.Bind("Loot", d[0] + "Chance", float.Parse(d[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture), new ConfigDescription(
-                    "% chance that a loot truck carries " + d[0] + " (all XChance values should add up to 100)", new AcceptableValueRange<float>(0f, 100f)));
             MinPartHealth = H.Bind("Loot", "MinPartHealth", 2f, new ConfigDescription(
                 "Lowest condition (%) of a spawned car's parts that have one (engine, radiator, wheels)", new AcceptableValueRange<float>(0f, 100f)));
             MaxPartHealth = H.Bind("Loot", "MaxPartHealth", 35f, new ConfigDescription(
@@ -374,42 +367,11 @@ namespace Apocapatrol
             ConvoyEnabled = H.Bind(CS, "Enabled", true, "Enemy cars and convoys spawn on their own while you play (the Debug menu buttons work regardless)");
             MaxHeat = H.Bind(CS, "MaxHeat", 3f, new ConfigDescription(
                 "Upper limit of the heat (3 = 300 %). Below 100 % the heat is how complete a group is; above 100 % it only raises the chances of " +
-                "the tougher spawn types (advanced / super advanced cars, the advanced convoy) and shortens the cooldown a little - group sizes " +
-                "stay at their 100 % values (x PatrolSizePercent)", new AcceptableValueRange<float>(0f, 5f)));
+                "shortens the cooldown a little; group definitions, cargo and exact rosters are configured in the editor", new AcceptableValueRange<float>(0f, 5f)));
             HeatIntervalKm = H.Bind(CS, "HeatIntervalKm", 10f, new ConfigDescription(
                 "Every this many km of the game's Distance Travelled add 25 % heat (linear: 10 = 100 % at 40 km)", new AcceptableValueRange<float>(1f, 200f)));
             ConvoySpawnDistance = H.Bind(CS, "SpawnDistance", 350f, new ConfigDescription(
                 "How far away a spawn appears (m): ahead of your car, up to 45 degrees left or right; behind you when on foot", new AcceptableValueRange<float>(50f, 1000f)));
-            JustCarsToConvoyRatio = H.Bind(CS, "JustCarsToConvoyRatio", 0.8f, new ConfigDescription(
-                "When a convoy is allowed, how likely plain enemy cars spawn instead of it (0 = always the convoy, 1 = never)", new AcceptableValueRange<float>(0f, 1f)));
-
-            BasicCarsKm = H.Bind(CS, "BasicCarsDistanceKm", 0f, new ConfigDescription("Basic enemy cars (3 small cars at 100 % heat) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            BasicCarsBosses = H.Bind(CS, "BasicCarsBossesKilled", 0, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            BasicCarsChance = H.Bind(CS, "BasicCarsChance", 45f, new ConfigDescription("Weight of basic enemy cars among the allowed car spawns (%)", new AcceptableValueRange<float>(0f, 100f)));
-            AdvancedCarsKm = H.Bind(CS, "AdvancedCarsDistanceKm", 30f, new ConfigDescription("Advanced enemy cars (3 cars, at least 1 advanced, maybe a junker) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            AdvancedCarsBosses = H.Bind(CS, "AdvancedCarsBossesKilled", 1, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            AdvancedCarsChance = H.Bind(CS, "AdvancedCarsChance", 35f, new ConfigDescription("Weight of advanced enemy cars (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
-            SuperCarsKm = H.Bind(CS, "SuperAdvancedCarsDistanceKm", 50f, new ConfigDescription("Super advanced enemy cars (5 cars, half junkers, at least 2 advanced) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            SuperCarsBosses = H.Bind(CS, "SuperAdvancedCarsBossesKilled", 3, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            SuperCarsChance = H.Bind(CS, "SuperAdvancedCarsChance", 20f, new ConfigDescription("Weight of super advanced enemy cars (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
-            // bikers (1.11.0): motorcycle patrols, same unlocks as the car patrols, weighed in the same patrol roll
-            BasicBikersKm = H.Bind(CS, "BasicBikersDistanceKm", 0f, new ConfigDescription("Basic bikers (3 basic motorcycles) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            BasicBikersBosses = H.Bind(CS, "BasicBikersBossesKilled", 0, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            BasicBikersChance = H.Bind(CS, "BasicBikersChance", 25f, new ConfigDescription("Weight of basic bikers among the allowed patrols (%)", new AcceptableValueRange<float>(0f, 100f)));
-            AdvancedBikersKm = H.Bind(CS, "AdvancedBikersDistanceKm", 30f, new ConfigDescription("Advanced bikers (3 basic + 2 advanced motorcycles) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            AdvancedBikersBosses = H.Bind(CS, "AdvancedBikersBossesKilled", 1, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            AdvancedBikersChance = H.Bind(CS, "AdvancedBikersChance", 20f, new ConfigDescription("Weight of advanced bikers (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
-            SuperBikersKm = H.Bind(CS, "SuperBikersDistanceKm", 50f, new ConfigDescription("Super bikers (a medium car leading 3 basic + 3 advanced motorcycles) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            SuperBikersBosses = H.Bind(CS, "SuperBikersBossesKilled", 3, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            SuperBikersChance = H.Bind(CS, "SuperBikersChance", 10f, new ConfigDescription("Weight of super bikers (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
-            ConvoyBikerChance = H.Bind(CS, "ConvoyBikerEscortChance", 30f, new ConfigDescription("% of convoys whose small escort cars are motorcycles instead", new AcceptableValueRange<float>(0f, 100f)));
-            BasicConvoyKm = H.Bind(CS, "BasicConvoyDistanceKm", 5f, new ConfigDescription("Basic convoy (a basic truck + 2 junkers + 3-5 small cars) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            BasicConvoyBosses = H.Bind(CS, "BasicConvoyBossesKilled", 0, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            BasicConvoyChance = H.Bind(CS, "BasicConvoyChance", 70f, new ConfigDescription("Weight of the basic convoy among the allowed convoys (%)", new AcceptableValueRange<float>(0f, 100f)));
-            AdvancedConvoyKm = H.Bind(CS, "AdvancedConvoyDistanceKm", 20f, new ConfigDescription("Advanced convoy (an advanced truck + the same escort, at least 2 advanced) from this Distance Travelled (km)", new AcceptableValueRange<float>(0f, 500f)));
-            AdvancedConvoyBosses = H.Bind(CS, "AdvancedConvoyBossesKilled", 3, new ConfigDescription("... and this many bosses killed", new AcceptableValueRange<int>(0, 7)));
-            AdvancedConvoyChance = H.Bind(CS, "AdvancedConvoyChance", 30f, new ConfigDescription("Weight of the advanced convoy (%, multiplied by the heat)", new AcceptableValueRange<float>(0f, 100f)));
-
             CleanupEnabled = H.Bind("Cleanup", "Enabled", true,
                 "Remove raider cars you left behind. A car you have ever sat in is never removed (the game itself only deletes cars beyond 5 km)");
             CleanupMinutes = H.Bind("Cleanup", "RemoveAfterMinutes", 10f, new ConfigDescription(
@@ -429,7 +391,7 @@ namespace Apocapatrol
             CarTemplates.Load();  // JSON car templates: embedded in the DLL + plugins\Apocapatrol\CarTemplates\*.json
             PurgeStaleEntries();
 
-            SceneManager.sceneLoaded += (s, m) => { EnsureRunner(); Patrol.ResetForScene(); PlayerRef.Reset(); PatrolPersistence.ResetForScene(); Convoy.ResetForScene(); };
+            SceneManager.sceneLoaded += (s, m) => { EditorSession.CancelAll(); PickupCatalog.Invalidate(); EnsureRunner(); Patrol.ResetForScene(); PlayerRef.Reset(); PatrolPersistence.ResetForScene(); Convoy.ResetForScene(); };
             EnsureRunner();
             Log.LogInfo(NAME + " " + VERSION + " loaded (" + CarTemplates.Summary + ")");
         }
@@ -478,6 +440,7 @@ namespace Apocapatrol
             UnityEngine.Object.DontDestroyOnLoad(_runner);
             _runner.AddComponent<Patrol>();
             _runner.AddComponent<TemplateMenu>();
+            _runner.AddComponent<TemplateExporter>();
             _runner.AddComponent<Convoy>();
             _runner.AddComponent<Cleanup>();
         }

@@ -1,0 +1,126 @@
+{
+  "schema": 2,
+  "name": "Halfbreed_Advanced",
+  "body": "Halfbreed",
+  "kind": "motorcycle",
+  "rams": "Pedestrians",
+  "driver": "Flexa",
+  "passenger": "",
+  "bumpers": [],
+  "fillFuel": true,
+  "releaseHandbrake": true,
+  "parts": [
+    {
+      "parent": -1,
+      "hinge": "parts/model/steering_parent_F/steering_hinge/hinge_headlight",
+      "prefab": "Headlight"
+    },
+    {
+      "parent": 0,
+      "hinge": "",
+      "prefab": "metal_plate_2",
+      "pos": [
+        -0.302,
+        -0.2231,
+        -0.5888
+      ],
+      "rot": [
+        3.6894,
+        198.6193,
+        7.7688
+      ]
+    },
+    {
+      "parent": -1,
+      "hinge": "parts/model/steering_parent_F/steering_hinge/steering front/collider#2",
+      "prefab": "metal_plate_2",
+      "pos": [
+        0.3041,
+        0.0822,
+        -0.4809
+      ],
+      "rot": [
+        332.4721,
+        160.4894,
+        5.5031
+      ]
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_bumper_rear",
+      "prefab": "bumper_15"
+    },
+    {
+      "parent": 3,
+      "hinge": "colliders/collider#10",
+      "prefab": "metal_plate_1",
+      "pos": [
+        0.307,
+        -0.1899,
+        -0.4262
+      ],
+      "rot": [
+        290.3722,
+        347.2875,
+        358.887
+      ]
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_exhaust",
+      "prefab": "exhaust_the_six",
+      "hingePos": [
+        0,
+        -0.1,
+        -0.95
+      ],
+      "hingeRot": [
+        319,
+        0,
+        0
+      ]
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_seat_driver",
+      "prefab": "seat_motorcycle"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_engine",
+      "prefab": "2.8L V6 115HP 183Nm Gasoline",
+      "hingePos": [
+        0,
+        -0.355,
+        0.67
+      ],
+      "hingeRot": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_F",
+      "prefab": "motorcycle_wheel"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_M",
+      "prefab": "motorcycle_wheel"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_RL",
+      "prefab": "motorcycle_wheel"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_RR",
+      "prefab": "motorcycle_wheel"
+    }
+  ],
+  "source": "Apocatemplater 1.0.3, 2026-10-02 17:18, from Halfbreed(Clone)26",
+  "lootPreset": "car-standard"
+}

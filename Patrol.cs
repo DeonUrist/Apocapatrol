@@ -165,28 +165,27 @@ namespace Apocapatrol
                 parts += AttachMissingHeadlights(car);
                 Plugin.Verbose(parts + " parts attached");
 
-                if (tpl.FillFuel) Fuel(car, Plugin.RollPartFill());
+                if (tpl.FillFuel)
+                {
+                    if (tpl.FuelLitres >= 0)
+                    {
+                        var f = FindFsm(car, "Fuel", "LiquidAmount");
+                        var liquid = f != null ? f.FsmVariables.GetFsmFloat("Liquid") : null;
+                        if (liquid != null) liquid.Value = tpl.FuelLitres;
+                    }
+                    else Fuel(car, Plugin.RollPartFill());
+                }
                 if (tpl.ReleaseHandbrake) Handbrake(car, false);
                 List<GameObject> cargo = null;
                 string lootKey = null;
-                // a template's "cargo" loads only into trucks: on a car it is what happened to lie in the cabin at dump time
-                // (a dead passenger's drops...) - kept in the file, not spawned. Cars get the back-seat roll instead (below).
-                if (!string.IsNullOrEmpty(tpl.Cargo) && tpl.IsTruck)
+                var loot = tpl.IsTruck ? (tpl.SpawnLoot == null ? EditorStore.RollTruckLoot(() => UnityEngine.Random.value, tpl.SpawnCargoOptions) : null) : EditorStore.Loot(false, tpl.LootPreset);
+                var rolled = tpl.SpawnLoot ?? (loot != null ? loot.Roll(() => UnityEngine.Random.value) : new Dictionary<string, int>());
+                lootKey = tpl.SpawnCargoKey ?? EditorStore.CargoTexture(rolled, loot != null ? loot.TextureKey : "");
+                if (rolled.Count > 0)
                 {
-                    bool itemSpec = CarTemplates.IsItemSpec(tpl.Cargo);   // a JSON template's fixed bed items ("dogfood_can:6;akms:1")
-                    lootKey = itemSpec ? "Custom" : tpl.Cargo.Equals("Random", StringComparison.OrdinalIgnoreCase) ? Cargo.RollLootType() : tpl.Cargo;
-                    string spec = itemSpec ? tpl.Cargo : Cargo.SpecFor(lootKey);
-                    float scale = UnityEngine.Random.Range(Mathf.Min(tpl.LootScaleMin, tpl.LootScaleMax), Mathf.Max(tpl.LootScaleMin, tpl.LootScaleMax));
-                    Plugin.Verbose("Loot: " + lootKey + " (" + spec + ") x" + Plugin.LootMultiplier.Value + " x" + scale.ToString("0.00") + " (template)");
                     cargo = new List<GameObject>();
-                    yield return Cargo.Load(car, spec, scale, cargo);   // a few items per frame, not the whole bed in one
+                    yield return Cargo.Load(car, rolled, tpl.IsTruck, cargo);
                     if (car == null) yield break;
-                }
-
-                if (!tpl.IsTruck && !tpl.IsMotorcycle)
-                {
-                    if (cargo == null) cargo = new List<GameObject>();
-                    Cargo.BackSeatLoot(car, tpl.IsAdvanced, cargo);
                 }
 
                 yield return null;
@@ -207,7 +206,6 @@ namespace Apocapatrol
                 if (cargo != null) Cargo.SettleFsms(cargo);
                 if (Explode.IsWreck(car)) yield break;   // crew killed during the build: it already blew up
                 SetPartConditions(car);
-                if (cargo != null) Cargo.ApplyForcedConditions(cargo);   // "#100" items (the mechanic truck's V8) keep their set condition
                 FillParts(car);
                 Headlights(car, true);
 
@@ -340,8 +338,11 @@ namespace Apocapatrol
             part.SetActive(true);
             var rb = part.GetComponent<Rigidbody>();
             if (rb != null) UnityEngine.Object.DestroyImmediate(rb);
-            try { part.tag = "vehPart"; } catch (Exception e) { Plugin.Log.LogWarning("tag vehPart: " + e.Message); }
-            part.layer = 8;
+            if (!VehicleAttachments.Prepare(part))
+            {
+                try { part.tag = "vehPart"; } catch (Exception e) { Plugin.Log.LogWarning("tag vehPart: " + e.Message); }
+                part.layer = 8;
+            }
             part.transform.SetParent(hinge, true);
             part.transform.localPosition = Vector3.zero;
             part.transform.localRotation = Quaternion.identity;
@@ -375,11 +376,11 @@ namespace Apocapatrol
             }
             if (hinge == null) { Plugin.Log.LogWarning(tpl.Name + ": hinge " + p.hinge + " not found on " + root.name + " for " + p.prefab); return null; }
             // only a real hinge holds one part; colliders and parts carry any number of attachables (plates, spikes)
-            bool realHinge = hinge.name.StartsWith("hinge", StringComparison.OrdinalIgnoreCase);
-            var existing = realHinge ? PartOn(hinge) : null;
-            if (existing != null) { Plugin.Verbose("  " + hinge.name + " already holds " + existing.name + ", " + p.prefab + " not added"); return existing; }
             var prefab = Prefabs.FindAny(p.prefab) ?? Prefabs.Find(p.prefab, "item");
             if (prefab == null) { Plugin.Log.LogWarning(tpl.Name + ": part prefab not found: " + p.prefab); return null; }
+            bool realHinge = hinge.name.StartsWith("hinge", StringComparison.OrdinalIgnoreCase) && !VehicleAttachments.IsFreeAttachment(prefab);
+            var existing = realHinge ? PartOn(hinge) : null;
+            if (existing != null) { Plugin.Verbose("  " + hinge.name + " already holds " + existing.name + ", " + p.prefab + " not added"); return existing; }
             if (p.hingePos != null && p.hingePos.Length == 3) hinge.localPosition = new Vector3(p.hingePos[0], p.hingePos[1], p.hingePos[2]);
             if (p.hingeRot != null && p.hingeRot.Length == 3) hinge.localEulerAngles = new Vector3(p.hingeRot[0], p.hingeRot[1], p.hingeRot[2]);
             var part = Attach(prefab, hinge);
@@ -813,7 +814,7 @@ namespace Apocapatrol
                 side = 1f;
                 if (anchor != null && sit != null) side = Vector3.Dot(anchor.position - sit.position, car.transform.right) >= 0f ? 1f : -1f;
             }
-            var from = (anchor != null ? anchor.position : car.transform.position) + car.transform.right * side * Plugin.BailDistance + Vector3.up * 1.5f;
+            var from = (anchor != null ? anchor.position : car.transform.position) + car.transform.right * side * VehicleRules.ExitDistance(car.name) + Vector3.up * 1.5f;
             var pos = from + Vector3.down * 1.2f;
             var hits = Physics.RaycastAll(from, Vector3.down, 6f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float best = float.MaxValue;
@@ -989,6 +990,7 @@ namespace Apocapatrol
         internal static GameObject Find(string query, string kind)
         {
             if (string.IsNullOrEmpty(query)) return null;
+            if (MotorcycleIntegration.IsBody(query)) return MotorcycleIntegration.Template();
             if (_all == null) Scan();
             string q = query.Trim();
             Entry e = _all.FirstOrDefault(x => x.Kind == kind && string.Equals(x.Name, q, StringComparison.OrdinalIgnoreCase))
@@ -1012,6 +1014,7 @@ namespace Apocapatrol
         internal static GameObject FindAny(string query)
         {
             if (string.IsNullOrEmpty(query)) return null;
+            if (MotorcycleIntegration.IsBody(query)) return MotorcycleIntegration.Template();
             string q = query.Trim();
             if (_all == null) Scan();
             var hit = Lookup(q);

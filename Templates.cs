@@ -20,30 +20,34 @@ namespace Apocapatrol
         internal string Driver = "", Passenger = "";
         internal string RearWheel = "";       // wheel item for hinge_wheel_RL/RR; "" = the same as Wheel
         internal string[] Bumpers = null;     // front bumper rolled per build from these ("" = none); null = never a bumper
-        internal string Cargo = "";           // "Random" = a loot type rolled by the [Loot] chances, or a fixed [Loot] key ("Food", ...); "" = empty bed
-        internal float LootScaleMin = 1f, LootScaleMax = 1f;   // per-spawn loot amount factor rolled in this range (on top of [Loot] Multiplier)
         internal bool FillFuel = true, ReleaseHandbrake = true;
+        internal float FuelLitres = -1f;
 
         // JSON car templates (CarTemplates.cs; written by the Apocatemplater dumper). Parts != null = this exact part list is
         // attached hinge by hinge instead of the Wheel/Engine/... fields above.
         internal TemplatePart[] Parts;
         internal string Kind = "";            // as written: "small", "small;motorcycle" ...; "" = by body / cargo (the built-in rule)
         internal string[] Kinds = new string[0];   // Kind split on ';' / ',' / spaces, lower case, no duplicates (CarTemplates.ParseKinds)
-        internal string Tier = "";            // basic | advanced; "" = by name
         internal bool Spawns = true;          // false: spawner menu only, never in a patrol / convoy
         internal float Weight = 1f;           // relative pick chance among the templates a patrol slot accepts
+        internal string LootPreset = "", SourcePath = "";
+        internal bool IsDefault, Favorite;
+        internal Dictionary<string, int> SpawnLoot;
+        internal string SpawnCargoKey;
+        internal string[] SpawnCargoOptions;
+        internal CarTemplate CloneForSpawn() { return (CarTemplate)MemberwiseClone(); }
         internal string Origin = "built-in";  // built-in | embedded | file (for the log and the spawner menu)
 
         // the spawn roles (Convoy picks, spawner menu column)
         // A template may have several kinds ("small;motorcycle"): it counts as each of them. Without any kind the built-in rule decides:
-        // truck = Rust* body or cargo, junker = Junker body, small = everything else.
+        // truck = Rust* body, junker = Junker body, small = everything else.
         internal bool HasKind(string kind)
         {
             if (string.IsNullOrEmpty(kind)) return false;
             if (Kinds != null && Kinds.Length > 0) return Array.IndexOf(Kinds, kind.Trim().ToLowerInvariant()) >= 0;
             switch (kind.Trim().ToLowerInvariant())
             {
-                case "truck": return (Body ?? "").StartsWith("Rust", StringComparison.OrdinalIgnoreCase) || Cargo.Length > 0;
+                case "truck": return (Body ?? "").StartsWith("Rust", StringComparison.OrdinalIgnoreCase);
                 case "medium": case "junker": return string.Equals(Body, "Junker", StringComparison.OrdinalIgnoreCase);
                 case "small": return !HasKind("truck") && !HasKind("medium");
                 default: return false;
@@ -54,26 +58,6 @@ namespace Apocapatrol
         internal bool IsMotorcycle { get { return HasKind("motorcycle"); } }
         internal bool IsSmall { get { return HasKind("small"); } }
         internal string KindLabel { get { return Kinds != null && Kinds.Length > 0 ? string.Join(";", Kinds) : (IsTruck ? "truck" : IsJunker ? "medium" : "small"); } }
-        internal bool IsAdvanced { get { return Tier.Length > 0 ? Tier.Equals("advanced", StringComparison.OrdinalIgnoreCase) : Name.IndexOf("Advanced", StringComparison.OrdinalIgnoreCase) >= 0; } }
-        internal bool IsBasic { get { return Tier.Length > 0 ? Tier.Equals("basic", StringComparison.OrdinalIgnoreCase) : Name.EndsWith("_Basic", StringComparison.OrdinalIgnoreCase) || (!IsAdvanced && IsTruck); } }
-
-        // loot types: key, item spec ("prefab:count;prefab:min-max;..."; "@weapons" = rolled by Cargo.WeaponsSpec), default chance (%)
-        // (chances: the original 25/20/15/15/15/10 + Diesel 15, Mechanic 10, Corpses 10, Rats 5 = 140, normalised to 100 and rounded to whole numbers:
-        //  18/14/11/11/11/11/7/7/7/3 = 100 — whole numbers so the default parses the same under every regional number format)
-        internal static readonly string[][] LootDefaults =
-        {
-            new[] { "Food", "dogfood_can:6-10", "18" },
-            new[] { "Water", "Water_Can_Plastic:4;Water_Barrel:1@50", "14" },
-            new[] { "Gasoline", "Gasoline_Can:4;Gasoline_Barrel:1@50", "11" },
-            new[] { "Diesel", "Diesel_Can:4;Diesel_Barrel:1@50", "11" },
-            new[] { "Medicine", "bandage_1:5;first_aid_1:2-3", "11" },
-            new[] { "Weapons", "@weapons", "11" },
-            new[] { "Drugs", "alcohol_canister:2;weed_bag:3;plant_weed:1", "7" },
-            new[] { "Mechanic", "Repairbox_Small|Repairbox_Medium|Repairbox_Large:3;MotorOil_Can_Big:1;"
-                + "5.2L V8 230HP 340Nm Gasoline|7L V8 355HP 569Nm Gasoline|8.2L V8 400HP 746Nm Gasoline|18L V8 335HP 1700Nm Diesel:1@15/30#100", "7" },
-            new[] { "Corpses", "Scraffa_Dead:3-5", "7" },
-            new[] { "Rats", "Rat_Dead:6-8", "3" },
-        };
 
         // front bumper rolls (Denis): small cars a third each nothing / bumper_8 / bumper_3; junkers nothing / junker_bumper_front / bumper_12;
         // trucks always one of bumper_12..15
@@ -99,25 +83,9 @@ namespace Apocapatrol
         // ------------------------------------------------------------ THE PARK
         // name, body, wheel, engine, radiator, steering wheel, driver seat, passenger seat, driver, passenger, ramsTargets
         // (prefab names or in-game item names; "" = no part / nobody)
-        internal static readonly CarTemplate[] Builtin =
-        {
-            // name, body, wheel, engine, radiator, steering wheel, exhaust, driver seat, passenger seat, driver, passenger, ramsTargets
-            new CarTemplate("PipeRat_Basic", "PipeRat", "small_wheel_1", "1.2L I4 59HP 87Nm Gasoline", "radiator_small", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Sprokka", RamTargets.Pedestrians) { Bumpers = SmallBumpers },
-            new CarTemplate("PipeRat_Advanced", "PipeRat", "small_wheel_2", "2.8L V6 115HP 183Nm Gasoline", "Medium Radiator", "steeringwheel_7", "poloska_exhaust",
-                "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Lugnut", RamTargets.Pedestrians) { Bumpers = SmallBumpers },
-            // Poloska_* / TinyTyrant_*: JSON templates built into the DLL (CarTemplates/*.json) since 1.13.0
-            // Junker_Basic / Junker_Advanced: JSON templates built into the DLL (CarTemplates/Junker_*.json, kind medium) since 1.12.0
-            new CarTemplate("Rustcargo_Basic", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
-                "rustallion_seat_front", "rustallion_seat_front", "Scraffa", "Flexa", RamTargets.Cars) { RearWheel = "truck_wheel_2", Bumpers = TruckBumpers },
-            new CarTemplate("Rustcargo_Advanced", "Rustcargo", "truck_wheel_1_armored", "7L I6 165HP 542Nm Diesel", "radiator_truck_big", "steeringwheel_3", "exhaust_single",
-                "rustallion_seat_front", "rustallion_seat_front", "Sprokka", "Flexa", RamTargets.Cars) { RearWheel = "truck_wheel_2_armored", Bumpers = TruckBumpers },
-            // the loot truck = Rustcargo_Basic with a loaded bed; the load is rolled by the [Loot] XChance weights, items and amounts in [Loot]
-            new CarTemplate("Rustcargo_Loot", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single",
-                "rustallion_seat_front", "rustallion_seat_front", "Scraffa", "Flexa", RamTargets.Cars) { Cargo = "Random", RearWheel = "truck_wheel_2", Bumpers = TruckBumpers },
-            new CarTemplate("Rustcargo_Loot_Advanced", "Rustcargo", "truck_wheel_1_armored", "7L I6 165HP 542Nm Diesel", "radiator_truck_big", "steeringwheel_3", "exhaust_single",
-                "rustallion_seat_front", "rustallion_seat_front", "Sprokka", "Flexa", RamTargets.Cars) { Cargo = "Random", LootScaleMin = 1.5f, LootScaleMax = 2f, RearWheel = "truck_wheel_2_armored", Bumpers = TruckBumpers },
-        };
+        internal static readonly CarTemplate FallbackCar = new CarTemplate("Basic PipeRat", "PipeRat", "small_wheel_1", "1.2L I4 59HP 87Nm Gasoline", "radiator_small", "steeringwheel_7", "poloska_exhaust", "poloska_seat_front_homemade", "poloska_seat_front_homemade", "Scraffa", "Sprokka", RamTargets.Pedestrians) { LootPreset = "car-empty", IsDefault = true, Favorite = true };
+        internal static readonly CarTemplate FallbackTruck = new CarTemplate("Empty truck", "Rustcargo", "truck_wheel_1", "5.8L I6 120HP 356Nm Diesel", "radiator_truck", "steeringwheel_3", "exhaust_single", "rustallion_seat_front", "rustallion_seat_front", "Scraffa", "Flexa", RamTargets.Cars) { RearWheel = "truck_wheel_2", LootPreset = "truck-empty", IsDefault = true, Favorite = true };
+        internal static readonly CarTemplate[] Builtin = { FallbackCar, FallbackTruck };
 
         // Park = the built-ins above + every JSON template (CarTemplates.Rebuild; a JSON template with a built-in's name replaces it).
         // Declared after Builtin: static initialisers run in source order.
@@ -149,11 +117,11 @@ namespace Apocapatrol
         {
             if (Parts != null)
                 return Body + " / " + Parts.Length + " part(s) (" + Origin + ") / driver " + (Driver.Length > 0 ? Driver : "-") + " / passenger " + (Passenger.Length > 0 ? Passenger : "-")
-                    + " / rams " + Rams + " / " + KindLabel + " " + (IsAdvanced ? "advanced" : "basic") + (Spawns ? "" : " (menu only)")
-                    + (Cargo.Length > 0 ? " / loot " + Cargo : "");
+                    + " / rams " + Rams + " / " + KindLabel
+                    ;
             return Body + " / " + Wheel + (RearWheel.Length > 0 ? " + rear " + RearWheel : "") + " / " + Engine + " / " + Radiator + " / " + SteeringWheel + " / " + (Exhaust.Length > 0 ? Exhaust : "no exhaust") + " / seats " + Seat + " + " + PassengerSeat
                 + " / driver " + (Driver.Length > 0 ? Driver : "-") + " / passenger " + (Passenger.Length > 0 ? Passenger : "-") + " / rams " + Rams
-                + (Cargo.Length > 0 ? " / loot " + Cargo : "");
+                ;
         }
 
         private static string Q(string s) { return "\"" + (s ?? "").Replace("\"", "\\\"") + "\""; }

@@ -3,125 +3,116 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using UnityEngine;
 
 namespace Apocapatrol
 {
-    // JSON car templates (the Apocatemplater dumper writes them; schema in CarTemplateFile.cs). Two sources, merged into
-    // CarTemplate.Park after the built-in park (same name = replaces the earlier one):
-    //   embedded - the repo's CarTemplates\*.json, compiled into the DLL as resources "Apocapatrol.CarTemplates.<file>.json"
-    //              (build.sh / csproj) = the "hardcoded" ones that ship with the mod;
-    //   file     - BepInEx\plugins\Apocapatrol\CarTemplates\*.json, re-read whenever the spawner menu opens and a file changed,
-    //              so a fresh dump can be built in game without a restart. Wins over embedded.
-    // Every template takes part in the patrol / convoy picks by its kind (small / junker / truck) and tier (basic / advanced),
-    // weighted by "weight", unless "spawns" is false.
     internal static class CarTemplates
     {
-        private const string ResourcePrefix = "Apocapatrol.CarTemplates.";
-        private static string _dir = "";
-        private static List<CarTemplate> _embedded = new List<CarTemplate>();
-        private static string _stamp = null;
-
-        internal static string Folder { get { return _dir; } }
-        internal static string Summary = "";   // last merge, logged by Plugin.Awake
-
+        private const string Prefix = "Apocapatrol.DefaultTemplates.";
+        private static readonly Dictionary<string, string> _defaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private static string _root, _stamp;
+        internal static string Folder { get; private set; }
+        internal static string PlayerFolder { get; private set; }
+        internal static string Summary = "";
         internal static void Init(string dllPath)
         {
-            try { _dir = Path.Combine(Path.GetDirectoryName(dllPath) ?? "", "CarTemplates"); }
-            catch (Exception) { _dir = ""; }
+            _root = Path.GetDirectoryName(Path.GetFullPath(dllPath)); Folder = Path.Combine(_root, "BaseTemplates"); PlayerFolder = Path.Combine(_root, "PlayerTemplates");
+            Directory.CreateDirectory(Folder); Directory.CreateDirectory(PlayerFolder);
         }
-
-        // Awake: embedded once, the folder now
         internal static void Load()
         {
-            _embedded = LoadEmbedded();
-            Refresh(true);
+            _defaults.Clear(); var asm = Assembly.GetExecutingAssembly();
+            foreach (string resource in asm.GetManifestResourceNames().Where(n => n.StartsWith(Prefix, StringComparison.Ordinal) && n.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
+                using (var stream = asm.GetManifestResourceStream(resource)) using (var reader = new StreamReader(stream)) _defaults[resource.Substring(Prefix.Length, resource.Length - Prefix.Length - 5)] = reader.ReadToEnd();
+            foreach (var pair in _defaults) { string path = EditorStore.SafePath(Folder, pair.Key + ".json"); if (!File.Exists(path)) EditorStore.AtomicWrite(path, pair.Value); }
+            UpgradeMotorcycleLoot(); MigrateLegacy(); Refresh(true);
         }
-
-        // the spawner menu calls this on every open: the folder is re-read only when a file was added, removed or rewritten
+        private static void UpgradeMotorcycleLoot()
+        {
+            string shipped;
+            if (!_defaults.TryGetValue("motorcycle_template", out shipped)) return;
+            string path = EditorStore.SafePath(Folder, "motorcycle_template.json");
+            try
+            {
+                var old = TemplateFile.FromJson(File.ReadAllText(path));
+                if (old.lootPreset != "car-standard") return;
+                old.lootPreset = "car-empty";
+                // Only update the unchanged 2.0.2 default; preserve edited templates and loot profiles.
+                if (old.ToJson() != TemplateFile.FromJson(shipped).ToJson()) return;
+                string backup = Path.Combine(_root, "TemplateUpgradeBackups"); Directory.CreateDirectory(backup);
+                File.Copy(path, EditorStore.UniquePath(backup, "motorcycle_template-2_0_2", ".json"));
+                EditorStore.AtomicWrite(path, old.ToJson());
+            }
+            catch (Exception e) { Warn("Motorcycle loot upgrade: " + e.Message); }
+        }
+        private static void MigrateLegacy()
+        {
+            string legacy = Path.Combine(_root, "CarTemplates"), marker = Path.Combine(_root, "legacy-templates-imported.txt");
+            if (!Directory.Exists(legacy) || File.Exists(marker)) return;
+            foreach (string path in Directory.GetFiles(legacy, "*.json")) try
+            {
+                var file = TemplateFile.FromJson(File.ReadAllText(path)); string name = string.IsNullOrWhiteSpace(file.name) ? Path.GetFileNameWithoutExtension(path) : file.name;
+                if (_defaults.ContainsKey(name)) name += "_Legacy";
+                string dest = EditorStore.UniquePath(PlayerFolder, name, ".json"); file.name = Path.GetFileNameWithoutExtension(dest); file.schema = 2;
+                if (file.lootPreset.Length == 0) file.lootPreset = file.body == "Rustcargo" ? (file.cargo.Length > 0 ? "truck-food" : "truck-empty") : "car-standard";
+                EditorStore.AtomicWrite(dest, file.ToJson());
+            }
+            catch (Exception e) { Warn("Legacy template preserved but import failed " + path + ": " + e.Message); }
+            File.WriteAllText(marker, "Imported copies into PlayerTemplates. Originals remain in CarTemplates.");
+        }
+        internal static void RestoreDefaults() { foreach (var pair in _defaults) EditorStore.AtomicWrite(EditorStore.SafePath(Folder, pair.Key + ".json"), pair.Value); }
         internal static void Refresh(bool force)
         {
-            string stamp = Stamp();
-            if (!force && stamp == _stamp) return;
-            _stamp = stamp;
-            Rebuild(LoadFolder());
-        }
-
-        private static void Rebuild(List<CarTemplate> files)
-        {
-            var list = new List<CarTemplate>(CarTemplate.Builtin);
-            var replaced = new List<string>();
-            foreach (var t in _embedded.Concat(files))
+            string stamp = Stamp(Folder) + Stamp(PlayerFolder); if (!force && stamp == _stamp) return; _stamp = stamp;
+            var list = new Dictionary<string, CarTemplate>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pair in _defaults)
             {
-                int i = list.FindIndex(x => string.Equals(x.Name, t.Name, StringComparison.OrdinalIgnoreCase));
-                if (i >= 0) { replaced.Add(t.Name + " (" + list[i].Origin + " -> " + t.Origin + ")"); list[i] = t; }
-                else list.Add(t);
+                var t = Parse(pair.Value, pair.Key, "default", pair.Key); if (t == null) continue;
+                t.IsDefault = t.Favorite = true; t.SourcePath = EditorStore.SafePath(Folder, pair.Key + ".json"); list[t.Name] = t;
             }
-            CarTemplate.Park = list.ToArray();
-            Summary = "Car templates: " + CarTemplate.Builtin.Length + " built-in, " + _embedded.Count + " embedded, " + files.Count + " from files";
-            Plugin.Verbose("Car templates: " + CarTemplate.Builtin.Length + " built-in, " + _embedded.Count + " embedded, " + files.Count + " from " + _dir
-                + (replaced.Count > 0 ? "; replaced " + string.Join(", ", replaced.ToArray()) : "") + " -> park of " + list.Count);
+            LoadFolder(Folder, true, list); LoadFolder(PlayerFolder, false, list);
+            CarTemplate.Park = list.Values.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+            if (CarTemplate.Park.Length == 0) CarTemplate.Park = CarTemplate.Builtin;
+            Summary = CarTemplate.Park.Length + " templates: code defaults + BaseTemplates + PlayerTemplates";
         }
-
-        private static List<CarTemplate> LoadEmbedded()
+        private static void LoadFolder(string folder, bool favorite, Dictionary<string, CarTemplate> list)
         {
-            var r = new List<CarTemplate>();
-            try
+            if (!Directory.Exists(folder)) return;
+            foreach (string path in Directory.GetFiles(folder, "*.json").OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) try
             {
-                var asm = Assembly.GetExecutingAssembly();
-                foreach (var res in asm.GetManifestResourceNames().OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
-                {
-                    if (!res.StartsWith(ResourcePrefix, StringComparison.Ordinal) || !res.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) continue;
-                    string text;
-                    using (var s = asm.GetManifestResourceStream(res))
-                    {
-                        if (s == null) continue;
-                        using (var rd = new StreamReader(s, Encoding.UTF8)) text = rd.ReadToEnd();
-                    }
-                    string fallback = res.Substring(ResourcePrefix.Length, res.Length - ResourcePrefix.Length - ".json".Length);
-                    var t = Parse(text, fallback, "embedded", res);
-                    if (t != null) r.Add(t);
-                }
+                var t = Parse(File.ReadAllText(path), Path.GetFileNameWithoutExtension(path), favorite ? "base" : "player", path);
+                if (t == null || (!favorite && list.ContainsKey(t.Name))) continue;
+                t.IsDefault = _defaults.ContainsKey(t.Name); t.Favorite = favorite || t.IsDefault; t.SourcePath = Path.GetFullPath(path); list[t.Name] = t;
             }
-            catch (Exception e) { Plugin.Log.LogWarning("Car templates (embedded): " + e.Message); }
-            return r;
+            catch (Exception e) { Warn("Template file preserved: " + path + ": " + e.Message); }
         }
-
-        private static List<CarTemplate> LoadFolder()
+        private static string Stamp(string folder)
         {
-            var r = new List<CarTemplate>();
-            if (_dir.Length == 0 || !Directory.Exists(_dir)) return r;
-            try
-            {
-                foreach (var path in Directory.GetFiles(_dir, "*.json").OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
-                {
-                    string text;
-                    try { text = File.ReadAllText(path); }
-                    catch (Exception e) { Plugin.Log.LogWarning("Car template " + path + ": " + e.Message); continue; }
-                    var t = Parse(text, Path.GetFileNameWithoutExtension(path), "file", path);
-                    if (t != null) r.Add(t);
-                }
-            }
-            catch (Exception e) { Plugin.Log.LogWarning("Car templates (" + _dir + "): " + e.Message); }
-            return r;
+            if (!Directory.Exists(folder)) return "";
+            return string.Join(";", Directory.GetFiles(folder, "*.json").OrderBy(x => x).Select(path => { var info = new FileInfo(path); return info.Name + "|" + info.Length + "|" + info.LastWriteTimeUtc.Ticks; }).ToArray());
         }
-
-        private static string Stamp()
+        internal static void Favorite(CarTemplate t)
         {
-            if (_dir.Length == 0 || !Directory.Exists(_dir)) return "";
-            var sb = new StringBuilder();
-            try
-            {
-                foreach (var path in Directory.GetFiles(_dir, "*.json").OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
-                {
-                    var fi = new FileInfo(path);
-                    sb.Append(fi.Name).Append('|').Append(fi.LastWriteTimeUtc.Ticks).Append('|').Append(fi.Length).Append(';');
-                }
-            }
-            catch (Exception) { }
-            return sb.ToString();
+            if (t.IsDefault || t.SourcePath.Length == 0) return;
+            string source = ManagedPath(t.SourcePath), target = EditorStore.SafePath(t.Favorite ? PlayerFolder : Folder, Path.GetFileName(source));
+            if (File.Exists(target)) throw new IOException("That filename already exists in the destination folder");
+            File.Move(source, target); Refresh(true);
         }
+        internal static void Delete(CarTemplate t)
+        {
+            if (t.IsDefault || t.Favorite) throw new InvalidOperationException("Unfavourite custom templates before deleting them");
+            Recycle(t.SourcePath);
+            foreach (var g in EditorStore.Data.Patrols.Concat(EditorStore.Data.Convoys)) g.Templates.RemoveAll(n => n.Equals(t.Name, StringComparison.OrdinalIgnoreCase));
+            EditorStore.Save(); Refresh(true);
+        }
+        private static string ManagedPath(string path)
+        {
+            string full = Path.GetFullPath(path); var folders = new[] { Folder, PlayerFolder, Path.Combine(_root, "OldTemplatesFolder") };
+            if (!folders.Any(dir => string.Equals(Path.GetDirectoryName(full), Path.GetFullPath(dir), StringComparison.OrdinalIgnoreCase)) || !full.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("File outside managed template folders");
+            return full;
+        }
+        internal static void Recycle(string path) { string file = ManagedPath(path); if (File.Exists(file)) ShellRecycle.Move(file); }
+        private static void Warn(string message) { if (Plugin.Log != null) Plugin.Log.LogWarning(message); }
 
         private static string S(string s) { return (s ?? "").Trim(); }
 
@@ -147,19 +138,18 @@ namespace Apocapatrol
                 Body = S(f.body),
                 Kind = S(f.kind),
                 Kinds = ParseKinds(f.kind),
-                Tier = S(f.tier).ToLowerInvariant(),
                 Spawns = f.spawns,
-                Weight = Mathf.Max(0f, f.weight),
+                Weight = Math.Max(0f, f.weight),
                 Driver = S(f.driver),
                 Passenger = S(f.passenger),
-                Cargo = S(f.cargo),
-                LootScaleMin = f.lootScaleMin, LootScaleMax = f.lootScaleMax,
+                LootPreset = S(f.lootPreset),
                 Bumpers = f.bumpers != null && f.bumpers.Length > 0 ? f.bumpers.Select(S).ToArray() : null,
                 FillFuel = f.fillFuel, ReleaseHandbrake = f.releaseHandbrake,
+                FuelLitres = f.fuelLitres,
                 Parts = parts,
                 Origin = origin,
             };
-            if (t.Tier.Length == 0) t.Tier = t.Name.IndexOf("Advanced", StringComparison.OrdinalIgnoreCase) >= 0 ? "advanced" : "basic";
+            if (t.LootPreset.Length == 0 && f.schema < 2) t.LootPreset = t.IsTruck ? (f.cargo.Length > 0 ? "truck-food" : "truck-empty") : "car-standard";
             t.Rams = S(f.rams).Length > 0 ? CarTemplate.ParseRams(S(f.rams)) : (t.IsTruck ? RamTargets.Cars : RamTargets.Pedestrians);
             foreach (var p in parts)   // for the menu summary / Describe
             {

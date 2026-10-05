@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 
 namespace Apocapatrol
@@ -141,9 +142,16 @@ namespace Apocapatrol
         private const float WallInset = 0.069f, EndInset = 0.066f;
         private static readonly Dictionary<string, Material> _cargoMat = new Dictionary<string, Material>();   // "<container mat id>|<file>"
 
+        internal static string[] CargoTextures()
+        {
+            return _tex.Where(p => p.Key.StartsWith("cargo_", StringComparison.OrdinalIgnoreCase) && p.Value != null).Select(p => p.Key).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+
         internal static string CargoFile(string lootKey)
         {
             string k = (lootKey ?? "").Trim().ToLowerInvariant();
+            if (k == "none") return null;
+            if (k.StartsWith("cargo_", StringComparison.Ordinal) && k.IndexOfAny(Path.GetInvalidFileNameChars()) < 0) return k;
             switch (k)
             {
                 case "food": case "rats": case "corpses": return "cargo_food";
@@ -158,6 +166,7 @@ namespace Apocapatrol
             try
             {
                 string file = CargoFile(lootKey);
+                if (file == null) return;
                 var tex = Load(file);
                 if (tex == null && file != "cargo") { file = "cargo"; tex = Load(file); }
                 if (tex == null) return;

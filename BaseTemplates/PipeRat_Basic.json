@@ -1,0 +1,70 @@
+{
+  "schema": 2,
+  "name": "PipeRat_Basic",
+  "body": "PipeRat",
+  "kind": "small",
+  "rams": "Pedestrians",
+  "driver": "Scraffa",
+  "passenger": "Sprokka",
+  "lootPreset": "car-standard",
+  "bumpers": [
+    "",
+    "bumper_8",
+    "bumper_3"
+  ],
+  "fillFuel": true,
+  "releaseHandbrake": true,
+  "parts": [
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_FL",
+      "prefab": "small_wheel_1"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_FR",
+      "prefab": "small_wheel_1"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_RL",
+      "prefab": "small_wheel_1"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_RR",
+      "prefab": "small_wheel_1"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_engine",
+      "prefab": "1.2L I4 59HP 87Nm Gasoline"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_radiator",
+      "prefab": "radiator_small"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_steeringwheel",
+      "prefab": "steeringwheel_7"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_exhaust",
+      "prefab": "poloska_exhaust"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_seat_driver",
+      "prefab": "poloska_seat_front_homemade"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_seat_passenger",
+      "prefab": "poloska_seat_front_homemade"
+    }
+  ],
+  "source": "Apocapatrol shipped default"
+}

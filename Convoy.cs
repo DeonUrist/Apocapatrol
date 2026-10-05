@@ -8,10 +8,9 @@ using UnityEngine;
 namespace Apocapatrol
 {
     // The convoy / enemy-car spawner: heat from the game's Distance Travelled and boss kills, a cooldown clock, the spawn-type rolls,
-    // the group composition (drawn from the template park by name: <Body>_Basic / <Body>_Advanced, Junker_*, Rustcargo_*),
+    // the exact vehicle roster and allowed cargo loaded from the editor,
     // the spot ahead of (or behind) the player, and the staggered builds. Spawned cars are ordinary patrol cars: the Crew drives
     // off as soon as the engine runs and the Pilot hunts the player.
-    internal enum SpawnKind { BasicCars, AdvancedCars, SuperCars, BasicConvoy, AdvancedConvoy, BasicBikers, AdvancedBikers, SuperBikers }
 
     internal class Convoy : MonoBehaviour
     {
@@ -128,73 +127,14 @@ namespace Apocapatrol
             Plugin.Verbose("Convoy: next roll in " + (_cooldown / 60f).ToString("0.0") + " min (" + why + ", heat " + (_heat * 100f).ToString("0") + " %)");
         }
 
-        private bool Allowed(SpawnKind k) { return Allowed(k, _km, _bosses); }
-
-        private static bool Allowed(SpawnKind k, float _km, int _bosses)
-        {
-            switch (k)
-            {
-                case SpawnKind.BasicCars: return _km >= Plugin.BasicCarsKm.Value && _bosses >= Plugin.BasicCarsBosses.Value;
-                case SpawnKind.AdvancedCars: return _km >= Plugin.AdvancedCarsKm.Value && _bosses >= Plugin.AdvancedCarsBosses.Value;
-                case SpawnKind.SuperCars: return _km >= Plugin.SuperCarsKm.Value && _bosses >= Plugin.SuperCarsBosses.Value;
-                case SpawnKind.BasicConvoy: return _km >= Plugin.BasicConvoyKm.Value && _bosses >= Plugin.BasicConvoyBosses.Value;
-                case SpawnKind.AdvancedConvoy: return _km >= Plugin.AdvancedConvoyKm.Value && _bosses >= Plugin.AdvancedConvoyBosses.Value;
-                case SpawnKind.BasicBikers: return _km >= Plugin.BasicBikersKm.Value && _bosses >= Plugin.BasicBikersBosses.Value;
-                case SpawnKind.AdvancedBikers: return _km >= Plugin.AdvancedBikersKm.Value && _bosses >= Plugin.AdvancedBikersBosses.Value;
-                case SpawnKind.SuperBikers: return _km >= Plugin.SuperBikersKm.Value && _bosses >= Plugin.SuperBikersBosses.Value;
-            }
-            return false;
-        }
-
-        private static float Weight(SpawnKind k, float heat)
-        {
-            switch (k)
-            {
-                case SpawnKind.BasicCars: return Plugin.BasicCarsChance.Value;
-                case SpawnKind.AdvancedCars: return Plugin.AdvancedCarsChance.Value * heat;
-                case SpawnKind.SuperCars: return Plugin.SuperCarsChance.Value * heat;
-                case SpawnKind.BasicConvoy: return Plugin.BasicConvoyChance.Value;
-                case SpawnKind.AdvancedConvoy: return Plugin.AdvancedConvoyChance.Value * heat;
-                case SpawnKind.BasicBikers: return Plugin.BasicBikersChance.Value;
-                case SpawnKind.AdvancedBikers: return Plugin.AdvancedBikersChance.Value * heat;
-                case SpawnKind.SuperBikers: return Plugin.SuperBikersChance.Value * heat;
-            }
-            return 0f;
-        }
-
-        // Weighted pick among the given kinds (the weights act as chances; a total above 100 is normalised, below 100 the
-        // remainder is nothing... except that a spawn that was decided on always yields something, so we just normalise).
-        private static SpawnKind? Roll(List<SpawnKind> kinds, float heat)
-        {
-            float total = 0f;
-            foreach (var k in kinds) total += Mathf.Max(0f, Weight(k, heat));
-            if (kinds.Count == 0 || total <= 0f) return kinds.Count > 0 ? kinds[0] : (SpawnKind?)null;
-            float r = UnityEngine.Random.value * total;
-            foreach (var k in kinds)
-            {
-                r -= Mathf.Max(0f, Weight(k, heat));
-                if (r <= 0f) return k;
-            }
-            return kinds[kinds.Count - 1];
-        }
-
-        // Automatic event: which groups are allowed -> cars or convoy (JustCarsToConvoyRatio) -> which type -> spawn.
         private void Auto()
         {
-            var cars = new List<SpawnKind>();
-            var convoys = new List<SpawnKind>();
-            foreach (SpawnKind k in Enum.GetValues(typeof(SpawnKind)))
-                if (Allowed(k)) { if (IsConvoy(k)) convoys.Add(k); else cars.Add(k); }
-            if (cars.Count == 0 && convoys.Count == 0) { Plugin.Verbose("Convoy: nothing allowed yet (km " + _km.ToString("0.0") + ", bosses " + _bosses + ")"); ResetCooldown("nothing allowed"); return; }
-
-            List<SpawnKind> pool;
-            if (convoys.Count > 0 && cars.Count > 0) pool = UnityEngine.Random.value < Plugin.JustCarsToConvoyRatio.Value ? cars : convoys;
-            else pool = convoys.Count > 0 ? convoys : cars;
-            var kind = Roll(pool, _heat);
-            if (kind == null) { ResetCooldown("no kind"); return; }
+            bool convoy;
+            var group = EditorStore.Roll(_km, _bosses, Plugin.PatrolSpawnChancePercent.Value, () => UnityEngine.Random.value, out convoy);
+            if (group == null) { ResetCooldown("no eligible groups"); return; }
             if (!ClearOldGroups()) return;
-            if (!Launch(kind.Value, _heat, false)) { _cooldown = 60f; return; }   // no spot: try again in a minute
-            ResetCooldown("after " + kind.Value);
+            if (!Launch(group, convoy, false)) { _cooldown = 60f; return; }
+            ResetCooldown("after " + group.Name);
         }
 
         // Before an automatic spawn: raider cars that still have a live crew (and that the player never sat in) are an earlier group.
@@ -236,208 +176,28 @@ namespace Apocapatrol
             Plugin.Verbose("Convoy: spawn postponed (" + why + "), next roll in " + (_cooldown / 60f).ToString("0.0") + " min");
         }
 
-        internal static bool IsConvoy(SpawnKind k) { return k == SpawnKind.BasicConvoy || k == SpawnKind.AdvancedConvoy; }
-
-        // ------------------------------------------------------------ debug (spawner menu)
-
-        // The allowed groups for a distance / boss count, split like the automatic roll: patrols (cars + bikers) and convoys.
-        private static void Pools(float km, int bosses, List<SpawnKind> patrols, List<SpawnKind> convoys)
+        internal void DebugSpawn(SpawnGroup group, bool convoy)
         {
-            foreach (SpawnKind k in Enum.GetValues(typeof(SpawnKind)))
-                if (Allowed(k, km, bosses)) { if (IsConvoy(k)) convoys.Add(k); else patrols.Add(k); }
+            if (!Plugin.AllowDebugSpawns.Value) return;
+            UpdateHeat(); Launch(group, convoy, true);
         }
 
-        // "Basic enemy cars 64 %, Basic bikers 36 %" - each group's chance within its pool at this heat
-        internal static string Odds(float km, int bosses, bool convoy)
+        internal void DebugRoll()
         {
-            var p = new List<SpawnKind>(); var c = new List<SpawnKind>();
-            Pools(km, bosses, p, c);
-            var pool = convoy ? c : p;
-            if (pool.Count == 0) return "none unlocked";
-            float heat = HeatFor(km), total = 0f;
-            foreach (var k in pool) total += Mathf.Max(0f, Weight(k, heat));
-            var parts = new List<string>();
-            foreach (var k in pool)
-                parts.Add(Label(k) + " " + (total > 0f ? Mathf.Max(0f, Weight(k, heat)) / total * 100f : 100f / pool.Count).ToString("0") + " %");
-            return string.Join(", ", parts.ToArray());
+            if (!Plugin.AllowDebugSpawns.Value) return;
+            UpdateHeat(); bool convoy;
+            var group = EditorStore.Roll(_km, _bosses, Plugin.PatrolSpawnChancePercent.Value, () => UnityEngine.Random.value, out convoy);
+            if (group != null) Launch(group, convoy, true);
+            else Plugin.Log.LogInfo("Test spawning: no eligible groups with a positive chance");
         }
 
-        // Spawner menu buttons: the automatic spawner's own roll for a simulated distance / boss count (the heat follows from the
-        // distance, so group sizes are smaller below 100 % heat too). mode 0 = the full game roll (patrol or convoy by
-        // JustCarsToConvoyRatio), 1 = a patrol, 2 = a convoy. The spawn clock and the older-group check are left alone.
-        internal void DebugSpawn(int mode, float km, int bosses)
+        private bool Launch(SpawnGroup definition, bool convoy, bool debug)
         {
-            var patrols = new List<SpawnKind>(); var convoys = new List<SpawnKind>();
-            Pools(km, bosses, patrols, convoys);
-            List<SpawnKind> pool;
-            if (mode == 1) pool = patrols;
-            else if (mode == 2) pool = convoys;
-            else if (patrols.Count > 0 && convoys.Count > 0) pool = UnityEngine.Random.value < Plugin.JustCarsToConvoyRatio.Value ? patrols : convoys;
-            else pool = convoys.Count > 0 ? convoys : patrols;
-            float heat = HeatFor(km);
-            if (pool.Count == 0) { Plugin.Log.LogInfo("Debug spawn: nothing unlocked at " + km.ToString("0") + " km / " + bosses + " bosses"); return; }
-            var kind = Roll(pool, heat);
-            if (kind == null) return;
-            Plugin.Log.LogInfo("Debug spawn: " + Label(kind.Value) + " at " + km.ToString("0") + " km, " + bosses + " bosses, heat " + (heat * 100f).ToString("0") + " %");
-            Launch(kind.Value, heat, true);
-        }
-
-        // ------------------------------------------------------------ composition
-
-        // roles: a template's own kind / tier when it has one (JSON templates), else the built-in name/body rules (CarTemplate.IsTruck ...)
-        private static bool IsTruckTpl(CarTemplate t) { return t.IsTruck; }
-        private static bool IsJunkerTpl(CarTemplate t) { return t.IsJunker; }
-        private static bool IsAdvancedTpl(CarTemplate t) { return t.IsAdvanced; }
-        private static bool IsBasicTpl(CarTemplate t) { return t.IsBasic; }
-
-        // weighted by CarTemplate.Weight (built-ins 1); templates with Spawns = false never come here
-        private static CarTemplate Pick(Func<CarTemplate, bool> match)
-        {
-            var list = CarTemplate.Park.Where(t => t.Spawns && t.Weight > 0f && match(t)).ToList();
-            if (list.Count == 0) return null;
-            float total = 0f;
-            foreach (var t in list) total += t.Weight;
-            float r = UnityEngine.Random.value * total;
-            foreach (var t in list) { r -= t.Weight; if (r <= 0f) return t; }
-            return list[list.Count - 1];
-        }
-
-        // small = kind "small" (built-ins: not a junker, not a truck); a template with only other kinds ("motorcycle") is not a small car
-        private static CarTemplate Small(bool advanced) { return Pick(t => t.IsSmall && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }
-        private static CarTemplate Junker(bool advanced) { return Pick(t => IsJunkerTpl(t) && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }   // the medium car role
-        private static CarTemplate Moto(bool advanced) { return Pick(t => t.IsMotorcycle && (advanced ? IsAdvancedTpl(t) : IsBasicTpl(t))); }
-        // a convoy's truck is always a loot truck (a template with cargo); a plain truck only if the park had no loot truck of that tier
-        private static CarTemplate Truck(bool advanced)
-        {
-            return Pick(t => IsTruckTpl(t) && t.Cargo.Length > 0 && (advanced ? IsAdvancedTpl(t) : !IsAdvancedTpl(t)))
-                ?? Pick(t => IsTruckTpl(t) && (advanced ? IsAdvancedTpl(t) : !IsAdvancedTpl(t)));
-        }
-
-        // base count x heat (capped at 100 %: the group grows with the heat until it is complete, never beyond - heat above 100 %
-        // only makes the tougher groups likelier and the clock shorter) x [General] PatrolSizePercent, never below min
-        // (1 = a spawn always brings a car)
-        private static int Scaled(int baseCount, float heat, int min) { return Mathf.Max(min, Mathf.RoundToInt(baseCount * Mathf.Min(1f, heat) * Plugin.SizeFactor)); }
-        private static int Scaled(int baseCount, float heat) { return Scaled(baseCount, heat, 1); }
-
-        // Cars are rolled body first (small or junker), then whether that car is advanced; minimums are applied afterwards.
-        // A convoy always starts with its truck; the escort counts are scaled (down to nothing at a small patrol size, but the
-        // truck never travels completely alone).
-        internal static List<CarTemplate> Compose(SpawnKind kind, float heat)
-        {
-            CarTemplates.Refresh(false);   // templates dumped since the last check join this group already
-            var list = new List<CarTemplate>();
-            switch (kind)
-            {
-                case SpawnKind.BasicCars:
-                {
-                    int n = Scaled(3, heat);
-                    for (int i = 0; i < n; i++) Add(list, Small(false));
-                    break;
-                }
-                case SpawnKind.AdvancedCars:
-                {
-                    int n = Scaled(3, heat);
-                    bool junker = UnityEngine.Random.value < Mathf.Clamp01(0.5f * heat);
-                    int junkerAt = junker ? UnityEngine.Random.Range(0, n) : -1;
-                    var adv = new bool[n];
-                    for (int i = 0; i < n; i++) adv[i] = UnityEngine.Random.value < 0.5f;
-                    EnsureAdvanced(adv, 1);
-                    for (int i = 0; i < n; i++) Add(list, i == junkerAt ? Junker(adv[i]) ?? Small(adv[i]) : Small(adv[i]));
-                    break;
-                }
-                case SpawnKind.SuperCars:
-                {
-                    int n = Scaled(5, heat);
-                    var adv = new bool[n];
-                    for (int i = 0; i < n; i++) adv[i] = UnityEngine.Random.value < 0.5f;
-                    EnsureAdvanced(adv, 2);
-                    for (int i = 0; i < n; i++)
-                    {
-                        bool junker = UnityEngine.Random.value < 0.5f;
-                        Add(list, junker ? Junker(adv[i]) ?? Small(adv[i]) : Small(adv[i]));
-                    }
-                    break;
-                }
-                case SpawnKind.BasicBikers:
-                {
-                    int n = Scaled(3, heat);
-                    for (int i = 0; i < n; i++) Add(list, Moto(false));
-                    break;
-                }
-                case SpawnKind.AdvancedBikers:
-                {
-                    int b = Scaled(3, heat), a = Scaled(2, heat);
-                    for (int i = 0; i < a; i++) Add(list, Moto(true) ?? Moto(false));
-                    for (int i = 0; i < b; i++) Add(list, Moto(false));
-                    break;
-                }
-                case SpawnKind.SuperBikers:
-                {
-                    Add(list, Junker(true) ?? Junker(false));                                     // the medium car leads (first in the formation)
-                    int b = Scaled(3, heat), a = Scaled(3, heat);
-                    for (int i = 0; i < a; i++) Add(list, Moto(true) ?? Moto(false));
-                    for (int i = 0; i < b; i++) Add(list, Moto(false));
-                    break;
-                }
-                case SpawnKind.BasicConvoy:
-                case SpawnKind.AdvancedConvoy:
-                {
-                    bool advancedConvoy = kind == SpawnKind.AdvancedConvoy;
-                    Add(list, Truck(advancedConvoy) ?? Truck(!advancedConvoy));                 // the truck first, always
-                    int escortMin = Plugin.SizeFactor < 1f ? 0 : 1;                                // at 100 %+ every escort role keeps its old minimum of one
-                    int junkers = Scaled(2, heat, escortMin), smalls = Scaled(UnityEngine.Random.Range(3, 6), heat, escortMin);
-                    if (junkers + smalls == 0) smalls = 1;                                         // never a lone truck
-                    int n = junkers + smalls;
-                    var adv = new bool[n];
-                    if (advancedConvoy)
-                    {
-                        for (int i = 0; i < n; i++) adv[i] = UnityEngine.Random.value < 0.5f;   // half of the others advanced ...
-                        EnsureAdvanced(adv, 2);                                                 // ... and at least two
-                    }
-                    else if (UnityEngine.Random.value < 0.5f) adv[UnityEngine.Random.Range(0, n)] = true;   // 50 %: one advanced car
-                    // ConvoyBikerEscortChance (30 %): the small escort cars are motorcycles of the same tier (a small car when none exists)
-                    bool bikers = UnityEngine.Random.value * 100f < Plugin.ConvoyBikerChance.Value;
-                    for (int i = 0; i < n; i++)
-                        Add(list, i < junkers ? Junker(adv[i]) ?? Small(adv[i]) : bikers ? Moto(adv[i]) ?? Small(adv[i]) : Small(adv[i]));
-                    break;
-                }
-            }
-            return list;
-        }
-
-        private static void Add(List<CarTemplate> list, CarTemplate t) { if (t != null) list.Add(t); }
-
-        private static void EnsureAdvanced(bool[] adv, int min)
-        {
-            int have = adv.Count(a => a);
-            var idx = Enumerable.Range(0, adv.Length).Where(i => !adv[i]).OrderBy(i => UnityEngine.Random.value).ToList();
-            for (int k = 0; have < min && k < idx.Count; k++) { adv[idx[k]] = true; have++; }
-        }
-
-        internal static string Label(SpawnKind k)
-        {
-            switch (k)
-            {
-                case SpawnKind.BasicCars: return "Basic enemy cars";
-                case SpawnKind.AdvancedCars: return "Advanced enemy cars";
-                case SpawnKind.SuperCars: return "Super advanced enemy cars";
-                case SpawnKind.BasicConvoy: return "Basic convoy";
-                case SpawnKind.BasicBikers: return "Basic bikers";
-                case SpawnKind.AdvancedBikers: return "Advanced bikers";
-                case SpawnKind.SuperBikers: return "Super bikers";
-                default: return "Advanced convoy";
-            }
-        }
-
-        // ------------------------------------------------------------ placement + launch
-
-        private bool Launch(SpawnKind kind, float heat, bool debug)
-        {
-            var group = Compose(kind, heat);
-            if (group.Count == 0) { Plugin.Log.LogWarning("Convoy: no templates for " + Label(kind)); return false; }
+            CarTemplates.Refresh(false);
+            var group = EditorStore.Compose(definition, convoy, () => UnityEngine.Random.value);
+            if (_patrol == null) _patrol = GetComponent<Patrol>();
             Vector3 origin, dir; bool driving;
-            if (!Heading(out origin, out dir, out driving)) { Plugin.Log.LogWarning("Convoy: no player"); return false; }
-
+            if (!Heading(out origin, out dir, out driving)) return false;
             List<Vector3> spots = null; Vector3 facing = Vector3.forward; string where = "";
             for (int attempt = 0; attempt < 6 && spots == null; attempt++)
             {
@@ -448,10 +208,10 @@ namespace Apocapatrol
                 spots = Formation(center, facing, group.Count);
                 where = (driving ? "ahead" : "behind") + (angle < -10f ? "-left" : angle > 10f ? "-right" : "") + " " + Plugin.ConvoySpawnDistance.Value.ToString("0") + " m";
             }
-            if (spots == null) { Plugin.Log.LogWarning("Convoy: no ground for " + Label(kind) + " around the player"); return false; }
+            if (spots == null) { Plugin.Log.LogWarning("Convoy: no ground for " + definition.Name + " around the player"); return false; }
 
-            Plugin.Verbose("Convoy: " + Label(kind) + (debug ? " (debug)" : "") + " at heat " + (heat * 100f).ToString("0") + " % (km " + _km.ToString("0.0") + ", bosses " + _bosses
-                + ", patrol size " + Plugin.PatrolSizePercent.Value + " %), "
+            Plugin.Verbose("Convoy: " + definition.Name + (debug ? " (debug)" : "") + " at heat " + (_heat * 100f).ToString("0") + " % (km " + _km.ToString("0.0") + ", bosses " + _bosses
+                + "), "
                 + where + ": " + string.Join(", ", group.Select(t => t.Name).ToArray()));
             StartCoroutine(BuildAll(group, spots, Quaternion.LookRotation(facing)));
             return true;

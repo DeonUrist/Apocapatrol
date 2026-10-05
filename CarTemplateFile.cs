@@ -11,36 +11,38 @@ namespace Apocapatrol
     // nested TemplatePart[] array (Apocatemplater 1.0.1 wrote files without "parts").
     public class TemplateFile
     {
-        public int schema = 1;
+        public int schema = 2;
         public string name = "";            // template name (spawner menu, logs); "" = the file name
         public string body = "";            // frame prefab (PipeRat, Poloska, TinyTyrant, Junker, Rustcargo, Halfbreed ...)
         public string kind = "";            // one or more kinds, ';'-separated: "small", "junker", "truck", "small;motorcycle" ...
                                             // ("" = guessed from the body like the built-in park); every listed kind counts
-        public string tier = "";            // basic | advanced          ("" = guessed from the name: "Advanced" in it = advanced)
         public bool spawns = true;          // false = only in the spawner menu, never picked by patrols / convoys
-        public float weight = 1f;           // relative pick chance among the templates of the same kind + tier (built-ins are 1)
+        public float weight = 1f;           // relative pick chance among the templates of the same kind (built-ins are 1)
         public string rams = "";            // None | Pedestrians | Cars ("" = Cars for trucks, Pedestrians otherwise)
         public string driver = "";          // crew prefab (Scraffa, Spanna, Sprokka, Boltjaw, Flexa, Lugnut, Scrud); "" = nobody
         public string passenger = "";
+        public string lootPreset = "";
         public string cargo = "";           // "" none | "Random" (rolled by the [Loot] chances) | a loot key (Food ...) | an item spec "a:2;b:1-3"
-        public float lootScaleMin = 1f, lootScaleMax = 1f;
         public string[] bumpers = new string[0];   // a front bumper rolled per build ("" = none), only if no part sits on hinge_bumper_front
         public bool fillFuel = true, releaseHandbrake = true;
+        public float fuelLitres = -1f;
         public TemplatePart[] parts = new TemplatePart[0];
         public string source = "";          // who wrote it (Apocatemplater version, date, the car it came from) - information only
+        private bool CargoTruck { get { return string.Equals(body, "Rustcargo", StringComparison.OrdinalIgnoreCase) || Array.Exists((kind ?? "").Split(';', ','), k => k.Trim().Equals("truck", StringComparison.OrdinalIgnoreCase)); } }
 
         // ------------------------------------------------------------ write
         public string ToJson()
         {
             var sb = new StringBuilder();
             sb.Append("{\n");
-            P(sb, "schema", schema); P(sb, "name", name); P(sb, "body", body); P(sb, "kind", kind); P(sb, "tier", tier);
-            P(sb, "spawns", spawns); P(sb, "weight", weight); P(sb, "rams", rams); P(sb, "driver", driver); P(sb, "passenger", passenger);
-            P(sb, "cargo", cargo); P(sb, "lootScaleMin", lootScaleMin); P(sb, "lootScaleMax", lootScaleMax);
+            P(sb, "schema", schema); P(sb, "name", name); P(sb, "body", body); P(sb, "kind", kind);
+            if (!CargoTruck) P(sb, "lootPreset", lootPreset); P(sb, "rams", rams); P(sb, "driver", driver); P(sb, "passenger", passenger);
+
             sb.Append("    \"bumpers\": [");
             for (int i = 0; i < (bumpers ?? new string[0]).Length; i++) { if (i > 0) sb.Append(", "); Json.Str(sb, bumpers[i]); }
             sb.Append("],\n");
             P(sb, "fillFuel", fillFuel); P(sb, "releaseHandbrake", releaseHandbrake);
+            if (fuelLitres >= 0) P(sb, "fuelLitres", fuelLitres);
             sb.Append("    \"parts\": [");
             var ps = parts ?? new TemplatePart[0];
             for (int i = 0; i < ps.Length; i++)
@@ -83,12 +85,13 @@ namespace Apocapatrol
             var f = new TemplateFile();
             f.schema = (int)Json.Num(root, "schema", f.schema);
             f.name = Json.Text(root, "name", f.name); f.body = Json.Text(root, "body", f.body);
-            f.kind = Json.Text(root, "kind", f.kind); f.tier = Json.Text(root, "tier", f.tier);
+            f.kind = Json.Text(root, "kind", f.kind);
             f.spawns = Json.Bool(root, "spawns", f.spawns); f.weight = Json.Num(root, "weight", f.weight);
             f.rams = Json.Text(root, "rams", f.rams); f.driver = Json.Text(root, "driver", f.driver); f.passenger = Json.Text(root, "passenger", f.passenger);
+            f.lootPreset = f.CargoTruck ? "" : Json.Text(root, "lootPreset", f.lootPreset);
             f.cargo = Json.Text(root, "cargo", f.cargo);
-            f.lootScaleMin = Json.Num(root, "lootScaleMin", f.lootScaleMin); f.lootScaleMax = Json.Num(root, "lootScaleMax", f.lootScaleMax);
             f.fillFuel = Json.Bool(root, "fillFuel", f.fillFuel); f.releaseHandbrake = Json.Bool(root, "releaseHandbrake", f.releaseHandbrake);
+            f.fuelLitres = Json.Num(root, "fuelLitres", -1f);
             f.source = Json.Text(root, "source", f.source);
             object o;
             if (root.TryGetValue("bumpers", out o) && o is List<object>)

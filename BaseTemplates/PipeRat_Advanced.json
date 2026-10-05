@@ -1,0 +1,70 @@
+{
+  "schema": 2,
+  "name": "PipeRat_Advanced",
+  "body": "PipeRat",
+  "kind": "small",
+  "rams": "Pedestrians",
+  "driver": "Scraffa",
+  "passenger": "Lugnut",
+  "lootPreset": "car-standard",
+  "bumpers": [
+    "",
+    "bumper_8",
+    "bumper_3"
+  ],
+  "fillFuel": true,
+  "releaseHandbrake": true,
+  "parts": [
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_FL",
+      "prefab": "small_wheel_2"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_FR",
+      "prefab": "small_wheel_2"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_RL",
+      "prefab": "small_wheel_2"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_RR",
+      "prefab": "small_wheel_2"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_engine",
+      "prefab": "2.8L V6 115HP 183Nm Gasoline"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_radiator",
+      "prefab": "Medium Radiator"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_steeringwheel",
+      "prefab": "steeringwheel_7"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_exhaust",
+      "prefab": "poloska_exhaust"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_seat_driver",
+      "prefab": "poloska_seat_front_homemade"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_seat_passenger",
+      "prefab": "poloska_seat_front_homemade"
+    }
+  ],
+  "source": "Apocapatrol shipped default"
+}

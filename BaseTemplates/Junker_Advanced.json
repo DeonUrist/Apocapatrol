@@ -1,0 +1,136 @@
+{
+  "schema": 2,
+  "name": "Junker_Advanced",
+  "body": "Junker",
+  "kind": "medium",
+  "rams": "Pedestrians",
+  "driver": "Sprokka",
+  "passenger": "Flexa",
+  "bumpers": [],
+  "fillFuel": true,
+  "releaseHandbrake": true,
+  "parts": [
+    {
+      "parent": -1,
+      "hinge": "hinge_bumper_front",
+      "prefab": "bumper_12"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_bumper_rear",
+      "prefab": "junker_bumper_rear"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_headlight",
+      "prefab": "Headlight_2"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_headlight#1",
+      "prefab": "Headlight_2"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_door_FL",
+      "prefab": "door_car_2_L"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_door_FR",
+      "prefab": "door_car_2_R"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_trunk",
+      "prefab": "junker_trunk"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_hood",
+      "prefab": "junker_hood"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_seat_driver",
+      "prefab": "poloska_seat_front"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_seat_passenger",
+      "prefab": "poloska_seat_front"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_steeringwheel",
+      "prefab": "steeringwheel_2"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_exhaust",
+      "prefab": "exhaust_quad_big",
+      "hingePos": [
+        0,
+        0.349,
+        -1.19
+      ],
+      "hingeRot": [
+        320,
+        0,
+        0
+      ]
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_engine",
+      "prefab": "2.3L I4 89HP 165Nm Gasoline",
+      "hingePos": [
+        0,
+        0.214,
+        1.18
+      ],
+      "hingeRot": [
+        355,
+        180,
+        0
+      ]
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_radiator",
+      "prefab": "radiator_small",
+      "hingePos": [
+        0,
+        -0.016,
+        1.843
+      ],
+      "hingeRot": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_FL",
+      "prefab": "wheel_1"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_FR",
+      "prefab": "wheel_1"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_RL",
+      "prefab": "wheel_1"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_RR",
+      "prefab": "wheel_1"
+    }
+  ],
+  "source": "Apocatemplater 1.0.3, 2026-10-02 19:29, from Junker(Clone)26",
+  "lootPreset": "car-standard"
+}

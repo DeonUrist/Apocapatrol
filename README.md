@@ -1,227 +1,136 @@
-# Apocapatrol 1.20.3
+# Apocapatrol 2.0.6
 
-A BepInEx 5 mod for **Apocalypter** that puts raiders on the road. Armed gangs in scrap-built cars and trucks roam the wasteland and hunt
-you down. They ram you, shoot at you, and haul loot worth taking from them. The further you travel and the more bosses you kill, the
-more often they come and the tougher they get.
+F3 starts with all groups collapsed and no template selected. Vehicle template creation uses anchored, scrollable dropdowns with flat rows;
+click outside or press Escape to close them. Selection is deferred until drawing finishes and the form behind each dropdown is disabled,
+preventing click-through and the Empty car loot selection from reopening its menu. The editor, Loot tab and separate template-saving window implement the selected Salvage ledger design.
 
-## Raider cars
 
-Every raider vehicle is built from the game's own frames and parts, so it looks, drives and breaks like any other car in the game. Once
-its crew is dealt with it's yours to take.
+The UI uses the prototype's brown/gold palette, continuous ledger rows, square fields and joined tabs, with the game's Helveticrap heading font,
+rust background and thin metal frame. Both template lists have their own scroll. Chevron, star, trash and Remove textures match the prototype.
+Loot quantities sit immediately left of their percentages; Remove is used for item/roster contents, while trash is reserved for whole objects.
+All dropdowns share an anchored scroll menu with click-off/Escape dismissal. Dialog buttons stay below their fields. The window scales as one
+layout to fit the display while preserving the prototype's proportions. Existing vehicle rosters, loot contents, item chances, template parts and key bindings are preserved. Legacy truck loot references are ignored; cargo selection now belongs to convoys.
 
-- **Small cars**: PipeRat, Poloska and TinyTyrant, each in a basic and an advanced (stronger engine, better wheels) version.
-- **Junkers**: heavier, harder-hitting cars with doors, plates and a full body kit, basic and advanced.
-- **Motorcycles**: the Halfbreed, basic and advanced, ridden by bikers.
-- **Trucks**: the Rustcargo, with dual rear wheels, as a plain truck or a loot truck. The advanced truck has armored wheels and a big diesel.
-- Every car rolls a random look: small cars and junkers may carry a front bumper, and trucks always have one of four heavy bumpers.
-- They drive with their headlights on.
-- Knives and other melee weapons can slash the wheels of any car, raider or not. In the game itself a knife only cuts a loose wheel
-  and passes straight through one fitted to a car. (With Apocaraider installed, its wheel rules apply instead: the wheel damage
-  multiplier, hit numbers and wheels popping off.)
-- Nothing is brand new. Parts are worn (2–35 % condition), and the tank, engine oil and radiator are only partly filled (15–60 %).
 
-## The crews
+2.0.6 extends the group list to its panel bottom, centers button glyphs vertically, renames the footer actions **SPAWN** / **RESET**, and removes
+header/footer helper text. The footer shows only the selected template’s body, driver, passenger and Car Loot (or **Convoy Cargo** for trucks).
+Attached blastlances are recorded using their native `CheckBool.Attached` state and retain placement, nested parents, weapon tags and attachment
+state when rebuilt. Loose and bed-locked items remain excluded. Obsolete tier multipliers, automatic tier sizing, hidden tier configuration and
+legacy string-based cargo generation have been removed; Basic/Advanced words in existing names have no special behavior.
 
-Each car carries a driver and a passenger picked from the scrapyard gang: Boltjaw, Flexa, Lugnut, Scrud, Sprokka and Scraffa.
+Raider patrols and convoys for Apocalypter, with an in-game vehicle-roster and loot editor.
 
-- They sit in their seats in a proper seated pose and can be shot like any other enemy.
-- **Gunmen** (Boltjaw, Flexa, Lugnut, Scrud, Sprokka) shoot from the moving car at anything in front of it, up to 40 m away. A gunman at
-  the wheel fires in short bursts between stretches of driving. Scraffa just rides along.
-- **Kill the driver** and the car comes to a stop, unless his foot stays jammed on the gas (a small chance). Four seconds later the
-  surviving passenger acts, whatever the car is doing: takes the wheel and keeps coming, or jumps out and fights on foot.
-- A car with doors opens the right door first: the passenger's own door before he jumps out, the driver's door before a dead
-  driver is thrown out.
-- While the driver lives you can't get into the car. Once it's empty, it's yours.
-- If a car gets stuck a third time in a row, the crew climbs out and comes after you on foot. A car that runs out of fuel is left the
-  same way.
+## Editor
 
-## How they drive
+Bind **ApocaPatrol Config Key** under Apocasetter → Apocapatrol → Debug, or in
+`BepInEx/config/com.denis.apocalypter.apocapatrol.cfg`. Existing bindings are preserved; the default is None.
 
-Raiders drive at you, not randomly. They aim for where you'll be, not where you are, ram you, overshoot, swing around in a wide
-turn and come back for another pass. They steer around rocks, wrecks and buildings, back out when they hit a wall or get stuck, and
-stay clear of cliffs. Small cars go for you when you're on foot, while trucks will happily ram your car. If you get far enough away
-(700 m) they give up the chase until you come closer again. They'll also release a handbrake you pull on them.
+- **Patrols** and **Convoys**: expand a type to edit minimum distance, boss kills, spawn chance, and its vehicle roster.
+- Only the selected group is expanded; selecting another collapses the previous group. Collapsing a selected group clears the Add Template target.
+- Every roster entry produces one vehicle. Adding the same template twice produces two copies. Convoys can contain multiple trucks.
+- Spawn chances normalize across eligible group types. **PatrolSpawnChancePercent** in Apocasetter controls the global patrol/convoy split.
+- Empty patrols show a gray **Basic PipeRat** fallback. A convoy without a truck shows a gray **Empty truck** fallback.
+- **Allowed cargo** on each expanded convoy opens a two-list allocation window: add/remove options from Convoy Loot. Empty allowed lists spawn no cargo.
+- **Uniform cargo** shares one allowed cargo type and one item roll across the convoy trucks. Otherwise each truck rolls independently from that convoy’s allowed pool.
+- The right column has separate scrolling car and truck lists. Cars can be patrol members or convoy escorts; trucks belong to convoys.
+- Template rows show only the template name. Both lists have room for at least three full entries; Add/Spawn actions sit at the bottom.
+- Create and delete group definitions with the buttons beside their names.
 
-## Getting hit
+## Loot
 
-A raider car that runs into you hurts. A full-speed hit (30 km/h or faster) takes about **30 health from a small car, 50 from a
-junker, 70 from a truck**. At half that speed it takes half, and slower bumps do nothing. On foot the hit also knocks you away. You get
-the usual red flash and hurt sound. Walking or driving into a parked car does no damage, god mode protects you, and by default only
-hits on foot count. Hits while you sit in your own car are optional.
+The **Loot** tab manages named options for patrol cars and convoy trucks. Add any discovered, physical pickup prefab, including weapons,
+supplies, loose vehicle parts, and carcasses. Items are discovered from the loaded game's prefabs; Apocaspawner names are used when available.
 
-When a truck keeps shoving your car you can still bail out: with this mod you can leave a car at up to 30 km/h instead of the game's
-usual 21 km/h.
+Each item has an **independent absolute chance**, not a weight competing with other items:
 
-## Loot in the cars
+- 50%: 50% chance of one item.
+- 100%: one guaranteed item.
+- 150%: one guaranteed item and 50% chance of a second.
+- 200%: two guaranteed items.
 
-Raider cars (not trucks or motorcycles) may carry something on the back seat: a box of ammo of a random calibre (70 %) or a bandage
-(30 %). With **LootMultiplier** at 1 a basic car always has one item; an advanced car rolls twice that (two items). Each full 100 %
-is a sure item and the rest is the chance of one more (1.5 = one item and a 50 % chance of a second; advanced: three items).
+Car templates reference a named **Car Loot** option. Truck templates do not store loot choices. Convoys select their allowed cargo options; cargo selection chances are weights within that allowed pool, independently of the absolute chances for items.
 
-## Loot trucks
+Each convoy loot option includes a **Truck bed texture** dropdown listing all successfully loaded `Textures/cargo_*.png` images, including custom files. None keeps the native bed appearance. Textures are determined by the selected cargo configuration, not inferred from its item names.
+Deleting a loot option clears its references; those templates spawn no loot until another option is selected or defaults are reset.
 
-A loot truck carries a random cargo in its bed:
+## Create your own vehicle template
 
-| Cargo | Chance | What's inside |
-|---|---|---|
-| Food | 18 % | 6–10 cans of dog food |
-| Water | 14 % | 4 water cans, half the time a water barrel as well |
-| Gasoline | 11 % | 4 gasoline cans, half the time a gasoline barrel as well |
-| Diesel | 11 % | 4 diesel cans, half the time a diesel barrel as well |
-| Medicine | 11 % | 5 bandages and 2–3 first aid kits |
-| Weapons | 11 % | 2–4 random guns and 3–8 big boxes of ammo |
-| Drugs | 7 % | alcohol, weed bags and a weed plant |
-| Mechanic | 7 % | 3 repair boxes, a big can of motor oil, and a 15 % chance of a brand-new V8 engine (30 % on the advanced truck) |
-| Corpses | 7 % | 3–5 dead Scraffas |
-| Rats | 3 % | 6–8 dead rats |
+Bind **TemplateDumpKey** under Debug (None by default). It works **only while seated in a vehicle**. Looking at a vehicle or standing nearby does nothing.
 
-The advanced loot truck carries 1.5–2 times as much. Everything in the bed is a real item that you can pick up, use or sell.
+The key opens a separate save window containing a name and crew, plus a **Car Loot** dropdown for cars. Trucks have no loot dropdown. Storage trucks are recognized from
+the Rustcargo chassis and its frame's storage. Parts, part-on-part attachments, fitted poses, and adjusted hinges are recorded automatically.
+Wheel motion, engine wobble, and items locked in the bed are not recorded.
+Bus/Rustliner templating is temporarily disabled until crew seating is fixed.
 
-## Convoys and patrols
+**Cancel** or Escape discards the draft. Leaving the vehicle also cancels it. Only **Save template** writes JSON, into **PlayerTemplates**.
+An empty name generates `<Body>_Custom`, `_Custom_2`, etc.; named existing templates cannot be overwritten accidentally.
+Templates have no basic/advanced tier property; those words are simply part of their names.
 
-Raiders show up on their own while you play, usually far ahead of your car, or behind you when you're on foot. Every 5 to 60 minutes
-the game rolls what comes next. At first you only meet small groups, and bigger, better-armed ones follow as you get further from the
-starting area and kill more bosses.
+## Templates and favourites
 
-| Group | Appears from | What comes |
-|---|---|---|
-| Basic enemy cars | the start | 3 small cars |
-| Basic bikers | the start | 3 motorcycles |
-| Basic convoy | 5 km | a loot truck, 2 junkers and 3–5 small cars, sometimes one advanced car among them (in 30 % of convoys the small cars are motorcycles) |
-| Advanced convoy | 20 km and 3 bosses | an advanced loot truck with the same escort, half of it advanced |
-| Advanced enemy cars | 30 km and 1 boss | 3 cars, at least one advanced, maybe a junker |
-| Advanced bikers | 30 km and 1 boss | 3 motorcycles and 2 advanced ones |
-| Super advanced enemy cars | 50 km and 3 bosses | 5 cars, many of them junkers, at least two advanced |
-| Super bikers | 50 km and 3 bosses | a junker leading 3 motorcycles and 3 advanced ones |
+The mod ships 16 JSON defaults in **BaseTemplates** and keeps immutable copies inside the DLL for recovery. It loads these defaults together
+with local **BaseTemplates** and **PlayerTemplates** files. Missing disk defaults remain available from the DLL.
 
-**Heat** rises by 25 % every 10 km you travel from the starting area, up to 300 %. Below 100 % heat the groups are still incomplete (one car
-instead of three near the start); from 100 % on they are full size and stay that way, and higher heat only makes the tougher groups turn up
-more often and shortens the wait between them. Distance and boss kills come from your save, so adding
-the mod to a game in progress picks up right where you are.
+- Star a custom player template to move it into **BaseTemplates**.
+- Un-star a custom favourite to move it back into **PlayerTemplates**.
+- Shipped defaults have locked stars and disabled trash buttons.
+- Favourite templates have disabled trash buttons. Un-favourite a custom template before deleting it.
+- Red trash moves a custom template to the **Windows Recycle Bin** and removes every reference to it from group rosters.
 
-A group builds up out of sight and then sets off all at once.
+Old `CarTemplates` files are imported once as player templates; originals are kept. Imports that collide with a shipped name receive a legacy name.
 
-**Patrol size** (the first setting, 25 / 50 / 100 / 125 / 150 %) scales how many cars every group brings. Lower it if the game stutters
-when a convoy appears: fewer cars means fewer crews, physics bodies and AI drivers at once. A group always brings at least one car, and a
-convoy always brings its truck first.
+## RESET
 
-Only one group is out hunting you at a time. When the next one is due while raiders from an earlier group are still alive: if all of them
-are at least 300 m away, they vanish with their cars (crew, parts and cargo) and the new group comes; if any of them is closer, the new
-group waits and the next try comes sooner than usual.
+RESET restores shipped templates, patrol/convoy definitions, rosters, requirements, chances, Uniform cargo settings, and default loot options.
+It backs up **BaseTemplates** into **OldTemplatesFolder**; collisions receive `_1`, `_2`, and so on.
 
-## Cleanup
+The confirmation asks whether to delete custom templates. Unchecked keeps them in their current folders, including favourites.
+Checked moves custom templates, including favourites, into the Windows Recycle Bin. Custom loot options are retained.
 
-Raider cars you leave behind don't pile up in your world or your save. A raider car that stays more than 800 m away from you for
-10 minutes disappears together with its crew and cargo, and if more than 30 raider cars are around, the farthest ones go first. A car
-you've sat in counts as yours and is never removed, whether it's loot you took or a car you drove.
+Changes are saved automatically in **PatrolsAndLoot.json** beside the DLL. Invalid settings are preserved in an `invalid` backup before defaults are used.
 
-## Self-destructing cars
+## Integrated motorcycle
 
-While a raider drives, you can't take the car apart: the wrench does nothing on its wheels, engine or seats until the driver is dead.
+**motorcycle_template** uses MotorcycleMod 0.1.1's default equipped two-wheel Crossbreed-derived chassis: motorcycle tyres, 594cc/23HP engine,
+motorcycle radiator, exhaust, driver seat, and 10 litres of fuel. It has one **Scrud SMG driver** and no passenger. The underlying Motorcycle body is bare; all fitted parts come from the JSON template.
+It uses **Empty car loot** so customized Standard car loot cannot add loose car/truck engines. Unchanged 2.0.2 defaults upgrade with a backup; edited templates are preserved.
 
-Once a raider car is fully vacated - the crew is dead, they bailed out, or the last passenger climbed out beside a dead driver - the car
-blows up with the exploder zombie's fireball and bang (just the show: it doesn't hurt you): the frame turns black, and every part pops off. Most popped parts are wrecked (0 condition); about one in five keeps its
-condition and is worth picking up. What's left is a dead chassis: you can't get in, fuel it or fit parts to it, and it disappears once
-you're 1000 m away. Trucks are different: they don't turn black, their wheels stay on (with the same condition roll), they stay
-parked where they stopped, their rear doors still open, and the cargo stays in the bed for you to loot. A car you've sat in never explodes. Turn **SelfDestruct** off and vacated cars stay as they were before: driveable,
-strippable, cleaned up by the rules below.
+The balance controller and stable Easy Save prefab identity are included in Apocapatrol. MotorcycleMod is not required; if it is installed,
+Apocapatrol shares its chassis and existing settings. Rear fender collision extending beyond the tyre is disabled in both factories, including save reconstruction. Vanilla Crossbreed is unchanged. The default Basic bikers roster uses three copies of
+motorcycle_template. Existing unmodified Basic bikers rosters are upgraded once; custom rosters remain untouched.
 
-## Paint jobs
+The native verifier tested geometry, wheel setup, balance, acceleration, save reconstruction, SMG rider seating, and the actual Apocapatrol
+template-build coroutine, empty chassis and rear player capsule clearance: **81 checks passed** in an isolated runtime using the installed game assemblies/prefabs.
 
-The raiders' cars wear their own paint. Put a PNG named after the car into the mod's `Textures` folder and every car of that
-kind the mod spawns (basic and advanced, in patrols and convoys) wears it; the same cars you find in the world keep the game's
-look. `junker.png`, `poloska.png`, `tinytyrant.png`, `piperat.png` (the PipeRat's pipe frame), `piperat_dashboard.png` (its
-dashboard) and `rustcargo.png` (the truck's cab) are recognised. Keep the layout of
-the game's texture (its originals: Junker 1024 x 1024, Poloska and TinyTyrant 4096 x 4096, Rustcargo and PipeRat 2048 x 2048; the PipeRat's
-textures repeat along its pipes, so recolour them rather than paint a picture on them). Any square size works - smaller files load faster;
-all of them are loaded once when the game starts. Keep the
-Junker's transparent spots - those are its rust holes. Any other car texture works too: a PNG named after the game's texture
-replaces it on every raider car that uses it.
+## Debug spawning
 
-Cargo trucks show what they carry on the two long sides of their container. The roof, the ends and the rear doors keep the
-game's look.
+Enable **AllowDebugSpawns** in Apocasetter → Debug to reveal:
 
-| Load | Side picture |
-|---|---|
-| Water, Gasoline, Diesel, Medicine, Weapons, Drugs, Mechanic | `Textures\cargo_water.png`, `cargo_gasoline.png`, `cargo_diesel.png`, `cargo_medicine.png`, `cargo_weapons.png`, `cargo_drugs.png`, `cargo_mechanic.png` |
-| Dog food, rats, corpses | `Textures\cargo_food.png` |
-| Empty truck, or anything else | `Textures\cargo.png` |
+- **Spawn template**, below Add template: build the selected vehicle 8 m ahead.
+- **S**, beside each group's trash: force that group's exact roster.
+- **Test spawning**, beside RESET: use the save's real distance/boss requirements, global patrol/convoy distribution, and eligible group chances.
 
-Each file is one side of the container as you see it standing next to the truck: upright, left to right, about twice as wide as
-tall (2048 x 1024 works well). Both sides show the same picture and read the right way round. Transparent pixels let the
-container's own texture show through. A missing file falls back to `cargo.png`; without that the sides stay as they are.
+These controls are hidden by default. Debug spawning does not reset the automatic spawn timer or clear existing groups.
+The editor pauses the game, blocks input through Apocasetter when installed, and restores the previous cursor and time state when closed.
 
-The inside of the container (both walls, floor, roof and the closed front end) can have its own look for every truck:
-`Textures\cargo_inside.png`. It repeats every 2 m, so a square, seamless texture works best (1024 x 1024 = 2 x 2 m of
-wall). Without the file the inside keeps the game's texture.
+## Driving, combat, textures and saves
 
-Turn **CustomPaintjobs** off (under Debug) to skip all of this: raider cars then look like the game's own.
+Existing driving, crew takeover/bailout, melee wheel damage, ram damage, cleanup, self-destruct, and save/load behavior remain in use.
+Automatic spawning keeps the cooldown and older-group checks; vehicle counts come from the rosters.
+Crew leaving Rustcargo, Rustchief, or Rustallion cabs use twice the sideways exit clearance to avoid getting stuck in the cab.
 
-## Saving and loading
+Body textures are selected by the **vehicle body**, never by template name. Truck container textures follow the **loot contents**.
+Existing paint files under `Textures` still work. Car crews and their state remain in the game's save file.
 
-Raider cars, their crews, the crews' health and what they were doing are saved with your game. After a load they start their engines
-and carry on. The timer until the next convoy is saved too. All of it is stored inside the game's own save file, so it travels with
-Steam Cloud and copied saves; paint jobs come back after a load as well. (Saves made with versions before 1.9.0 keep their raider data in
-`BepInEx\config\Apocapatrol\Saves`, which is still read; their cars get their paint back on the next load.)
+## Installation and build
 
-## Settings
+Install BepInEx 5, then place the **Apocapatrol** folder under `BepInEx/plugins`. It contains the DLL, BaseTemplates, Textures, and theme/game.
+Do not leave a second Apocapatrol DLL in the plugins root. Apocasetter is recommended for bindings and general settings.
 
-A short list, changeable in game through the Apocasetter Mods menu if you have it, or in
-`BepInEx\config\com.denis.apocalypter.apocapatrol.cfg`. Everything else is tuned in and fixed.
+`dotnet build Apocapatrol.csproj -c Release` builds and deploys the DLL, textures, and UI theme to the configured game directory.
+Add `-p:DeployToGame=false` for a build without deployment. Missing shipped template files are materialized by the loader; existing disk edits are preserved.
+`build.sh` also includes the JSON defaults and new editor sources.
 
-**Scaling**
-- **PatrolSizePercent** (100 %): how many cars every spawn brings, 25–150 %. Lower it on a weak PC.
-- **AudioVoices** (64): how many sounds the game may play at once. The game ships with 32, which a firefight with several raider cars
-  overflows - shots and hits then cut out, your own included. Applied when the game starts; 0 keeps the game's setting.
-- **SelfDestruct** (on): vacated raider cars blow up (see above).
-- **LootMultiplier** (1): how much loot trucks carry, 0–3×, and the chance of a back-seat item in the cars (× 2 in advanced cars).
-- **MinConvoyCooldown** (5 min) / **MaxConvoyCooldown** (60 min): the wait between two raider spawns is rolled between these, a
-  little shorter as the heat rises. 0 as the maximum turns automatic spawns off. A change counts from the next roll.
-
-**Combat**
-- **RangedCombat** (on): gunmen in the cars shoot at you.
-- **ShootDistance** (40 m): how close you have to be before they open fire.
-- **RamDamage** (on): a raider car that hits you on foot hurts you.
-- **RamDamageInCar** (off): ...and also while you sit in your own car.
-
-**Debug**
-- **TemplateSpawnerKey** (none): the key for the spawner menu, off by default.
-- **VerboseLog** (off): detailed logging.
-- **AiOverlay** (off): an on-screen readout per raider car; with no raider car driving, the time until the next spawn roll.
-- **CustomPaintjobs** (on): raider cars wear the paint jobs from the `Textures` folder. Off = they keep the game's own look
-  (cars spawned from then on).
-
-## Spawner menu
-
-For testing: set **TemplateSpawnerKey** to a key (F8, say) and press it to open the spawner. At the top, set a **distance travelled**
-(the heat it gives is shown next to it) and a number of **bosses killed** - they start at your save's values - and see which patrols and
-convoys that unlocks and how likely each is. **Spawn (game roll)** calls in a group exactly as the game would at that point (patrol or
-convoy, then which one, at that heat - smaller groups below 100 % heat); **Patrol** and **Convoy** roll only among the patrols or the
-convoys. The spawn timer and raiders already out are left alone. Below them every car and truck is listed, and clicking one builds it with its crew in front of you. It's meant
-for testing and for picking a fight on purpose.
-
-## Your own raider cars
-
-Build a car in game the way you like it (frame, wheels, engine, seats, plates, spikes, roof rack, anything the wrench attaches,
-even items locked in the bed), then save it as a template with **Apocatemplater** (a small companion mod, dump key F9 by
-default): sit in the car or look at it and press the key. The template lands in `BepInEx\plugins\Apocapatrol\CarTemplates\`
-as a `.json` file and shows up in the spawner menu the next time you open it, marked `[file]`.
-
-Every template joins the raider patrols and convoys by its `kind` (`small`, `medium` - the junker's role, `junker` still
-works -, `truck` or `motorcycle`) and `tier` (`basic` or `advanced`), with `weight` as its relative chance among the cars of the
-same role. A car can have several kinds, separated by `;` (for example `"kind": "small;motorcycle"`): it counts as each of them. Open the file in a text editor to change the
-crew (`driver`, `passenger`), what it rams (`None`, `Pedestrians`, `Cars`), the bed (`cargo`: empty, `Random`, a loot type like
-`Food`, or the item list the dump wrote), the front bumper roll (`bumpers`), or set `spawns` to `false` to keep it out of the
-patrols (spawner menu only). A file with the name of a built-in car replaces that car.
-
-Templates in the mod's own `CarTemplates` folder of the source are built into `Apocapatrol.dll`, so they ship with the mod.
-
-## Install
-
-1. Install BepInEx 5 in the game folder.
-2. Copy the `Apocapatrol` folder (with `Apocapatrol.dll` and `Textures`) into `BepInEx\plugins\`. If you have an older
-   `BepInEx\plugins\Apocapatrol.dll` lying loose in `plugins`, delete it.
-3. Optional: install **Apocasetter** to change every setting in game.
-
-Works together with **Apocatremors**, which eases off its own ambushes while this mod is running. It's safe to add to an existing save.
-If you remove the mod later, the raider cars stay in your world as ordinary empty vehicles.
+The 2.0.6 verification suite covers JSON round trips, exact rosters, loot probabilities, global distribution, fallback groups, protected defaults,
+favourite transfers, native Windows recycling, RESET, backup collisions, corruption preservation, and path guards.
+It also checks key migration/order, single-group selection, large-cab clearance, and the bus template blacklist.
