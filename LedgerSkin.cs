@@ -23,10 +23,22 @@ namespace Apocapatrol
         private static readonly Dictionary<string, Texture2D> Boxes = new Dictionary<string, Texture2D>();
         private static readonly Dictionary<string, float> ButtonOffsets = new Dictionary<string, float>();
         internal static Color C(string hex) { return PatrolSkin.Hex(hex); }
+        // the game's menu font when Apocasetter / the MODS button did not provide one: a scan of every loaded Font, so it is cached and
+        // retried at most once a second (Begin runs on every IMGUI event while a window is open)
+        private static Font _scannedFont; private static float _nextFontScan;
+        private static Font ScannedGameFont()
+        {
+            if (_scannedFont == null && Time.realtimeSinceStartup >= _nextFontScan)
+            {
+                _nextFontScan = Time.realtimeSinceStartup + 1f;
+                _scannedFont = Resources.FindObjectsOfTypeAll<Font>().FirstOrDefault(f => f.name == "Helveticrap");
+            }
+            return _scannedFont;
+        }
         internal static GUISkin Begin()
         {
             var old = GUI.skin; PatrolSkin.Ensure(1);
-            var font = PatrolSkin.GameFont ?? Resources.FindObjectsOfTypeAll<Font>().FirstOrDefault(f => f.name == "Helveticrap");
+            var font = PatrolSkin.GameFont ?? ScannedGameFont();
             if (_skin == null || (_game != font && font != null))
             {
                 if (_body == null) _body = Font.CreateDynamicFontFromOSFont("Segoe UI", 14);

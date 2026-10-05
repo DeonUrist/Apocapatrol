@@ -1,4 +1,8 @@
-# Apocapatrol 2.0.6
+# Apocapatrol 2.0.7
+
+2.0.7 (review fixes): the exit-speed limit finds the player camera again (PlayerCameraHolder/PlayerCamera), so you can leave a car below
+30 km/h as intended; a car being built when a save loads no longer throws; loot ids compare case-insensitively in the editor; the
+font lookup and a few per-frame allocations are cached; a failed motorcycle save hook no longer stops the whole mod from loading.
 
 F3 starts with all groups collapsed and no template selected. Vehicle template creation uses anchored, scrollable dropdowns with flat rows;
 click outside or press Escape to close them. Selection is deferred until drawing finishes and the form behind each dropdown is disabled,

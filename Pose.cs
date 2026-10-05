@@ -136,12 +136,12 @@ namespace Apocapatrol
 
             if (_armPose != null && _useProfile)
             {
-                ApplyBone(_lArm, _lForeArm, _armPose.LeftArm, right, up);
-                ApplyBone(_lForeArm, _lHand, _armPose.LeftElbow, right, up);
-                ApplyBone(_lHand, _lForeArm, _armPose.LeftHand, right, up);
-                ApplyBone(_rArm, _rForeArm, _armPose.RightArm, right, up);
-                ApplyBone(_rForeArm, _rHand, _armPose.RightElbow, right, up);
-                ApplyBone(_rHand, _rForeArm, _armPose.RightHand, right, up);
+                ApplyBone(_lArm, _lForeArm, _armPose.LeftArm, right, up, false);
+                ApplyBone(_lForeArm, _lHand, _armPose.LeftElbow, right, up, false);
+                ApplyBone(_lHand, _lForeArm, _armPose.LeftHand, right, up, true);
+                ApplyBone(_rArm, _rForeArm, _armPose.RightArm, right, up, false);
+                ApplyBone(_rForeArm, _rHand, _armPose.RightElbow, right, up, false);
+                ApplyBone(_rHand, _rForeArm, _armPose.RightHand, right, up, true);
                 ApplyWeapons();
             }
             else
@@ -193,14 +193,14 @@ namespace Apocapatrol
             Swing(bone, -_aimPitch * weight, yawedRight);
         }
 
-        private static void ApplyBone(Transform bone, Transform joint, BonePoseConfig config, Vector3 right, Vector3 up)
+        private static void ApplyBone(Transform bone, Transform joint, BonePoseConfig config, Vector3 right, Vector3 up, bool hand)
         {
             if (bone == null || config == null) return;
             Swing(bone, -config.Vertical.Value, right);
             Swing(bone, config.Horizontal.Value, up);
             Vector3 axis = joint != null ? joint.position - bone.position : bone.forward;
             // Hands pass their forearm as the joint, so reverse that vector to keep the twist axis shoulder-to-fingertips.
-            if (bone.name.EndsWith("Hand") && joint != null) axis = bone.position - joint.position;
+            if (hand && joint != null) axis = bone.position - joint.position;
             if (axis.sqrMagnitude > 0.000001f) Swing(bone, config.Rotation.Value, axis.normalized);
         }
 

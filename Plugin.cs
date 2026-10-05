@@ -19,7 +19,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.0.6";
+        public const string VERSION = "2.0.7";
 
         internal static ManualLogSource Log;
 
@@ -149,7 +149,8 @@ namespace Apocapatrol
         private void Awake()
         {
             Log = Logger;
-            MotorcycleIntegration.Install();
+            try { MotorcycleIntegration.Install(); }
+            catch (Exception e) { Log.LogError("Motorcycle save hook not installed (saved motorcycles may not load): " + e); }
             Paint.Init(Info.Location);
             PatrolSkin.Init(Info.Location);
             var fixedSettings = HiddenConfig();

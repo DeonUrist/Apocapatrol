@@ -235,8 +235,8 @@ namespace Apocapatrol
                 ModalButtons(box, "Create", () =>
                 {
                     string name = _name.Trim(); if (name.Length == 0) throw new ArgumentException("Enter a name");
-                    if (_target is List<LootProfile>) { var list = (List<LootProfile>)_target; if (list.Any(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("That loot name exists"); var p = new LootProfile { Id = Guid.NewGuid().ToString("N"), Name = name }; list.Add(p); _lootSelected[ReferenceEquals(list, EditorStore.Data.TruckLoot) ? 1 : 0] = p.Id; }
-                    else { if (Groups.Any(g => g.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("That group name exists"); var g = new SpawnGroup { Id = Guid.NewGuid().ToString("N"), Name = name, Chance = 10 }; Groups.Add(g); _selectedGroup = EditorSelection.Select(_expanded, g.Id, true); }
+                    if (_target is List<LootProfile>) { var list = (List<LootProfile>)_target; if (list.Any(lp => lp.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("That loot name exists"); var p = new LootProfile { Id = Guid.NewGuid().ToString("N"), Name = name }; list.Add(p); _lootSelected[ReferenceEquals(list, EditorStore.Data.TruckLoot) ? 1 : 0] = p.Id; }
+                    else { if (Groups.Any(sg => sg.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("That group name exists"); var g = new SpawnGroup { Id = Guid.NewGuid().ToString("N"), Name = name, Chance = 10 }; Groups.Add(g); _selectedGroup = EditorSelection.Select(_expanded, g.Id, true); }
                 }, _name.Trim().Length > 0);
             }
             else
@@ -250,7 +250,7 @@ namespace Apocapatrol
                     {
                         var p = (LootProfile)_target; EditorStore.Data.CarLoot.Remove(p); EditorStore.Data.TruckLoot.Remove(p);
                         foreach (var group in EditorStore.Data.Convoys) group.AllowedCargo.RemoveAll(id => id.Equals(p.Id, StringComparison.OrdinalIgnoreCase));
-                        foreach (var t in CarTemplate.Park.Where(t => t.LootPreset == p.Id)) { t.LootPreset = ""; if (System.IO.File.Exists(t.SourcePath)) { var file = TemplateFile.FromJson(System.IO.File.ReadAllText(t.SourcePath)); file.lootPreset = ""; EditorStore.AtomicWrite(t.SourcePath, file.ToJson()); } }
+                        foreach (var t in CarTemplate.Park.Where(t => string.Equals(t.LootPreset, p.Id, StringComparison.OrdinalIgnoreCase))) { t.LootPreset = ""; if (System.IO.File.Exists(t.SourcePath)) { var file = TemplateFile.FromJson(System.IO.File.ReadAllText(t.SourcePath)); file.lootPreset = ""; EditorStore.AtomicWrite(t.SourcePath, file.ToJson()); } }
                     }
                 });
             }
@@ -261,7 +261,7 @@ namespace Apocapatrol
             LedgerSkin.Label(new Rect(x, box.y + 22, w, 26), "Add game pickup item", LedgerSkin.DialogTitle);
             LedgerSkin.Label(new Rect(x, box.y + 63, w, 20), "Find item", LedgerSkin.Small, LedgerSkin.Muted);
             _search = GUI.TextField(new Rect(x, box.y + 87, w, 34), _search, LedgerSkin.Input);
-            var items = PickupCatalog.All().Where(i => !profile.Items.Any(row => row.Id == i.Id) && (i.Name.IndexOf(_search, StringComparison.OrdinalIgnoreCase) >= 0 || i.Id.IndexOf(_search, StringComparison.OrdinalIgnoreCase) >= 0)).ToArray();
+            var items = PickupCatalog.All().Where(i => !profile.Items.Any(row => string.Equals(row.Id, i.Id, StringComparison.OrdinalIgnoreCase)) && (i.Name.IndexOf(_search, StringComparison.OrdinalIgnoreCase) >= 0 || i.Id.IndexOf(_search, StringComparison.OrdinalIgnoreCase) >= 0)).ToArray();
             var list = new Rect(x, box.y + 133, w, 180); LedgerSkin.Panel(list);
             _modalScroll = LedgerSkin.Scroll(new Rect(list.x + 4, list.y + 4, list.width - 8, list.height - 8), _modalScroll, items.Length * 34, width =>
             {

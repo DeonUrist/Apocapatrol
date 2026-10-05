@@ -126,6 +126,7 @@ namespace Apocapatrol
                 Plugin.Verbose("Car frame " + car.name + " at " + pos);
 
                 yield return null;   // let the frame's FSMs start (hinges, getEngine, START ...)
+                if (car == null) yield break;
 
                 int parts = 0;
                 if (tpl.Parts != null)
@@ -148,17 +149,18 @@ namespace Apocapatrol
                 else
                 {
                     parts += AttachAll(car, new[] { "hinge_wheel_FL", "hinge_wheel_FR" }, tpl.Wheel, "wheel");
-                    yield return null;
+                    yield return null; if (car == null) yield break;
                     parts += AttachAll(car, new[] { "hinge_wheel_RL", "hinge_wheel_RR" }, tpl.RearWheel.Length > 0 ? tpl.RearWheel : tpl.Wheel, "wheel");
                     yield return null;
+                    if (car == null) yield break;
                     string bumper = tpl.RollBumper();
                     if (bumper.Length > 0) { Plugin.Verbose("Front bumper roll: " + bumper); parts += AttachAll(car, new[] { "hinge_bumper_front" }, bumper, "bumper"); }
                     parts += AttachAll(car, new[] { "hinge_engine" }, tpl.Engine, "engine");
-                    yield return null;
+                    yield return null; if (car == null) yield break;
                     parts += AttachAll(car, new[] { "hinge_radiator" }, tpl.Radiator, "radiator");
                     parts += AttachAll(car, new[] { "hinge_steeringwheel" }, tpl.SteeringWheel, "steeringwheel");
                     parts += AttachAll(car, new[] { "hinge_exhaust" }, tpl.Exhaust, "exhaust");
-                    yield return null;
+                    yield return null; if (car == null) yield break;
                     parts += AttachAll(car, new[] { "hinge_seat_driver" }, tpl.Seat, "seat");
                     parts += AttachAll(car, new[] { "hinge_seat_passenger" }, tpl.PassengerSeat, "seat");
                 }
@@ -189,6 +191,7 @@ namespace Apocapatrol
                 }
 
                 yield return null;
+                if (car == null) yield break;
                 GameObject driver = null, passenger = null;
                 if (!string.IsNullOrEmpty(tpl.Driver))
                 {
@@ -196,6 +199,7 @@ namespace Apocapatrol
                     else driver = SeatLiveDriver(car, tpl.Driver, -1f, CrewPhase.Waiting, 0f, hold);
                 }
                 yield return null;
+                if (car == null) yield break;
                 if (!string.IsNullOrEmpty(tpl.Passenger)) passenger = SeatPassenger(car, tpl.Passenger);
                 var marker = PatrolMarker.Attach(car, body.name, tpl.Driver, driver, tpl.Passenger, passenger, tpl.Rams);
                 marker.CargoKey = lootKey ?? "";
@@ -1149,8 +1153,11 @@ namespace Apocapatrol
             if (_fsm == null || _fsm.gameObject == null)
             {
                 _fsm = null; _limits.Clear(); _applied = -1f;
+                // PlayerCameraHolder/PlayerCamera (a scene root, fsm_dump 2026-10-01); under the Player in older builds
+                var holder = GameObject.Find("PlayerCameraHolder");
+                var cam = holder != null ? holder.transform.Find("PlayerCamera") : null;
                 var player = PlayerRef.Player;
-                var cam = player != null ? Patrol.FindChild(player, "PlayerCamera") : null;
+                if (cam == null && player != null) cam = Patrol.FindChild(player, "PlayerCamera");
                 if (cam == null) return;
                 foreach (var f in cam.GetComponents<PlayMakerFSM>()) if (f.FsmName == "DriveUse") { _fsm = f; break; }
                 if (_fsm == null) return;

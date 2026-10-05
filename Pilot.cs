@@ -413,6 +413,8 @@ namespace Apocapatrol
             steer = Mathf.Clamp(steer, -1f, 1f);
         }
 
+        private static readonly float[] RearAngles = { 180f, 150f, 210f };
+
         // Three rays backwards from the tail while reversing; returns the nearest obstacle distance or -1.
         private float SenseRear(float forwardSpeed)
         {
@@ -420,7 +422,7 @@ namespace Apocapatrol
             var origin = (_rb != null ? _rb.worldCenterOfMass : _tf.position) - _tf.forward * Plugin.AiFrontOffset.Value + _tf.up * 0.5f;
             float minSlopeNormalY = Mathf.Cos(Plugin.AiMaxSlopeDeg.Value * Mathf.Deg2Rad);
             float best = -1f;
-            float[] angles = { 180f, 150f, 210f };
+            var angles = RearAngles;
             for (int i = 0; i < angles.Length; i++)
             {
                 var dir = Quaternion.AngleAxis(angles[i], _tf.up) * _tf.forward;

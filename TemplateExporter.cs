@@ -348,7 +348,7 @@ namespace Apocapatrol
             if (name.Length == 0)
             {
                 name = Sanitize(body) + "_Custom";
-                for (int i = 2; File.Exists(Path.Combine(dir, name + ".json")); i++) name = Sanitize(body) + "_Custom_" + i;
+                for (int i = 2; CarTemplate.Find(name) != null || File.Exists(Path.Combine(dir, name + ".json")); i++) name = Sanitize(body) + "_Custom_" + i;
             }
 
             if (CarTemplate.Find(name) != null || File.Exists(EditorStore.SafePath(dir, name + ".json"))) throw new IOException("A template with that name already exists");
