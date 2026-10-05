@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using HutongGames.PlayMaker;
 using UnityEngine;
 
@@ -129,6 +130,9 @@ namespace Apocapatrol
 
         private void Auto()
         {
+            // an autosave is due within the next half minute (or running): spawn after it, so the group is complete when it is saved
+            if (AutosaveSoon(30f)) { _cooldown = 45f; Plugin.Verbose("Convoy: spawn postponed 45 s, Apocasaver autosave due"); return; }
+            if (_patrol != null && _patrol.SaveBusy()) { _cooldown = 10f; return; }
             bool convoy;
             var group = EditorStore.Roll(_km, _bosses, Plugin.PatrolSpawnChancePercent.Value, () => UnityEngine.Random.value, out convoy);
             if (group == null) { ResetCooldown("no eligible groups"); return; }
@@ -164,6 +168,43 @@ namespace Apocapatrol
             foreach (var m in old) Cleanup.Remove(m, "an older group, " + OldGroupDistance.ToString("0") + "+ m away, before a new spawn");
             Plugin.Verbose("Convoy: removed " + old.Count + " older raider car(s) before the new spawn (nearest " + nearest.ToString("0") + " m)");
             return true;
+        }
+
+        // Apocasaver (optional, by reflection): true while it autosaves, or when its next autosave is due within `within` s. An autosave
+        // that is overdue (it waits for the player to be on foot) does not block spawns - the builds themselves wait out a running save.
+        private static bool _asResolved;
+        private static FieldInfo _asCurrent, _asLast, _asArmed;
+        private static PropertyInfo _asSaving;
+        private static BepInEx.Configuration.ConfigEntry<float> _asInterval;
+        private static BepInEx.Configuration.ConfigEntry<bool> _asEnabled;
+        internal static bool AutosaveSoon(float within)
+        {
+            try
+            {
+                if (!_asResolved)
+                {
+                    _asResolved = true;
+                    var asm = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "Apocasaver");
+                    var plugin = asm != null ? asm.GetType("Apocasaver.Plugin") : null;
+                    var runner = asm != null ? asm.GetType("Apocasaver.Runner") : null;
+                    if (plugin == null || runner == null) return false;
+                    const BindingFlags S = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, I = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                    _asCurrent = plugin.GetField("Current", S);
+                    var iv = plugin.GetField("IntervalMinutes", S); _asInterval = iv != null ? iv.GetValue(null) as BepInEx.Configuration.ConfigEntry<float> : null;
+                    var en = plugin.GetField("Enabled", S); _asEnabled = en != null ? en.GetValue(null) as BepInEx.Configuration.ConfigEntry<bool> : null;
+                    _asLast = runner.GetField("_lastSave", I); _asArmed = runner.GetField("_armed", I); _asSaving = runner.GetProperty("IsAutosaving", I);
+                    Plugin.Verbose("Convoy: Apocasaver found, spawns wait for its autosaves" + (_asCurrent != null && _asLast != null && _asInterval != null ? "" : " (timer not readable)"));
+                }
+                if (_asCurrent == null) return false;
+                var r = _asCurrent.GetValue(null) as UnityEngine.Object;
+                if (r == null) return false;
+                if (_asSaving != null && _asSaving.GetValue(r, null) is bool && (bool)_asSaving.GetValue(r, null)) return true;
+                if (_asLast == null || _asInterval == null || (_asEnabled != null && !_asEnabled.Value)) return false;
+                if (_asArmed != null && _asArmed.GetValue(r) is bool && !(bool)_asArmed.GetValue(r)) return false;
+                float remaining = _asInterval.Value * 60f - (Time.realtimeSinceStartup - (float)_asLast.GetValue(r));
+                return remaining > -3f && remaining < within;
+            }
+            catch (Exception e) { Plugin.Verbose("Convoy: Apocasaver timer: " + e.Message); _asCurrent = null; return false; }
         }
 
         // half the usual Min..Max cooldown, the roll squared so short waits are likelier
@@ -284,10 +325,13 @@ namespace Apocapatrol
         private IEnumerator BuildAll(List<CarTemplate> group, List<Vector3> spots, Quaternion rot)
         {
             var cars = new List<GameObject>();
-            int pending = 0;
+            int pending = 0, gen = Patrol.SceneGen;
             for (int i = 0; i < group.Count && i < spots.Count; i++)
             {
-                if (_patrol == null || !_patrol.InGame()) break;
+                // a save or the pause menu: the rest of the group waits (up to a minute) instead of being dropped; a load ends it
+                float waitUntil = Time.realtimeSinceStartup + 60f;
+                while (_patrol != null && !_patrol.InGame() && Patrol.SceneGen == gen && Time.realtimeSinceStartup < waitUntil) yield return null;
+                if (_patrol == null || !_patrol.InGame() || Patrol.SceneGen != gen) break;
                 pending++;
                 _patrol.SpawnAt(group[i], spots[i], rot, true, car => { pending--; if (car != null) cars.Add(car); });
                 yield return new WaitForSeconds(BuildInterval);

@@ -17,7 +17,10 @@ namespace Apocapatrol
         private int _inGameFrame = -1;      // InGame() is asked by four runner components every frame: evaluated once per frame
         private bool _inGame;
 
-        internal static void ResetForScene() { Prefabs.Invalidate(); Register.Invalidate(); MeleeWheels.Reset(); }
+        internal static void ResetForScene() { Prefabs.Invalidate(); Register.Invalidate(); MeleeWheels.Reset(); DayLight.Reset(); _lightState = -1; SceneGen++; }
+
+        // bumped on every scene load: a build or a convoy that waited through a load does not continue in the new world
+        internal static int SceneGen;
 
         private void Update()
         {
@@ -26,7 +29,56 @@ namespace Apocapatrol
             Ram.Tick();
             ExitSpeed.Tick();
             MeleeWheels.Tick();
+            if (Time.unscaledTime >= _nextLights) { _nextLights = Time.unscaledTime + 5f; LightsTick(); }
             if (Time.unscaledTime >= _nextPrune) { _nextPrune = Time.unscaledTime + 30f; PruneIgnoreSignatures(); }
+        }
+
+        // Raider cars drive with their headlights on only while it is dark (DayLight): at dusk / dawn every car with a live crew that the
+        // player never took is switched over. New builds and restored cars pick the current state themselves.
+        private static float _nextLights;
+        private static int _lightState = -1;   // -1 = not read yet in this scene, 0 = day, 1 = dark
+        private static void LightsTick()
+        {
+            int state = DayLight.Dark ? 1 : 0;
+            if (state == _lightState) return;
+            bool first = _lightState < 0;
+            _lightState = state;
+            if (first) return;   // the baseline: cars already got the right lights when they were built / restored
+            int n = 0;
+            foreach (var m in PatrolMarker.All.ToArray())
+            {
+                if (m == null || m.Exploded || m.PlayerEntered || Register.Pending(m.gameObject)) continue;
+                var crew = m.GetComponent<Crew>();
+                if (crew == null || !crew.CrewAlive) continue;
+                Headlights(m.gameObject, state == 1);
+                n++;
+            }
+            Plugin.Verbose("Lights: it is " + (state == 1 ? "dark" : "light") + " now, " + n + " raider car(s) switched");
+        }
+
+        // The game is saving or loading (SaveLoadGame anywhere but isPlay). Builds wait for it: nothing is created or added to the
+        // game's save lists while the save walks them.
+        internal bool SaveBusy()
+        {
+            InGame();   // refreshes the SaveLoadGame reference
+            return Alive(_saveLoad) && _saveLoad.Fsm.Initialized && _saveLoad.ActiveStateName != "isPlay";
+        }
+
+        // Waits while a save runs. False = give the build up: a load ran (or the scene changed) meanwhile, or 60 s passed.
+        private IEnumerator WaitForSave(int gen, bool[] ok)
+        {
+            ok[0] = true;
+            if (!SaveBusy()) yield break;
+            float until = Time.realtimeSinceStartup + 60f;
+            Plugin.Verbose("Build: waiting for the save to finish");
+            while (SaveBusy())
+            {
+                string st = _saveLoad.ActiveStateName ?? "";
+                if (SceneGen != gen || st.IndexOf("Load", StringComparison.OrdinalIgnoreCase) >= 0 || st.IndexOf("Seed", StringComparison.OrdinalIgnoreCase) >= 0
+                    || st.IndexOf("Terrain", StringComparison.OrdinalIgnoreCase) >= 0 || Time.realtimeSinceStartup > until) { ok[0] = false; yield break; }
+                yield return null;
+            }
+            if (SceneGen != gen) ok[0] = false;
         }
 
         // occupants of destroyed cars (the game deletes cars beyond 5 km, the cleanup removes more) leave their signature behind
@@ -103,8 +155,12 @@ namespace Apocapatrol
         private IEnumerator Build(CarTemplate tpl, Vector3? at, Quaternion rot, bool menu, bool hold, Action<GameObject> onDone)
         {
             GameObject car = null;
+            int gen = SceneGen;
+            var saveOk = new bool[1];
             try
             {
+                yield return WaitForSave(gen, saveOk);   // the game is saving: spawn after it, never half-built into the save
+                if (!saveOk[0]) { Plugin.Verbose("Build of " + tpl.Name + " dropped: the game loaded or changed scene meanwhile"); yield break; }
                 Vector3 pos;
                 if (at.HasValue) pos = at.Value;
                 else
@@ -122,6 +178,9 @@ namespace Apocapatrol
                 car = UnityEngine.Object.Instantiate(body, pos, rot);
                 car.SetActive(true);
                 Paint.Apply(car, body.name);   // Textures/<body>.png or <texture>.png over the frame (e.g. poloska.png, junker.png)
+                // The car, its parts and its cargo go into the game's save lists only once the car is complete (Register.Commit below):
+                // a save during the build (autosave, the player) does not store a half-built car
+                Register.Defer(car);
                 Register.Name(car, body.name); Register.Add(car, true);
                 Plugin.Verbose("Car frame " + car.name + " at " + pos);
 
@@ -211,12 +270,18 @@ namespace Apocapatrol
                 if (Explode.IsWreck(car)) yield break;   // crew killed during the build: it already blew up
                 SetPartConditions(car);
                 FillParts(car);
-                Headlights(car, true);
+                if (DayLight.Dark) Headlights(car, true);   // raiders drive with their lights on at night
+                yield return WaitForSave(gen, saveOk);
+                if (car == null) yield break;
+                Plugin.Verbose("Registered " + car.name + " for saving: " + Register.Commit(car) + " object(s)");
 
                 yield return StartUp(car);
             }
             finally
             {
+                // stopped early (a wreck, an error): what exists is registered as before; a destroyed car's list is dropped
+                if (car != null) { if (Register.Pending(car)) Register.Commit(car); }
+                else Register.Discard(car);
                 if (menu) _busy = false;
                 if (onDone != null) onDone(car);
             }
@@ -1135,6 +1200,64 @@ namespace Apocapatrol
         }
     }
 
+    // =============================================================== daylight
+    // Is it dark outside? The game's sky is Azure[Sky] Dynamic Skybox (AzureTimeController; __GameManager__ [DayTime] reads its timeline
+    // from there): dark while the sun is below the horizon (GetSunElevation < 0), light again once it is clearly up (> 0.05) - a small
+    // hysteresis so the lights do not flicker at dawn. Without Azure: __GameManager__ [DayTime].Time, dark before 6:00 and from 19:30.
+    internal static class DayLight
+    {
+        private static UnityEngine.AzureSky.AzureTimeController _azure;
+        private static PlayMakerFSM _dayTime;
+        private static float _nextFind, _nextEval;
+        private static bool _dark, _known;
+
+        internal static void Reset() { _azure = null; _dayTime = null; _nextFind = 0f; _nextEval = 0f; _known = false; }
+
+        internal static bool Dark
+        {
+            get
+            {
+                if (_known && Time.unscaledTime < _nextEval) return _dark;
+                _nextEval = Time.unscaledTime + 2f;
+                try { Evaluate(); }
+                catch (Exception e) { Plugin.Log.LogWarning("DayLight: " + e.Message); _azure = null; _nextFind = Time.unscaledTime + 30f; }
+                return _dark;
+            }
+        }
+
+        private static void Evaluate()
+        {
+            if (_azure == null && Time.unscaledTime >= _nextFind)
+            {
+                _nextFind = Time.unscaledTime + 10f;
+                var go = GameObject.Find("Azure[Sky] Dynamic Skybox");
+                _azure = go != null ? go.GetComponent<UnityEngine.AzureSky.AzureTimeController>() : null;
+                if (_azure == null) _azure = UnityEngine.Object.FindObjectOfType<UnityEngine.AzureSky.AzureTimeController>();
+                if (_azure == null && (_dayTime == null || _dayTime.gameObject == null))
+                {
+                    _dayTime = null;
+                    var gm = GameObject.Find("__GameManager__");
+                    if (gm != null) foreach (var f in gm.GetComponents<PlayMakerFSM>()) if (f.FsmName == "DayTime") { _dayTime = f; break; }
+                }
+            }
+            bool was = _dark;
+            if (_azure != null)
+            {
+                float elevation = _azure.GetSunElevation();
+                _dark = _known && _dark ? elevation < 0.05f : elevation < 0f;
+                _known = true;
+            }
+            else if (_dayTime != null && _dayTime.Fsm.Initialized)
+            {
+                var t = _dayTime.FsmVariables.GetFsmFloat("Time");
+                if (t == null) return;
+                _dark = t.Value < 6f || t.Value >= 19.5f;
+                _known = true;
+            }
+            if (_known && was != _dark) Plugin.Verbose("DayLight: " + (_dark ? "dark" : "light") + (_azure != null ? " (sun elevation " + _azure.GetSunElevation().ToString("0.00") + ")" : " (DayTime fallback)"));
+        }
+    }
+
     // =============================================================== exit speed
     // The game lets the player leave a car only below 6 m/s: PlayerCamera [DriveUse] compares the car's speed against a literal 6 in
     // its inCar / over 2 / TooFast states (FloatCompare float2). A truck shoving the player's car keeps it above that for good, so the
@@ -1192,7 +1315,32 @@ namespace Apocapatrol
         private static GameObject _reg;
         private static PlayMakerArrayListProxy _cars, _items;
 
-        internal static void Invalidate() { _counterFsm = null; _counter = null; _reg = null; _cars = null; _items = null; }
+        internal static void Invalidate() { _counterFsm = null; _counter = null; _reg = null; _cars = null; _items = null; _pending.Clear(); }
+
+        // cars being built: what Add() would register for them (the car, its parts, its cargo) waits here until Commit
+        private static readonly Dictionary<GameObject, List<KeyValuePair<GameObject, bool>>> _pending = new Dictionary<GameObject, List<KeyValuePair<GameObject, bool>>>();
+
+        internal static void Defer(GameObject car) { if (car != null && !_pending.ContainsKey(car)) _pending[car] = new List<KeyValuePair<GameObject, bool>>(); }
+        internal static bool Pending(GameObject car) { return !ReferenceEquals(car, null) && _pending.Count > 0 && _pending.ContainsKey(car); }
+        internal static void Discard(GameObject car) { if (!ReferenceEquals(car, null)) _pending.Remove(car); }
+
+        // registers everything deferred for this car (objects destroyed meanwhile are skipped); returns the count
+        internal static int Commit(GameObject car)
+        {
+            List<KeyValuePair<GameObject, bool>> list;
+            if (ReferenceEquals(car, null) || !_pending.TryGetValue(car, out list)) return 0;
+            _pending.Remove(car);
+            int n = 0;
+            foreach (var kv in list) if (kv.Key != null) { AddNow(kv.Key, kv.Value); n++; }
+            return n;
+        }
+
+        private static GameObject PendingOwner(GameObject go)
+        {
+            if (_pending.Count == 0 || go == null) return null;
+            for (var t = go.transform; t != null; t = t.parent) if (_pending.ContainsKey(t.gameObject)) return t.gameObject;
+            return null;
+        }
 
         private static FsmInt Counter()
         {
@@ -1248,7 +1396,15 @@ namespace Apocapatrol
             }
         }
 
-        internal static void Add(GameObject go, bool isVehicle)
+        // owner = the car the object belongs to when it is not parented under it yet (cargo before it is locked in)
+        internal static void Add(GameObject go, bool isVehicle, GameObject owner = null)
+        {
+            var key = owner != null && _pending.ContainsKey(owner) ? owner : PendingOwner(go);
+            if (key != null) { _pending[key].Add(new KeyValuePair<GameObject, bool>(go, isVehicle)); return; }
+            AddNow(go, isVehicle);
+        }
+
+        private static void AddNow(GameObject go, bool isVehicle)
         {
             if (Registry() == null) return;
             var list = isVehicle ? _cars : _items;

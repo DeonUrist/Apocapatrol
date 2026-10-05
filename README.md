@@ -1,4 +1,8 @@
-# Apocapatrol 2.0.7
+# Apocapatrol 2.0.8
+
+2.0.8: raider cars only switch their headlights on when it is dark (the sun below the horizon) and switch them off again at dawn.
+A save never stores a half-built raider car: spawns wait while the game saves, a car joins the save only once it is complete, and
+automatic spawns hold back when an Apocasaver autosave is about to run.
 
 2.0.7 (review fixes): the exit-speed limit finds the player camera again (PlayerCameraHolder/PlayerCamera), so you can leave a car below
 30 km/h as intended; a car being built when a save loads no longer throws; loot ids compare case-insensitively in the editor; the

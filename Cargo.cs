@@ -61,7 +61,7 @@ namespace Apocapatrol
                 go.SetActive(true); var bounds = Bounds(go);
                 float y = SeatSurface(car, p) + (go.transform.position.y - bounds.min.y) + 0.02f;
                 go.transform.position = new Vector3(p.x, y, p.z);
-                Register.Name(go, slot.Prefab.name); Register.Add(go, false); Lock(go, lockGo); items.Add(go);
+                Register.Name(go, slot.Prefab.name); Register.Add(go, false, car); Lock(go, lockGo); items.Add(go);
             }
         }
 
@@ -144,7 +144,7 @@ namespace Apocapatrol
                     go.transform.position = t.TransformPoint(new Vector3(lx, baseY + 0.01f, lz) + pivotOffsetLocal);
                     placedPos.Add(new Vector3(lx, baseY, lz)); placedR.Add(r); placedTop.Add(baseY + h + 0.01f);
 
-                    Register.Name(go, slot.Prefab.name); Register.Add(go, false);
+                    Register.Name(go, slot.Prefab.name); Register.Add(go, false, car);
                     Lock(go, t);
                     items.Add(go);
                     placed++;

@@ -230,7 +230,7 @@ namespace Apocapatrol
                 var data = new PatrolSaveData { version = SchemaVersion, saveFile = Path.GetFileName(slot), worldSeed = seed, convoyCooldown = Convoy.CurrentCooldown() };
                 var cars = new List<PatrolCarData>();
                 foreach (var marker in PatrolMarker.All)
-                    if (marker != null) cars.Add(marker.Snapshot());
+                    if (marker != null && !Register.Pending(marker.gameObject)) cars.Add(marker.Snapshot());   // still being built: not in the game's save either
                 data.cars = cars.ToArray();
                 var bytes = Serialize(data);
                 AtomicWrite(path, bytes);
@@ -294,7 +294,7 @@ namespace Apocapatrol
                 {
                     RepairFrame(kv.Key, kv.Value.bodyPrefab); Paint.Apply(kv.Key, kv.Value.bodyPrefab);
                     var crew = kv.Key.GetComponent<Crew>();
-                    if (crew != null && crew.CrewAlive && !Explode.IsWreck(kv.Key)) Patrol.Headlights(kv.Key, true);   // raiders drive with their lights on
+                    if (crew != null && crew.CrewAlive && !Explode.IsWreck(kv.Key)) Patrol.Headlights(kv.Key, DayLight.Dark);   // lights on at night, off by day
                 }
         }
 
