@@ -239,7 +239,8 @@ namespace Apocapatrol
                 if (tpl.ReleaseHandbrake) Handbrake(car, false);
                 List<GameObject> cargo = null;
                 string lootKey = null;
-                var loot = tpl.IsTruck ? (tpl.SpawnLoot == null ? EditorStore.RollTruckLoot(() => UnityEngine.Random.value, tpl.SpawnCargoOptions) : null) : EditorStore.Loot(false, tpl.LootPreset);
+                // a truck: its fixed cargo option (template "E" in the editor) when it has one, else a roll among the convoy's allowed cargo
+                var loot = tpl.IsTruck ? (tpl.SpawnLoot == null ? (EditorStore.Loot(true, tpl.LootPreset) ?? EditorStore.RollTruckLoot(() => UnityEngine.Random.value, tpl.SpawnCargoOptions)) : null) : EditorStore.Loot(false, tpl.LootPreset);
                 var rolled = tpl.SpawnLoot ?? (loot != null ? loot.Roll(() => UnityEngine.Random.value) : new Dictionary<string, int>());
                 lootKey = tpl.SpawnCargoKey ?? EditorStore.CargoTexture(rolled, loot != null ? loot.TextureKey : "");
                 if (rolled.Count > 0)

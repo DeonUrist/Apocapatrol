@@ -141,6 +141,52 @@ namespace Apocapatrol
             IconImage(new Rect(r.center.x - 8, r.center.y - 8, 16, 16), name, tint);
             GUI.enabled = previous; return hit;
         }
+        // a small inline text button ("rename", "E"): Small font, muted, accent on hover, boxed when `boxed`; vertically centred in r
+        internal static bool TextButton(Rect r, string text, bool boxed = false, bool enabled = true)
+        {
+            bool previous = GUI.enabled; GUI.enabled = previous && enabled;
+            bool hover = GUI.enabled && r.Contains(Event.current.mousePosition);
+            bool hit = GUI.Button(r, GUIContent.none, GUIStyle.none);
+            if (boxed) Panel(r, hover ? Selected : Field, hover ? Accent : Line);
+            var ink = !enabled ? new Color(Muted.r, Muted.g, Muted.b, .45f) : hover ? Accent : Muted;
+            ButtonLabel(r, text, Small, ink, TextAnchor.MiddleCenter);
+            GUI.enabled = previous; return hit;
+        }
+        internal static float TextWidth(string text, GUIStyle style) { return style.CalcSize(new GUIContent(text)).x; }
+
+        // two stacked triangles (up over down) in one column; returns -1 (up), +1 (down) or 0
+        internal static int Reorder(Rect column, bool canUp, bool canDown)
+        {
+            float half = column.height / 2;
+            var up = new Rect(column.x, column.y, column.width, half); var down = new Rect(column.x, column.y + half, column.width, half);
+            int result = 0;
+            if (TriangleButton(up, true, canUp)) result = -1;
+            if (TriangleButton(down, false, canDown)) result = 1;
+            return result;
+        }
+        private static bool TriangleButton(Rect r, bool up, bool enabled)
+        {
+            bool previous = GUI.enabled; GUI.enabled = previous && enabled;
+            bool hit = GUI.Button(r, GUIContent.none, GUIStyle.none);
+            bool hover = GUI.enabled && r.Contains(Event.current.mousePosition);
+            var tint = !enabled ? new Color(Muted.r, Muted.g, Muted.b, .35f) : hover ? Accent : Text;
+            var old = GUI.color; GUI.color = tint; GUI.DrawTexture(new Rect(r.center.x - 6, r.center.y - 4, 12, 8), Triangle(up)); GUI.color = old;
+            GUI.enabled = previous; return hit;
+        }
+        private static Texture2D _triUp, _triDown;
+        private static Texture2D Triangle(bool up)
+        {
+            var t = up ? _triUp : _triDown; if (t != null) return t;
+            const int W = 12, H = 8;
+            t = new Texture2D(W, H, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < H; y++)
+            {
+                // row 0 is the bottom of the texture; the up triangle is widest at the bottom
+                float rowFromBase = up ? y : H - 1 - y, halfWidth = (W / 2f) * (1f - rowFromBase / H);
+                for (int x = 0; x < W; x++) { float d = Mathf.Abs(x + .5f - W / 2f); t.SetPixel(x, y, new Color(1, 1, 1, Mathf.Clamp01(halfWidth - d + .5f))); }
+            }
+            t.Apply(); if (up) _triUp = t; else _triDown = t; return t;
+        }
         internal static bool Dropdown(Rect r, string text)
         {
             bool hit = GUI.Button(r, GUIContent.none, GUIStyle.none); Panel(r, Field, r.Contains(Event.current.mousePosition) && GUI.enabled ? Accent : Line);
@@ -207,6 +253,8 @@ namespace Apocapatrol
         private Vector2 _scroll;
         internal void Open(Rect anchor, List<KeyValuePair<string, string>> options, string selected, Action<string> setter, float bottom)
         {
+            var first = options.Where(o => string.IsNullOrEmpty(o.Key) || string.Equals(o.Value, "None", StringComparison.OrdinalIgnoreCase) || o.Value.StartsWith("Convoy cargo", StringComparison.OrdinalIgnoreCase)).ToList();
+            options = first.Concat(options.Except(first).OrderBy(o => o.Value, StringComparer.OrdinalIgnoreCase)).ToList();
             _pending = () =>
             {
                 _anchor = anchor; _options = options; _selected = selected; _setter = setter; _scroll = Vector2.zero;

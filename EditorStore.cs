@@ -105,7 +105,7 @@ namespace Apocapatrol
             if (convoy) foreach (var truck in list.Where(t => t.IsTruck)) truck.SpawnCargoOptions = (group.AllowedCargo ?? new List<string>()).ToArray();
             if (convoy && group.UniformCargo)
             {
-                var trucks = list.Where(t => t.IsTruck && t.SpawnLoot == null).ToList();
+                var trucks = list.Where(t => t.IsTruck && t.SpawnLoot == null && Loot(true, t.LootPreset) == null).ToList();   // a fixed cargo option stays
                 var shared = trucks.Count > 0 ? RollTruckLoot(random, group.AllowedCargo) : null;
                 var roll = shared != null ? shared.Roll(random) : new Dictionary<string, int>();
                     foreach (var truck in trucks) { truck.SpawnLoot = new Dictionary<string, int>(roll, StringComparer.OrdinalIgnoreCase); truck.SpawnCargoKey = CargoTexture(roll, shared != null ? shared.TextureKey : ""); }

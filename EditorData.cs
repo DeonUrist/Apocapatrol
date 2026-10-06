@@ -69,6 +69,7 @@ namespace Apocapatrol
     {
         public List<SpawnGroup> Patrols = new List<SpawnGroup>(), Convoys = new List<SpawnGroup>();
         public List<LootProfile> CarLoot = new List<LootProfile>(), TruckLoot = new List<LootProfile>();
+        public List<string> TemplateOrder = new List<string>();   // the template lists' order in the editor (names; unlisted ones follow, defaults first, by name)
 
         public static EditorData FromJson(string text)
         {
@@ -77,6 +78,8 @@ namespace Apocapatrol
             var result = new EditorData();
             result.Patrols = Groups(root, "patrols"); result.Convoys = Groups(root, "convoys");
             result.CarLoot = Loot(root, "carLoot"); result.TruckLoot = Loot(root, "truckLoot");
+            object order;
+            if (root.TryGetValue("templateOrder", out order) && order is List<object>) result.TemplateOrder = ((List<object>)order).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             foreach (var g in result.Convoys.Where(g => g.AllowedCargo == null))
                 g.AllowedCargo = g.Id.EndsWith("-truck", StringComparison.OrdinalIgnoreCase) ? new List<string> { "truck-empty" } : result.TruckLoot.Where(p => p.Id != "truck-empty").Select(p => p.Id).ToList();
             return result;
@@ -149,7 +152,7 @@ namespace Apocapatrol
         {
             Func<SpawnGroup, object> group = g => StoreJson.Object("id", g.Id, "name", g.Name, "minKm", g.MinKm, "minBosses", g.MinBosses, "chance", g.Chance, "uniformCargo", g.UniformCargo, "templates", g.Templates, "allowedCargo", g.AllowedCargo);
             Func<LootProfile, object> loot = p => StoreJson.Object("id", p.Id, "name", p.Name, "textureKey", p.TextureKey, "default", p.Default, "spawnChance", p.SpawnChance, "items", p.Items.Select(i => StoreJson.Object("id", i.Id, "chance", i.Chance)).ToList());
-            return StoreJson.Write(StoreJson.Object("schema", 2, "patrols", Patrols.Select(group).ToList(), "convoys", Convoys.Select(group).ToList(), "carLoot", CarLoot.Select(loot).ToList(), "truckLoot", TruckLoot.Select(loot).ToList()));
+            return StoreJson.Write(StoreJson.Object("schema", 2, "patrols", Patrols.Select(group).ToList(), "convoys", Convoys.Select(group).ToList(), "carLoot", CarLoot.Select(loot).ToList(), "truckLoot", TruckLoot.Select(loot).ToList(), "templateOrder", TemplateOrder));
         }
     }
 

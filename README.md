@@ -1,4 +1,8 @@
-# Apocapatrol 2.0.12
+# Apocapatrol 2.0.13
+
+2.0.13 editor: a small **rename** next to every patrol, convoy and loot option name; an **E** next to every template name edits its
+driver, passenger and car loot (trucks: a fixed cargo option, or the convoy's rolled cargo); up/down triangles reorder patrols, convoys,
+car templates and truck templates (the order is kept in PatrolsAndLoot.json); dropdown lists are sorted alphabetically.
 
 2.0.12: motorcycle riders (Motorcycle, Halfbreed) hold their arms apart on the handlebar grips instead of together.
 
