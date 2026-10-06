@@ -1,4 +1,6 @@
-# Apocapatrol 2.5.0
+# Apocapatrol 2.5.1
+
+2.5.1: Warboy_Armored_Tyrant ships with its Warboy's roof spot (the saved riderPos).
 
 2.5.0: the **parking hold** of 2.4.0 is gone - it left some cars unable to move. The mod no longer touches a car's physics or wheels
 at all; the one stability rule left is the **centre of mass**: a car with a suspension lift kit carries it 0.3 m lower, plus 1.5 x any
