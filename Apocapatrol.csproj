@@ -47,6 +47,8 @@
     <Copy SourceFiles="$(OutDir)$(AssemblyName).dll" DestinationFolder="$(GameDir)\BepInEx\plugins\Apocapatrol" />
     <ItemGroup><TextureFiles Include="Textures\**\*" /></ItemGroup>
     <Copy SourceFiles="@(TextureFiles)" DestinationFolder="$(GameDir)\BepInEx\plugins\Apocapatrol\Textures" />
+    <ItemGroup><SoundFiles Include="Sounds\**\*" /></ItemGroup>
+    <Copy SourceFiles="@(SoundFiles)" DestinationFolder="$(GameDir)\BepInEx\plugins\Apocapatrol\Sounds" />
     <ItemGroup><ThemeFiles Include="theme\game\*" /><LedgerFiles Include="theme\ledger\*" /><BaseFiles Include="BaseTemplates\*.json" /></ItemGroup>
     <Copy SourceFiles="@(ThemeFiles)" DestinationFolder="$(GameDir)\BepInEx\plugins\Apocapatrol\theme\game" />
     <Copy SourceFiles="@(LedgerFiles)" DestinationFolder="$(GameDir)\BepInEx\plugins\Apocapatrol\theme\ledger" />

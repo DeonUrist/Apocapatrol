@@ -1,3 +1,10 @@
+# Apocapatrol 2.1.1
+
+2.1.1 blast-lance riders: they only throw when a flat throw really reaches you (35 m at most) and aim where you will be; when the
+crew bails out (or the car is abandoned, taken or blows up) the rider jumps off and fights on foot; drive close to a rider and - always
+when it is wounded, otherwise with a 10 % chance - it screams "Witness me!" and leaps at your car, exploding on impact (aimed ahead).
+`[Debug] WitnessMeChance` (test setting, will be removed) sets that chance. Needs the `Sounds` folder next to the DLL.
+
 # Apocapatrol 2.1.0
 
 2.1.0 (prototype): **Blast-lance riders** - a template (cars only, no trucks or motorcycles) can carry a raider crouching on the roof who

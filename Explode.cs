@@ -45,7 +45,7 @@ namespace Apocapatrol
             bool truck = IsTruck(marker.BodyPrefab);
             var crew = car.GetComponent<Crew>();
             if (crew != null) crew.OnExploded();
-            if (marker.Rider != null && Patrol.GetHealth(marker.Rider) != 0f) { Patrol.BailOut(car, marker.Rider, marker.RiderPrefab, 0f); marker.Rider = null; }
+            if (marker.Rider != null) { var rg = marker.Rider.GetComponent<RiderGuard>(); if (rg != null) rg.JumpOff("the car blows up"); marker.Rider = null; }
             Nwh.SetInput(car, 0f, 0f, truck ? 1f : 0f);
             if (truck) { Nwh.StopEngine(car); Patrol.Handbrake(car, true); Nwh.SetHandbrake(car, 1f); }
 
