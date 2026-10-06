@@ -1,4 +1,7 @@
-# Apocapatrol 2.0.14
+# Apocapatrol 2.0.15
+
+2.0.15 fixes 2.0.13/2.0.14: templates saved or edited with those versions lost their driver, passenger and rams lines (the car spawned
+empty). Re-save or press E on such a template once to put the crew back.
 
 2.0.14: a raider car whose template has a cassette in the radio blasts it at full volume from the spawn until you switch the radio
 off. [General] Raider music, on by default.

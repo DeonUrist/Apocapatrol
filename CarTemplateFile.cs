@@ -36,7 +36,8 @@ namespace Apocapatrol
             var sb = new StringBuilder();
             sb.Append("{\n");
             P(sb, "schema", schema); P(sb, "name", name); P(sb, "body", body); P(sb, "kind", kind);
-            if (!CargoTruck || !string.IsNullOrEmpty(lootPreset)) P(sb, "lootPreset", lootPreset);   // a truck's lootPreset = a fixed cargo option (editor "E") P(sb, "rams", rams); P(sb, "driver", driver); P(sb, "passenger", passenger);
+            if (!CargoTruck || !string.IsNullOrEmpty(lootPreset)) P(sb, "lootPreset", lootPreset);   // a truck's lootPreset = a fixed cargo option (editor "E")
+            P(sb, "rams", rams); P(sb, "driver", driver); P(sb, "passenger", passenger);
 
             sb.Append("    \"bumpers\": [");
             for (int i = 0; i < (bumpers ?? new string[0]).Length; i++) { if (i > 0) sb.Append(", "); Json.Str(sb, bumpers[i]); }
