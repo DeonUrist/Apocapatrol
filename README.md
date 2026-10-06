@@ -1,5 +1,7 @@
 # Apocapatrol 2.6.0
 
+**Requires Apocaplayer and Part Adjuster Tools** - see Requirements below.
+
 2.6.0: `[Scaling] PatrolSizePercent` is back for weaker PCs: below 100 every patrol and convoy loses cars at random down to that share
 (rounded down, never below one car; a convoy keeps all of its trucks and only its escort shrinks).
 
@@ -226,9 +228,20 @@ Crew leaving Rustcargo, Rustchief, or Rustallion cabs use twice the sideways exi
 Body textures are selected by the **vehicle body**, never by template name. Truck container textures follow the **loot contents**.
 Existing paint files under `Textures` still work. Car crews and their state remain in the game's save file.
 
+## Requirements
+
+Apocapatrol needs two other mods installed, both from the same author:
+
+- **Apocaplayer** (`DeonUrist/Apocaplayer`) - the player body and animation set the crews are built on.
+- **Part Adjuster Tools** (`DeonUrist/PartAdjusterTools`, plugin `PartAdjustment`) - the suspension lift kit adjustment and the centre-of-mass rule
+  the templates rely on.
+
+Installing through **Apocasetter** pulls both in automatically (the index lists them as required). Optional: Apocatremors (AI cars rouse its
+ambushes), MotorcycleMod (shares its bike chassis if present).
+
 ## Installation and build
 
-Install BepInEx 5, then place the **Apocapatrol** folder under `BepInEx/plugins`. It contains the DLL, BaseTemplates, Textures, Sounds and theme.
+Install BepInEx 5 and the two required mods above, then place the **Apocapatrol** folder under `BepInEx/plugins`. It contains the DLL, BaseTemplates, Textures, Sounds and theme.
 Do not leave a second Apocapatrol DLL in the plugins root. Apocasetter is recommended for bindings and general settings.
 
 `dotnet build Apocapatrol.csproj -c Release` builds and deploys the DLL, textures, and UI theme to the configured game directory.
