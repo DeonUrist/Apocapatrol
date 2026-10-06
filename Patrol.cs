@@ -272,6 +272,7 @@ namespace Apocapatrol
                 SetPartConditions(car);
                 FillParts(car);
                 if (DayLight.Dark) Headlights(car, true);   // raiders drive with their lights on at night
+                RaiderMusic(car);                            // a cassette in the template's radio: on, full volume ([General] Raider music)
                 yield return WaitForSave(gen, saveOk);
                 if (car == null) yield break;
                 Plugin.Verbose("Registered " + car.name + " for saving: " + Register.Commit(car) + " object(s)");
@@ -325,6 +326,39 @@ namespace Apocapatrol
                 else if (f.FsmName == "Headlight") { f.SendEvent(on ? "HeadlightsON" : "HeadlightsOFF"); n++; }
             }
             Plugin.Verbose("Lights " + (on ? "on" : "off") + ": " + car.name + " (" + n + " light FSM(s))");
+        }
+
+        // A radio with a cassette in it (the cassette's CheckTag FSM has set the radio's Music.music clip and started it, the OnOff FSM
+        // holds the pitch at 0 = "off"): full volume, then switched on the way the player does it - "useDoor" on the PlayStop [Play]
+        // FSM (click sound, OnOff Activate = pitch 1, Play/Stop swap, so one click of the player stops it).
+        internal static void RaiderMusic(GameObject car)
+        {
+            if (car == null || Plugin.RaiderMusic == null || !Plugin.RaiderMusic.Value) return;
+            int n = 0;
+            foreach (var music in car.GetComponentsInChildren<PlayMakerFSM>(true))
+            {
+                if (music == null || music.FsmName != "Music" || music.Fsm == null || !music.Fsm.Initialized) continue;
+                var radio = music.gameObject;
+                var src = radio.GetComponent<AudioSource>();
+                if (src == null) continue;
+                var clipVar = music.FsmVariables.GetFsmObject("music");
+                var clip = (clipVar != null ? clipVar.Value as AudioClip : null) ?? src.clip;
+                if (clip == null) continue;   // no cassette in this radio
+                if (src.clip != clip) src.clip = clip;
+                src.loop = true; src.volume = 1f;
+                if (!src.isPlaying) src.Play();
+                var knob = FindChild(radio.transform, "Volume");
+                if (knob != null) foreach (var f in knob.GetComponents<PlayMakerFSM>()) if (f.FsmName == "Volume") { var v = f.FsmVariables.GetFsmFloat("audioVolume"); if (v != null) v.Value = 1f; }
+                PlayMakerFSM play = null, onOff = null;
+                var ps = FindChild(radio.transform, "PlayStop");
+                if (ps != null) foreach (var f in ps.GetComponents<PlayMakerFSM>()) if (f.FsmName == "Play") { play = f; break; }
+                foreach (var f in radio.GetComponents<PlayMakerFSM>()) if (f.FsmName == "OnOff") { onOff = f; break; }
+                if (play != null && play.enabled && play.Fsm.Initialized) play.SendEvent("useDoor");
+                else if (onOff != null) { onOff.enabled = true; onOff.SendEvent("Activate"); src.pitch = 1f; }
+                else src.pitch = 1f;
+                n++;
+            }
+            if (n > 0) Plugin.Verbose("Raider music: " + car.name + " plays " + n + " cassette(s)");
         }
 
         internal static Vector3 DriverSeatPos(GameObject car)

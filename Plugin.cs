@@ -19,7 +19,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.0.13";
+        public const string VERSION = "2.0.14";
 
         internal static ManualLogSource Log;
 
@@ -56,7 +56,7 @@ namespace Apocapatrol
         internal static ConfigEntry<float> ExplodedLootPercent;
         // [AI]
         internal static ConfigEntry<bool> AiInvertSteering, AiOverlay, CustomPaintjobs;
-        internal static ConfigEntry<bool> SpawnWarning;
+        internal static ConfigEntry<bool> SpawnWarning, RaiderMusic;
         internal static ConfigEntry<float> AiDriveByOffset;
         internal static ConfigEntry<float> AiThrottle, AiLeadTime, AiCommitSeconds, AiSteerRate, AiSteerAngle, AiMaxSteerAtSpeed, AiTurnSafeSpeed,
             AiRamDistance, AiPassWidth, AiRunOutMeters, AiRunOutMaxSeconds, AiReverseSeconds, AiReverseThrottle, AiStuckSeconds,
@@ -166,6 +166,9 @@ namespace Apocapatrol
             SpawnWarning = Config.Bind("General", "SpawnWarning", true,
                 "When raiders spawn (an automatic patrol or convoy, or a test spawn from the editor) a red warning appears top left for a few " +
                 "seconds: \"You hear a sound of distant engines\". Template spawns do not show it. Off = no warning");
+            RaiderMusic = Config.Bind("General", "Raider music", true,
+                "A raider car built from a template that has a cassette in its radio plays it at full volume from the moment it spawns, " +
+                "until you switch the radio off. Off = the cassette sits in the radio, silent, as in a parked car");
 
             // ---- the settings players see (Denis, 1.8.0): [Scaling], [Combat], [Debug]. Everything else is fixed at the defaults below.
             AudioVoices = Config.Bind("Scaling", "AudioVoices", 64, new ConfigDescription(

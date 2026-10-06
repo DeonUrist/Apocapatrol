@@ -1,4 +1,7 @@
-# Apocapatrol 2.0.13
+# Apocapatrol 2.0.14
+
+2.0.14: a raider car whose template has a cassette in the radio blasts it at full volume from the spawn until you switch the radio
+off. [General] Raider music, on by default.
 
 2.0.13 editor: a small **rename** next to every patrol, convoy and loot option name; an **E** next to every template name edits its
 driver, passenger and car loot (trucks: a fixed cargo option, or the convoy's rolled cargo); up/down triangles reorder patrols, convoys,
