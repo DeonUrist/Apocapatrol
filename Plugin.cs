@@ -19,7 +19,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.2.2";
+        public const string VERSION = "2.2.3";
 
         internal static ManualLogSource Log;
 
@@ -56,8 +56,8 @@ namespace Apocapatrol
         internal static ConfigEntry<float> ExplodedLootPercent;
         // [AI]
         internal static ConfigEntry<bool> AiInvertSteering, AiOverlay, CustomPaintjobs;
-        internal static ConfigEntry<bool> SpawnWarning, RaiderMusic, RiderLances, HideFsmWarnings, TurretSpotEditor;
-        internal static ConfigEntry<float> RiderRange, RiderIntervalMin, RiderIntervalMax, RiderLanceSpeed, RiderMaxThrowAngle, RiderJumpRange, WitnessMeChance, RiderLeapSpeed, RiderBlastDamage, RiderBlastRadius, TurretThigh, TurretKnee, TurretHipHeight;
+        internal static ConfigEntry<bool> SpawnWarning, RaiderMusic, RiderLances, HideFsmWarnings, TurretSpotEditor, FuryRoad;
+        internal static ConfigEntry<float> RiderRange, RiderIntervalMin, RiderIntervalMax, RiderLanceSpeed, RiderMaxThrowAngle, RiderJumpRange, WitnessMeChance, RiderLeapSpeed, RiderBlastDamage, RiderBlastRadius, TurretThigh, TurretKnee, TurretHipHeight, RiderLeapReachPercent, RiderBailRange;
         internal static ConfigEntry<string> RiderLanceOffset, RiderLanceRotation;
         internal static void SaveConfig() { try { _instance.Config.Save(); } catch (Exception e) { Log.LogWarning("Config save: " + e.Message); } }
         private static Plugin _instance;
@@ -115,6 +115,8 @@ namespace Apocapatrol
                 {
                     new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("General", "AudioVoices"), AudioVoices),
                     new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Self-destruct", "SelfDestructingCars"), SelfDestruct),
+                    new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Scaling", "SelfDestruct"), SelfDestruct),   // 2.2.3: -> [General]
+                    new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Convoy spawner", "Enabled"), ConvoyEnabled),
                 };
                 int n = 0;
                 foreach (var mv in moves)
@@ -125,7 +127,7 @@ namespace Apocapatrol
                     mv.Value.SetSerializedValue(old);
                     n++;
                 }
-                if (n > 0) Log.LogInfo("Config: carried " + n + " setting(s) over to [Scaling]");
+                if (n > 0) Log.LogInfo("Config: carried " + n + " moved setting(s) over");
             }
             catch (Exception e) { Log.LogWarning("Config migration: " + e.Message); }
         }
@@ -164,6 +166,17 @@ namespace Apocapatrol
             CarTemplates.Init(Info.Location);
             bool exposePose = PoseConfigurationEnabled(Config.ConfigFilePath);
 
+            // ---- [General], top to bottom as the Mods window lists them (2.2.3): on/off, Fury Road, self-destruct, then the rest
+            ConvoyEnabled = Config.Bind("General", "Enabled", true,
+                "Raider patrols and convoys spawn on their own while you play. Off = no automatic spawns at all (the editor's test spawns still work)");
+            FuryRoad = Config.Bind("General", "Fury Road", false,
+                "Every patrol and convoy group can spawn from the start: their minimum distance travelled and minimum boss kills are ignored. " +
+                "Off = groups unlock with distance and bosses as set in the editor");
+            SelfDestruct = Config.Bind("General", "SelfDestruct", true,
+                "A raider car that is fully vacated (crew dead, bailed out, or the last passenger got out beside a dead driver) explodes: the frame " +
+                "goes black (trucks stay a lootable wreck), every part pops off with 0 condition and the dead chassis cannot be entered, " +
+                "fuelled or fitted with parts any more; it is removed once you are 1000 m away. Off = vacated cars stay as they are now. " +
+                "A car you have sat in never explodes");
             Config.Bind("General", "Apocasetter", true,
                 "Show this mod in the Apocasetter Mods menu.\n" +
                 "To expose seat offsets, shared pose settings and all per-human controls, uncomment the next line and restart:\n" +
@@ -171,9 +184,6 @@ namespace Apocapatrol
             SpawnWarning = Config.Bind("General", "SpawnWarning", true,
                 "When raiders spawn (an automatic patrol or convoy, or a test spawn from the editor) a red warning appears top left for a few " +
                 "seconds: \"You hear a sound of distant engines\". Template spawns do not show it. Off = no warning");
-            HideFsmWarnings = Config.Bind("General", "Hide missing-FSM warnings", true,
-                "The game's own FSMs constantly look for an \"ID\" FSM on things that have none, and each miss prints \"Could not find FSM: ID on " +
-                "GameObject: ...\" to the log. On = those warnings are not printed (the lookup works the same). Off = vanilla");
             RaiderMusic = Config.Bind("General", "Raider music", true,
                 "A raider car built from a template that has a cassette in its radio plays it at full volume from the moment it spawns, " +
                 "until you switch the radio off. Off = the cassette sits in the radio, silent, as in a parked car");
@@ -184,11 +194,6 @@ namespace Apocapatrol
                 "more: every shot and every hit is a sound, and beyond the limit sounds - the player's own shots too - cut out. 64 is a good value; " +
                 "0 leaves the game's own setting. Applied at game start (restart the game after a change)",
                 new AcceptableValueList<int>(0, 32, 48, 64, 96, 128)));
-            SelfDestruct = Config.Bind("Scaling", "SelfDestruct", true,
-                "A raider car that is fully vacated (crew dead, bailed out, or the last passenger got out beside a dead driver) explodes: the frame " +
-                "goes black (trucks stay a lootable wreck), every part pops off with 0 condition and the dead chassis cannot be entered, " +
-                "fuelled or fitted with parts any more; it is removed once you are 1000 m away. Off = vacated cars stay as they are now. " +
-                "A car you have sat in never explodes");
             MinConvoyCooldown = Config.Bind("Scaling", "MinConvoyCooldown", 5f, new ConfigDescription(
                 "Shortest time between two raider spawns (minutes; 0 = can follow immediately). Each wait is rolled between this and " +
                 "MaxConvoyCooldown, a little shorter at high heat. A change applies from the next roll",
@@ -277,7 +282,9 @@ namespace Apocapatrol
             RiderJumpRange = H.Bind("Combat", "RiderJumpRange", 15f, new ConfigDescription("\"Witness me!\": the rider leaps when your car is closer than this, m", new AcceptableValueRange<float>(3f, 30f)));
             RiderIntervalMin = H.Bind("Combat", "RiderIntervalMin", 5f, new ConfigDescription("Shortest pause between two of a rider's throws, s", new AcceptableValueRange<float>(1f, 60f)));
             RiderIntervalMax = H.Bind("Combat", "RiderIntervalMax", 9f, new ConfigDescription("Longest pause between two of a rider's throws, s", new AcceptableValueRange<float>(1f, 120f)));
-            RiderLeapSpeed = H.Bind("Combat", "RiderLeapSpeed", 16f, new ConfigDescription("\"Witness me!\": the leap's ground speed relative to the rider's car, m/s - a long, flat jump, no lob", new AcceptableValueRange<float>(5f, 40f)));
+            RiderLeapReachPercent = H.Bind("Combat", "RiderLeapReachPercent", 80f, new ConfigDescription("\"Witness me!\": the Warboy only leaps at a car within this % of his longest jump (RiderLeapSpeed x 1.2 s, the speeds of both cars counted)", new AcceptableValueRange<float>(10f, 100f)));
+            RiderBailRange = H.Bind("Combat", "RiderBailRange", 6f, new ConfigDescription("A Warboy on a motorcycle who cannot turn to you jumps off when you are closer than this, m", new AcceptableValueRange<float>(1f, 30f)));
+            RiderLeapSpeed = H.Bind("Combat", "RiderLeapSpeed", 11f, new ConfigDescription("\"Witness me!\": the leap's ground speed relative to the rider's car, m/s - a long, flat jump, no lob", new AcceptableValueRange<float>(5f, 40f)));
             RiderBlastDamage = H.Bind("Combat", "RiderBlastDamage", 60f, new ConfigDescription("\"Witness me!\": damage of the rider's blast at its centre (in your car too); falls to a third at the edge", new AcceptableValueRange<float>(0f, 300f)));
             RiderBlastRadius = H.Bind("Combat", "RiderBlastRadius", 7f, new ConfigDescription("\"Witness me!\": reach of the rider's blast, m (damage and the shove of your car)", new AcceptableValueRange<float>(1f, 20f)));
             TurretThigh = H.Bind("Combat", "TurretThigh", 80f, new ConfigDescription("Crouched human turret gunner: thigh angle forward, degrees", new AcceptableValueRange<float>(0f, 150f)));
@@ -406,7 +413,7 @@ namespace Apocapatrol
             if (!exposePose) ArmPoseProfile.RemoveStoredConfiguration(Config);
 
             const string CS = "Convoy spawner";
-            ConvoyEnabled = H.Bind(CS, "Enabled", true, "Enemy cars and convoys spawn on their own while you play (the Debug menu buttons work regardless)");
+            HideFsmWarnings = H.Bind("General", "Hide missing-FSM warnings", true, "The game's \"Could not find FSM: ID on GameObject: ...\" warnings are not printed (QuietFsm)");
             MaxHeat = H.Bind(CS, "MaxHeat", 3f, new ConfigDescription(
                 "Upper limit of the heat (3 = 300 %). Below 100 % the heat is how complete a group is; above 100 % it only raises the chances of " +
                 "shortens the cooldown a little; group definitions, cargo and exact rosters are configured in the editor", new AcceptableValueRange<float>(0f, 5f)));

@@ -76,18 +76,19 @@ namespace Apocapatrol
             return go;
         }
 
-        // 2.2.2: a turret body never touches anything physically while it rides - no contact can shove the vehicle (a bike was pushed
-        // backwards by its sitter: weapon props the game toggles on drop their per-pair collision ignores). Every Rigidbody of the body is
-        // kinematic with collision detection off; colliders the game switches on later attach to the root and inherit it. Raycasts and
-        // sensors still find the colliders, so it can be shot as before. (Jumping off / landing: the flight uses its own casts and the landed
-        // mob is a fresh object, so nothing has to be undone.)
+        // A turret body never touches anything physically while it rides - no contact can shove the vehicle (a bike was pushed backwards
+        // by its sitter: weapon props the game toggles on drop their per-pair collision ignores). 2.2.2 switched detectCollisions off, which
+        // also hid the body from raycasts: shots went through it into the driver. 2.2.3: every collider of the body (inactive props included)
+        // is a trigger instead - no contacts, but the game's raycasts hit triggers (QueriesHitTriggers), so it is shot as before. Every
+        // Rigidbody kinematic. The body is only ever replaced (a fresh mob jumps off, the game's carcass on death), never made solid again.
         internal static void NoContacts(GameObject go)
         {
-            foreach (var rb in go.GetComponentsInChildren<Rigidbody>(true))
+            foreach (var rb in go.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) rb.isKinematic = true;
+            foreach (var c in go.GetComponentsInChildren<Collider>(true))
             {
-                if (rb == null) continue;
-                rb.isKinematic = true;
-                rb.detectCollisions = false;
+                if (c == null || c is TerrainCollider) continue;
+                var mc = c as MeshCollider; if (mc != null && !mc.convex) mc.convex = true;   // a trigger mesh collider must be convex
+                c.isTrigger = true;
             }
         }
 
@@ -232,6 +233,7 @@ namespace Apocapatrol
         // 2.1.4 "Witness me!" leap: a long, flat jump - the ground speed relative to the thrower's car is fixed (hSpeed), the flight time is
         // when that ground track meets the target's predicted ground track, and the vertical part just has to land on it (a low arc: no lob).
         // false when the target runs away faster than that, the jump would take over 1.6 s, or it would need more than 35 degrees up.
+        internal const float MaxLeapTime = 1.2f;   // 2.2.3: the longest "Witness me!" jump (was 1.6 s at 16 m/s - Denis: shorter)
         internal static bool FlatLeap(Vector3 from, Vector3 baseVel, Vector3 target, Vector3 targetVel, float hSpeed, out Vector3 launch, out float time)
         {
             var r = target - from; r.y = 0f;
@@ -252,7 +254,7 @@ namespace Apocapatrol
             if (time <= 0f) { launch = Vector3.zero; return false; }
             time = Mathf.Max(time, 0.25f);
             launch = U(from, baseVel, target, targetVel, Physics.gravity, time);
-            return time <= 1.6f && Elevation(launch) <= 35f;
+            return time <= MaxLeapTime && Elevation(launch) <= 35f;
         }
 
         // 2.1.4: the rider's own blast - no lance, no FSM event, nothing that can fail to go off: the exploder zombie's blast effect (sound,
@@ -519,7 +521,7 @@ namespace Apocapatrol
             // on a motorcycle he can only turn BikeArc degrees from the bike's nose: the player close by and out of that arc for a second
             // (beside or behind him) -> he jumps off and fights on foot
             bool inArc = !_bike || !has || ArcOff(to) <= Rider.BikeArc;
-            if (_bike && Plugin.RiderLances.Value && has && !inArc && dist <= Plugin.RiderJumpRange.Value && _mode == Mode.Riding)
+            if (_bike && Plugin.RiderLances.Value && has && !inArc && dist <= Plugin.RiderBailRange.Value && _mode == Mode.Riding)
             {
                 _outOfArc += Time.deltaTime;
                 if (_outOfArc > 1f) { JumpOff("cannot turn to the player"); return; }
@@ -539,7 +541,9 @@ namespace Apocapatrol
                     {
                         Escort();
                         Vector3 launch; float flight;
-                        if (inArc && near <= Plugin.RiderJumpRange.Value && Time.time >= _nextWitness && CanLeap(tvel, tcar, out launch, out flight)) { StartWitness(); return; }
+                        // only a car well inside his reach: the jump (both cars' speeds counted) takes at most RiderLeapReachPercent of the longest
+                        if (inArc && near <= Plugin.RiderJumpRange.Value && Time.time >= _nextWitness && CanLeap(tvel, tcar, out launch, out flight)
+                            && flight <= Rider.MaxLeapTime * Plugin.RiderLeapReachPercent.Value / 100f) { StartWitness(); return; }
                     }
                 }
                 else if (near > Plugin.RiderRange.Value + 8f) _inClose = false;
@@ -748,13 +752,35 @@ namespace Apocapatrol
         {
             if (_mode == Mode.Flying || _mode == Mode.Dismount || _mode == Mode.Done || _car == null) return;
             if (!Alive()) { Die(); return; }
-            if (_gunner) StopGunner();
-            var cv = CarVel();
-            _vel = _car.transform.right * _side * 3.2f + Vector3.up * 4.2f + cv * 0.7f;
-            Unseat();
-            Play(2);
-            _mode = Mode.Dismount; _modeStart = Time.time;
+            // 2.2.3: he becomes a normal NPC at once - a fresh mob of his kind (same health, AI on) takes his place and jumps off with
+            // physics, playing Apocaplayer's Jump on its own animator while in the air (was: a kinematic hop, a stiff upright body)
+            var vel = _car.transform.right * _side * 3.2f + Vector3.up * 4.2f + CarVel() * 0.7f;
             Plugin.Verbose("Rider: " + name + " jumps off " + _car.name + " (" + why + ")");
+            SpawnMob(transform.position, vel);
+        }
+
+        // the fresh mob that replaces this body (jump-off), with the given velocity; this body is removed
+        private void SpawnMob(Vector3 at, Vector3 vel)
+        {
+            _mode = Mode.Done;
+            float health = Health();
+            var prefab = Prefabs.FindAny(_prefab);
+            if (prefab != null)
+            {
+                var mob = UnityEngine.Object.Instantiate(prefab, at, Quaternion.Euler(0f, transform.eulerAngles.y, 0f));
+                mob.SetActive(true);
+                Register.Name(mob, prefab.name); Register.Add(mob, false);
+                if (health > 0f) { Patrol.SetHealth(mob, health); mob.AddComponent<Patrol.LateHealth>().Value = health; }
+                if (_car != null)   // it leaves the vehicle: never caught on it
+                {
+                    var carCols = _car.GetComponentsInChildren<Collider>(true);
+                    foreach (var a in mob.GetComponentsInChildren<Collider>(true)) foreach (var b in carCols) if (a != null && b != null) Physics.IgnoreCollision(a, b, true);
+                }
+                mob.AddComponent<JumpClip>().Velocity = vel;
+                Plugin.Verbose("Rider: " + mob.name + " jumped off and fights on foot");
+            }
+            if (_marker != null) _marker.DropRider(gameObject);
+            Destroy(gameObject);
         }
 
         private void Hop()
@@ -826,6 +852,59 @@ namespace Apocapatrol
             if (_graphOk) { try { _graph.Destroy(); } catch (Exception) { } _graphOk = false; }
             if (Lance != null) Destroy(Lance.gameObject);
         }
+    }
+
+    // A jumped-off turret's fresh mob: its velocity is applied once its FSMs have started (Movement's Idle sets the velocity to 0 on entry),
+    // and Apocaplayer's Jump clip plays on its own Animator through a PlayableGraph until it is back on the ground (0.25..1.5 s); then the
+    // graph is destroyed and the mob's own animator controller is back in charge. Without Apocaplayer / a humanoid: just the jump.
+    internal sealed class JumpClip : MonoBehaviour
+    {
+        internal Vector3 Velocity;
+        private int _frames; private bool _pushed; private float _start;
+        private PlayableGraph _graph; private bool _graphOk;
+        private Rigidbody _rb; private Collider _col;
+        private static readonly RaycastHit[] _hits = new RaycastHit[8];
+
+        private void Start()
+        {
+            _start = Time.time;
+            _rb = GetComponent<Rigidbody>(); _col = GetComponent<Collider>();
+            try
+            {
+                var clip = Rider.Clip("Jump"); var anim = GetComponentInChildren<Animator>();
+                if (clip != null && anim != null && anim.isHuman)
+                {
+                    _graph = PlayableGraph.Create("Apocapatrol.JumpOff");
+                    _graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
+                    var output = AnimationPlayableOutput.Create(_graph, "jump", anim);
+                    output.SetSourcePlayable(AnimationClipPlayable.Create(_graph, clip));
+                    _graph.Play(); _graphOk = true;
+                }
+            }
+            catch (Exception e) { Plugin.Verbose("JumpClip: " + e.Message); }
+        }
+
+        private void FixedUpdate()
+        {
+            if (_pushed || ++_frames < 2) return;
+            _pushed = true;
+            if (_rb != null && !_rb.isKinematic) _rb.velocity = Velocity;
+        }
+
+        private void Update()
+        {
+            float t = Time.time - _start;
+            bool grounded = false;
+            if (t > 0.25f && _col != null && (_rb == null || _rb.velocity.y <= 0.5f))
+            {
+                var b = _col.bounds;
+                int n = Physics.RaycastNonAlloc(new Vector3(b.center.x, b.min.y + 0.2f, b.center.z), Vector3.down, _hits, 0.35f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                for (int i = 0; i < n; i++) if (_hits[i].collider != null && !_hits[i].collider.transform.IsChildOf(transform)) { grounded = true; break; }
+            }
+            if (grounded || t > 1.5f) Destroy(this);
+        }
+
+        private void OnDestroy() { if (_graphOk) { try { _graph.Destroy(); } catch (Exception) { } _graphOk = false; } }
     }
 
     // sets a freshly spawned blast-lance projectile off once its FSMs have started (an event sent before Start is lost)

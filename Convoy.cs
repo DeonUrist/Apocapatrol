@@ -103,6 +103,10 @@ namespace Apocapatrol
             _heat = HeatFor(km);
         }
 
+        // [General] Fury Road: every group's minimum distance / boss kills count as met
+        private float RollKm { get { return Plugin.FuryRoad.Value ? 1e6f : _km; } }
+        private int RollBosses { get { return Plugin.FuryRoad.Value ? 999 : _bosses; } }
+
         internal static float HeatFor(float km) { return Mathf.Clamp(km / Mathf.Max(1f, Plugin.HeatIntervalKm.Value) * 0.25f, 0f, Mathf.Max(0f, Plugin.MaxHeat.Value)); }
 
         internal static int BossKills()
@@ -134,7 +138,7 @@ namespace Apocapatrol
             if (AutosaveSoon(30f)) { _cooldown = 45f; Plugin.Verbose("Convoy: spawn postponed 45 s, Apocasaver autosave due"); return; }
             if (_patrol != null && _patrol.SaveBusy()) { _cooldown = 10f; return; }
             bool convoy;
-            var group = EditorStore.Roll(_km, _bosses, Plugin.PatrolSpawnChancePercent.Value, () => UnityEngine.Random.value, out convoy);
+            var group = EditorStore.Roll(RollKm, RollBosses, Plugin.PatrolSpawnChancePercent.Value, () => UnityEngine.Random.value, out convoy);
             if (group == null) { ResetCooldown("no eligible groups"); return; }
             if (!ClearOldGroups()) return;
             if (!Launch(group, convoy, false)) { _cooldown = 60f; return; }
@@ -227,7 +231,7 @@ namespace Apocapatrol
         {
             if (!Plugin.AllowDebugSpawns.Value) return;
             UpdateHeat(); bool convoy;
-            var group = EditorStore.Roll(_km, _bosses, Plugin.PatrolSpawnChancePercent.Value, () => UnityEngine.Random.value, out convoy);
+            var group = EditorStore.Roll(RollKm, RollBosses, Plugin.PatrolSpawnChancePercent.Value, () => UnityEngine.Random.value, out convoy);
             if (group != null) Launch(group, convoy, true);
             else Plugin.Log.LogInfo("Test spawning: no eligible groups with a positive chance");
         }
