@@ -19,7 +19,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.1.2";
+        public const string VERSION = "2.1.3";
 
         internal static ManualLogSource Log;
 
@@ -265,7 +265,7 @@ namespace Apocapatrol
 
             RiderRange = H.Bind("Combat", "RiderRange", 35f, new ConfigDescription("A blast-lance rider throws at a target closer than this, m (and only when a flat throw reaches it)", new AcceptableValueRange<float>(5f, 150f)));
             RiderMaxThrowAngle = H.Bind("Combat", "RiderMaxThrowAngle", 20f, new ConfigDescription("The rider only throws when the lance reaches the predicted spot with at most this many degrees up (a throw, not a lob)", new AcceptableValueRange<float>(0f, 45f)));
-            RiderJumpRange = H.Bind("Combat", "RiderJumpRange", 12f, new ConfigDescription("\"Witness me!\": the rider leaps when your car is closer than this, m", new AcceptableValueRange<float>(3f, 30f)));
+            RiderJumpRange = H.Bind("Combat", "RiderJumpRange", 15f, new ConfigDescription("\"Witness me!\": the rider leaps when your car is closer than this, m", new AcceptableValueRange<float>(3f, 30f)));
             RiderIntervalMin = H.Bind("Combat", "RiderIntervalMin", 5f, new ConfigDescription("Shortest pause between two of a rider's throws, s", new AcceptableValueRange<float>(1f, 60f)));
             RiderIntervalMax = H.Bind("Combat", "RiderIntervalMax", 9f, new ConfigDescription("Longest pause between two of a rider's throws, s", new AcceptableValueRange<float>(1f, 120f)));
             RiderLanceSpeed = H.Bind("Combat", "RiderLanceSpeed", 30f, new ConfigDescription("Throw speed of a rider's lance, m/s (the player's is 30)", new AcceptableValueRange<float>(5f, 80f)));

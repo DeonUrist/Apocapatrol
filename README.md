@@ -1,3 +1,8 @@
+# Apocapatrol 2.1.3
+
+2.1.3: the "Witness me!" leap goes a bit further (from 15 m), the scream is much louder and carries far, and every blast - the leap
+and every thrown lance - explodes on impact, whatever angle it hits at.
+
 # Apocapatrol 2.1.2
 
 2.1.2: the rider screams "Witness me!" to the end first and leaps a moment later (about 1.9 s in all), aimed at where you are then -

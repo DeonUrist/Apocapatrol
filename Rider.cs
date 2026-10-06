@@ -111,6 +111,44 @@ namespace Apocapatrol
         {
             return (target + targetVel * t - from - baseVel * t - 0.5f * g * t * t) / t;
         }
+        // The blast lance's own explosion: what the projectile's [Explosion] FSM creates in its "explode" state (CreateObject), read once from the
+        // prefab's FSM. Spawned directly, it always goes off - no trigger contact or FSM event needed.
+        private static GameObject _explosion; private static bool _explosionLooked;
+        internal static GameObject ExplosionPrefab()
+        {
+            if (_explosionLooked) return _explosion;
+            _explosionLooked = true;
+            try
+            {
+                var lance = Prefabs.FindAny(Projectile);
+                var fsm = lance != null ? lance.GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == "Explosion") : null;
+                if (fsm != null && fsm.Fsm != null)
+                    foreach (var st in fsm.Fsm.States)
+                    {
+                        if (st.Name != "explode") continue;
+                        var acts = st.Actions;
+                        if (acts == null || acts.Length == 0) { st.LoadActions(); acts = st.Actions; }
+                        if (acts != null) foreach (var a in acts) { var c = a as HutongGames.PlayMaker.Actions.CreateObject; if (c != null && c.gameObject != null && c.gameObject.Value != null) { _explosion = c.gameObject.Value; break; } }
+                    }
+                Plugin.Verbose("Rider: blast lance explosion = " + (_explosion != null ? _explosion.name : "not found (falls back to setting off a lance)"));
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("Rider: explosion lookup: " + e.Message); }
+            return _explosion;
+        }
+
+        // a blast-lance explosion at the point, every time: the explosion object itself, or (not found) a lance set off by its FSM
+        internal static void Boom(Vector3 at)
+        {
+            var ex = ExplosionPrefab();
+            if (ex != null) { var go = UnityEngine.Object.Instantiate(ex, at, Quaternion.identity); go.SetActive(true); return; }
+            var prefab = Prefabs.FindAny(Projectile);
+            if (prefab == null) return;
+            var bomb = UnityEngine.Object.Instantiate(prefab, at, Quaternion.identity);
+            bomb.SetActive(true);
+            var rb = bomb.GetComponent<Rigidbody>(); if (rb != null) rb.isKinematic = true;
+            bomb.AddComponent<Detonator>();
+        }
+
         internal static float Elevation(Vector3 v) { return Mathf.Asin(Mathf.Clamp(v.normalized.y, -1f, 1f)) * Mathf.Rad2Deg; }
 
         // "Witness me!" - Sounds/witness-me.wav (16-bit PCM, normalised to the game's human_hurt voice: -23.8 LUFS, peak -5.6 dBTP) as a
@@ -125,14 +163,15 @@ namespace Apocapatrol
                 {
                     _screamLooked = true;
                     var path = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(typeof(Rider).Assembly.Location) ?? ".", "Sounds", "witness-me.wav");
-                    _scream = Wav.Load(path, "witness-me");
+                    _scream = Wav.Load(path, "witness-me", 1.8f);   // +5 dB over the normalised file (peak about -0.5 dBFS)
                     if (_scream == null) Plugin.Log.LogWarning("Rider: " + path + " not found or not a PCM wav - the rider leaps silently");
                 }
                 if (_scream == null || at == null) return 1.5f;
                 var go = new GameObject("Apocapatrol.WitnessMe");
                 go.transform.SetParent(at, false); go.transform.localPosition = Vector3.up * 1.6f;
                 var src = go.AddComponent<AudioSource>();
-                src.clip = _scream; src.spatialBlend = 1f; src.rolloffMode = AudioRolloffMode.Logarithmic; src.minDistance = 6f; src.maxDistance = 120f;
+                // loud and far: full volume within 35 m, still clearly heard at 200+ m (mostly 3D, a little 2D so distance doesn't swallow it)
+                src.clip = _scream; src.spatialBlend = 0.8f; src.rolloffMode = AudioRolloffMode.Logarithmic; src.minDistance = 35f; src.maxDistance = 400f;
                 src.volume = 1f; src.priority = 64; src.dopplerLevel = 0f;
                 src.Play();
                 UnityEngine.Object.Destroy(go, _scream.length + 0.2f);
@@ -399,6 +438,7 @@ namespace Apocapatrol
                 rb.isKinematic = false;
                 rb.velocity = launch + carVel;
                 IgnoreOwn(go);
+                go.AddComponent<LanceFuse>();   // explodes on any hit, whatever angle it lands at
                 Plugin.Verbose("Rider: " + name + " threw a blast lance, " + flight.ToString("0.00") + " s flight, " + Rider.Elevation(launch).ToString("0") + "° up");
             }
             catch (Exception e) { Plugin.Log.LogWarning("Rider: throw: " + e.Message); }
@@ -427,7 +467,7 @@ namespace Apocapatrol
             if (tcar != null) { var tc = tcar.GetComponent<Rigidbody>(); aim = (tc != null ? tc.worldCenterOfMass : tcar.transform.position) + Vector3.up * 0.4f; }
             var from = transform.position + Vector3.up * 0.9f;
             Vector3 launch; float flight;
-            float speed = Plugin.RiderLanceSpeed.Value * 0.5f;
+            float speed = Plugin.RiderLanceSpeed.Value * 0.6f;   // 2.1.3: a bit further than half the lance's throw
             if (!Rider.Solve(from, CarVel(), aim, tvel, speed, out launch, out flight)) Plugin.Verbose("Rider: the leap falls short - jumps anyway");
             _vel = launch + CarVel();
             Unseat();
@@ -475,14 +515,7 @@ namespace Apocapatrol
             _mode = Mode.Done;
             try
             {
-                var prefab = Prefabs.FindAny(Rider.Projectile);
-                if (prefab != null)
-                {
-                    var bomb = UnityEngine.Object.Instantiate(prefab, at, Quaternion.identity);
-                    bomb.SetActive(true);
-                    var rb = bomb.GetComponent<Rigidbody>(); if (rb != null) rb.isKinematic = true;
-                    bomb.AddComponent<Detonator>();
-                }
+                Rider.Boom(at);
                 var dead = Prefabs.FindAny(_prefab + "_Dead");
                 if (dead != null)
                 {
@@ -581,15 +614,34 @@ namespace Apocapatrol
         private void Update()
         {
             if (++_frames < 2) return;
-            foreach (var f in GetComponents<PlayMakerFSM>()) if (f.FsmName == "Explosion") f.SendEvent("DamageFlammable");
-            Destroy(this);
+            foreach (var f in GetComponents<PlayMakerFSM>()) if (f.FsmName == "Explosion" && f.Fsm.Initialized && f.ActiveStateName != "explode" && f.ActiveStateName != "delete") f.SendEvent("DamageFlammable");
+            if (_frames > 10) Destroy(this);
+        }
+    }
+
+    // A rider's thrown blast lance: the game's lance only goes off when its head's trigger touches something, so one that lands flat or at an
+    // angle used to lie there (and blow up later). Any solid hit - or 8 s - now sets it off, unless its own FSM is already exploding.
+    internal sealed class LanceFuse : MonoBehaviour
+    {
+        private float _born; private bool _done;
+        private PlayMakerFSM _fsm;
+        private void Start() { _born = Time.time; _fsm = GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == "Explosion"); }
+        private bool Exploding() { return _fsm != null && _fsm.Fsm != null && _fsm.Fsm.Initialized && (_fsm.ActiveStateName == "explode" || _fsm.ActiveStateName == "delete"); }
+        private void OnCollisionEnter(Collision c) { if (!_done && Time.time - _born > 0.05f) Fire(c.contactCount > 0 ? c.GetContact(0).point : transform.position); }
+        private void Update() { if (!_done && Time.time - _born > 8f) Fire(transform.position); }
+        private void Fire(Vector3 at)
+        {
+            if (Exploding()) { _done = true; return; }
+            _done = true;
+            Rider.Boom(at);
+            Destroy(gameObject);
         }
     }
 
     // a minimal RIFF/WAVE reader (8/16-bit PCM, any channel count) -> AudioClip
     internal static class Wav
     {
-        internal static AudioClip Load(string path, string name)
+        internal static AudioClip Load(string path, string name, float gain = 1f)
         {
             if (!System.IO.File.Exists(path)) return null;
             var b = System.IO.File.ReadAllBytes(path);
@@ -607,6 +659,7 @@ namespace Apocapatrol
             var data = new float[count];
             if (bits == 16) for (int i = 0; i < count; i++) data[i] = BitConverter.ToInt16(b, dataAt + i * 2) / 32768f;
             else for (int i = 0; i < count; i++) data[i] = (b[dataAt + i] - 128) / 128f;
+            if (gain != 1f) for (int i = 0; i < count; i++) data[i] = Mathf.Clamp(data[i] * gain, -1f, 1f);
             var clip = AudioClip.Create(name, count / channels, channels, rate, false);
             clip.SetData(data, 0);
             clip.hideFlags = HideFlags.DontUnloadUnusedAsset;
