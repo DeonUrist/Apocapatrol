@@ -66,7 +66,7 @@ namespace Apocapatrol
         private void LateUpdate() { _session.Maintain(); }
         private void OnGUI()
         {
-            if (!_session.Open) { DrawToast(); return; }
+            if (!_session.Open || _draftCar == null) { DrawToast(); return; }   // just saved/closed: the session lets go a frame later
             _session.Maintain(); GUI.depth = -1000;
             float scale = Mathf.Min((Screen.width - 32f) / LedgerSkin.Width, (Screen.height - 32f) / 660f);
             var old = LedgerSkin.Begin(); var matrix = GUI.matrix;
@@ -81,6 +81,7 @@ namespace Apocapatrol
         private readonly LedgerDropdown _ledgerDropdown = new LedgerDropdown();
         private void DrawDraft(int id)
         {
+            if (_draftCar == null) return;   // closed during this OnGUI pass (Save/Cancel run after the Layout event; Repaint still comes)
             _ledgerDropdown.Before(); bool enabled = GUI.enabled;
             LedgerSkin.Window(_rect); LedgerSkin.Header(_rect.width);
             GUI.enabled = enabled && !_ledgerDropdown.IsOpen;
