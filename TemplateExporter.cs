@@ -40,6 +40,7 @@ namespace Apocapatrol
         private string _templateName = "", _driverName = "Scraffa", _passengerName = "Sprokka", _lootId = "";
         private Action _afterDraw;
         private bool _truck;
+        private bool _bike;   // the true motorcycle (no rear, no seats behind): its templates carry no loot setting at all
         private Rect _rect;
 
         private void Update()
@@ -58,7 +59,8 @@ namespace Apocapatrol
             if (!_session.Acquire()) return;
             _draftCar = car; _truck = PrefabName(car.name).Equals("Rustcargo", StringComparison.OrdinalIgnoreCase) && FrameChildren(car, "PhysicsLock").Any();
             _templateName = ""; _driverName = "Scraffa"; _passengerName = "None"; _ledgerDropdown.Close();
-            var profiles = _truck ? EditorStore.Data.TruckLoot : EditorStore.Data.CarLoot; _lootId = !_truck && profiles.Any(p => p.Id == "car-empty") ? "car-empty" : profiles.Count > 0 ? profiles[0].Id : "";
+            _bike = MotorcycleIntegration.IsBody(PrefabName(car.name));
+            var profiles = _truck ? EditorStore.Data.TruckLoot : EditorStore.Data.CarLoot; _lootId = _bike ? "" : !_truck && profiles.Any(p => p.Id == "car-empty") ? "car-empty" : profiles.Count > 0 ? profiles[0].Id : "";
         }
         private void Close() { _session.Close(); _draftCar = null; _ledgerDropdown.Close(); }
         private void OnDestroy() { _session.Close(true); }
@@ -96,7 +98,12 @@ namespace Apocapatrol
             DraftLedgerDropdown(new Rect(input, box.y + 182, w, 34), "Passenger", _passengerName, people, value => _passengerName = value, box.yMax - 84);
             var profiles = _truck ? EditorStore.Data.TruckLoot : EditorStore.Data.CarLoot;
             var profile = profiles.FirstOrDefault(p => p.Id == _lootId);
-            if (!_truck)
+            if (_bike)
+            {
+                LedgerSkin.Label(new Rect(x, box.y + 229, 144, 34), "Car loot");
+                LedgerSkin.Label(new Rect(input, box.y + 229, w, 34), "None - a motorcycle carries no loot", null, LedgerSkin.Muted);
+            }
+            else if (!_truck)
             {
                 LedgerSkin.Label(new Rect(x, box.y + 229, 144, 34), "Car loot");
                 var anchor = new Rect(input, box.y + 229, w, 34);
@@ -354,7 +361,7 @@ namespace Apocapatrol
             if (CarTemplate.Find(name) != null || File.Exists(EditorStore.SafePath(dir, name + ".json"))) throw new IOException("A template with that name already exists");
             var file = new TemplateFile
             {
-                name = name, body = body, kind = kind, lootPreset = _truck ? "" : _lootId,
+                name = name, body = body, kind = kind, lootPreset = _truck || _bike ? "" : _lootId,
                 rams = kind == "truck" ? "Cars" : "Pedestrians",
                 driver = hasDriverSeat ? (_driverName == "None" ? "" : _driverName) : "",
                 passenger = hasPassengerSeat ? (_passengerName == "None" ? "" : _passengerName) : "",

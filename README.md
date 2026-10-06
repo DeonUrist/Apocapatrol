@@ -1,4 +1,6 @@
-# Apocapatrol 2.0.9
+# Apocapatrol 2.0.10
+
+2.0.10: templates saved from the motorcycle (the one without a back) have no loot setting: the Car loot choice is not offered.
 
 2.0.9: when raiders spawn (automatic or test patrols and convoys, not template spawns) a red warning top left says
 "You hear a sound of distant engines" for a few seconds. [General] SpawnWarning, on by default.
