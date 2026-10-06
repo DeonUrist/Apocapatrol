@@ -1,12 +1,18 @@
+# Apocapatrol 2.5.0
+
+2.5.0: the **parking hold** of 2.4.0 is gone - it left some cars unable to move. The mod no longer touches a car's physics or wheels
+at all; the one stability rule left is the **centre of mass**: a car with a suspension lift kit carries it 0.3 m lower, plus 1.5 x any
+extra lift of the body, so tall cars on big wheels do not flip in turns (Part Adjustment 1.4.0 applies the same rule to the car you
+drive). The **shipped templates and spawn tables are now the current ones**: 24 BaseTemplates (Buzzard bikes, Chariots, Porcupine,
+Piperat Scout / Bandit, Tiny / Big Tyrant, the Warboy band - Weak Warboy, Junker Warboy, Warboy Tyrant, Warboy Armored Tyrant, Warboy
+Bike - and the War rig) with the 16 patrol and 4 convoy groups and loot profiles that use them, embedded in the DLL as the defaults a
+fresh install and *Reset to defaults* produce. The old Basic / Advanced sets are no longer shipped (an existing install keeps its files).
+
 # Apocapatrol 2.4.0
 
-2.4.0: the **shaking car** is settled. With big truck wheels on a widened, lifted chassis the game's tyre model reverses the car's sideways
-motion every physics step while it stands still (the wheel loads swap sides fifty times a second); nothing in the tyre or suspension
-settings stops it safely, so a parked car is now held still - below 0.3 m/s with no engine torque its horizontal position and roll/pitch are
-frozen, the suspension keeps working, and it is released when the engine drives a wheel, something hits it or it moves. A lifted suspension
-also lowers the centre of mass by the lift, so tall cars on big wheels do not flip in turns. Both rules are shared with Part Adjustment 1.3.0.
-Also: Rustliner crews bail out through the rear door, the bus passenger sits on the small chair facing across the aisle, raider Rustliners
-wear `Textures/rustliner.png`, human turrets leave a god-mode player alone, and dropdown clicks in the editors no longer fall through.
+2.4.0: Rustliner crews bail out through the rear door, the bus passenger sits on the small chair facing across the aisle, raider
+Rustliners wear `Textures/rustliner.png`, human turrets leave a god-mode player alone, and dropdown clicks in the editors no longer fall
+through. (Its parking hold against the shaking car was withdrawn in 2.5.0.)
 
 # Apocapatrol 2.3.0
 

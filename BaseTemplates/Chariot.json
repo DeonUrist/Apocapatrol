@@ -1,0 +1,26 @@
+{
+    "schema": 2,
+    "name": "Chariot",
+    "body": "Halfbreed",
+    "kind": "motorcycle",
+    "lootPreset": "1d0931cf231649258983af7128986a96",
+    "rams": "Pedestrians",
+    "driver": "Scraffa",
+    "passenger": "",
+    "bumpers": [],
+    "fillFuel": true,
+    "releaseHandbrake": true,
+    "parts": [
+        { "parent": -1, "hinge": "parts/model/steering_parent_F/steering_hinge/hinge_headlight", "prefab": "Headlight" },
+        { "parent": -1, "hinge": "parts/model/colliders_car/collider#47", "prefab": "blastlance_1", "pos": [0.3559, -0.1161, 0.3598], "rot": [357.8038, 137.7828, 100.9849] },
+        { "parent": -1, "hinge": "hinge_exhaust", "prefab": "exhaust_the_six", "hingePos": [0, -0.1, -0.95], "hingeRot": [319, 0, 0] },
+        { "parent": -1, "hinge": "hinge_seat_driver", "prefab": "seat_motorcycle" },
+        { "parent": -1, "hinge": "hinge_engine", "prefab": "2.8L V6 115HP 183Nm Gasoline", "hingePos": [0, -0.355, 0.67], "hingeRot": [0, 0, 0] },
+        { "parent": -1, "hinge": "hinge_wheel_F", "prefab": "motorcycle_wheel" },
+        { "parent": -1, "hinge": "hinge_wheel_M", "prefab": "motorcycle_wheel" },
+        { "parent": -1, "hinge": "hinge_wheel_RL", "prefab": "motorcycle_wheel" },
+        { "parent": -1, "hinge": "hinge_wheel_RR", "prefab": "motorcycle_wheel" },
+        { "parent": 8, "hinge": "", "prefab": "blastlance_1", "pos": [-0.0315, 0.5059, -0.3532], "rot": [349.7054, 8.1014, 348.059] }
+    ],
+    "source": "Apocatemplater (Apocapatrol) 2.0.6, 2026-10-06 02:52, from Halfbreed(Clone)26"
+}

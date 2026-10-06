@@ -27,8 +27,6 @@ namespace Apocapatrol
             PatrolPersistence.Tick(this);
             if (!InGame()) return;
             Ram.Tick();
-            WheelContacts.Tick();
-            StandstillDamper.Tick();
             ExitSpeed.Tick();
             MeleeWheels.Tick();
             if (Time.unscaledTime >= _nextLights) { _nextLights = Time.unscaledTime + 5f; LightsTick(); }

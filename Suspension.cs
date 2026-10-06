@@ -229,7 +229,7 @@ namespace Apocapatrol
             }
         }
 
-        internal void Set(float width, float height) { Width = Mathf.Clamp(width, 1f, 1.5f); Height = Mathf.Clamp(height, -1f, 1f); Apply(); StandstillDamper.Attach(gameObject); }
+        internal void Set(float width, float height) { Width = Mathf.Clamp(width, 1f, 1.5f); Height = Mathf.Clamp(height, -1f, 1f); Apply(); }
 
         private void Apply()
         {
@@ -243,25 +243,31 @@ namespace Apocapatrol
             if (_body != null) _body.WakeUp();
         }
 
-        // a lifted body (Height < 0 = mounts down, body up) keeps its centre of mass where it was: the Rigidbody's automatic centre (nothing
-        // in the game or NWH sets one) lowered by SuspensionLiftCenterOfMass x the lift - same rule and default as Part Adjustment 1.2.1
+        // 2.5.0: a car with a lift kit carries its weight lower. The Rigidbody's automatic centre of mass (nothing in the game or NWH sets one)
+        // is lowered by KitDrop as soon as a kit sits on hinge_suspension, plus LiftFactor x any extra lift of the body (Height < 0), so a
+        // tall car on big wheels does not flip in turns. The automatic value is re-read first (parts going on or off still move it) and
+        // re-checked once a second. Same constants and rule as Part Adjustment 1.4.0; without a kit the centre is the automatic one.
+        internal const float KitDrop = 0.3f, LiftFactor = 1.5f;
+
         private void ApplyCenterOfMass(bool force)
         {
             if (_body == null) return;
-            long sig = 17;
+            bool kit = Suspension.KitFitted(gameObject);
+            long sig = kit ? 19 : 17;
+            sig = sig * 31 + (long)(Height * 1000f);
             foreach (var c in GetComponentsInChildren<Collider>(false)) if (c != null && c.enabled && !c.isTrigger) sig = sig * 31 + c.GetInstanceID();
             if (!force && sig == _comSig) return;
             _comSig = sig;
-            float lift = Plugin.SuspensionLiftCenterOfMass.Value ? Mathf.Max(0f, -Height) : 0f;
-            if (lift <= 0f) { if (_comShifted) { _body.ResetCenterOfMass(); _comShifted = false; } return; }
+            float drop = Plugin.SuspensionLiftCenterOfMass.Value && kit ? KitDrop + LiftFactor * Mathf.Max(0f, -Height) : 0f;
+            if (drop <= 0f) { if (_comShifted) { _body.ResetCenterOfMass(); _comShifted = false; } return; }
             _body.ResetCenterOfMass();
-            _body.centerOfMass = _body.centerOfMass - Vector3.up * lift;
+            _body.centerOfMass = _body.centerOfMass - Vector3.up * drop;
             _comShifted = true;
         }
 
         private void FixedUpdate()
         {
-            if (!_comShifted || Time.time < _nextCom) return;
+            if (Time.time < _nextCom) return;
             _nextCom = Time.time + 1f;
             ApplyCenterOfMass(false);
         }
@@ -305,103 +311,6 @@ namespace Apocapatrol
             RefreshCenters();
             if (!Suspension.KitFitted(gameObject) && (Width != 1f || Height != 0f)) { Apply(); return; }
             foreach (var x in _mounts) ApplyMount(x);
-        }
-    }
-
-    // A parked car is held still (2.3.x, final form in 2.4.0). Why: the vanilla tyre model (NWH) applies its full sideways grip against any
-    // sideways velocity, computed one physics step late. On stock cars the impulse is small and dies out; with 0.52 m truck wheels carrying
-    // 5000 N on a lifted chassis it reverses the body's sideways velocity every step - the car "shakes" in place, wheel loads swapping sides
-    // 50 times a second (measured). Nothing in the tyre or suspension parameters stops it safely, so the body is simply not allowed to move
-    // while parked: below 0.3 m/s with no engine torque on the wheels, the Rigidbody's horizontal position and its roll / pitch are frozen
-    // (the suspension still works vertically, the car still sits on slopes). Released when the engine drives a wheel, when something hits
-    // the car, or when it moves anyway (above 0.5 m/s). Part Adjustment has the same component; whichever mod attached one first owns a car.
-    internal sealed class StandstillDamper : MonoBehaviour
-    {
-        internal const float HoldSpeed = 0.3f, UnholdSpeed = 0.5f, DriveTorque = 30f, BumpImpulse = 50f;
-        private Rigidbody _rb; private bool _held, _bumped; private RigidbodyConstraints _baseConstraints;
-        private WheelController[] _wheels = new WheelController[0]; private float _nextWheels;
-
-        internal static void Attach(GameObject car)
-        {
-            if (car == null) return;
-            foreach (var c in car.GetComponents<Component>()) if (c != null && c.GetType().Name == "StandstillDamper") return;
-            car.AddComponent<StandstillDamper>();
-            Plugin.Verbose("Parking hold on " + car.name);
-        }
-
-        // the car the player drives (checked once a second from Patrol.Update)
-        private static float _next;
-        internal static void Tick()
-        {
-            if (Time.unscaledTime < _next) return;
-            _next = Time.unscaledTime + 1f;
-            if (Plugin.StandstillDamping.Value) Attach(PlayerRef.PlayerCar);
-        }
-
-        private void FixedUpdate()
-        {
-            if (_rb == null) { _rb = GetComponent<Rigidbody>(); if (_rb == null) { Destroy(this); return; } }
-            if (!Plugin.StandstillDamping.Value || _rb.isKinematic) { Unhold(); return; }
-            if (Time.time >= _nextWheels) Collect();
-            float speed = _rb.velocity.magnitude;
-            bool driving = false;
-            for (int i = 0; i < _wheels.Length; i++) if (_wheels[i] != null && Mathf.Abs(_wheels[i].MotorTorque) > DriveTorque) { driving = true; break; }
-            if (!_held && speed < HoldSpeed && !driving)
-            {
-                _baseConstraints = _rb.constraints;
-                _rb.constraints = _baseConstraints | RigidbodyConstraints.FreezePositionX | RigidbodyConstraints.FreezePositionZ | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
-                _rb.angularVelocity = Vector3.zero;
-                _rb.velocity = new Vector3(0f, _rb.velocity.y, 0f);
-                _held = true;
-            }
-            else if (_held && (speed > UnholdSpeed || driving || _bumped)) Unhold();
-            _bumped = false;
-        }
-
-        // the wheels (direct hinge_wheel_* children), re-read every 2 s: a wheel put on or taken off changes the set
-        private void Collect()
-        {
-            _nextWheels = Time.time + 2f;
-            var list = new List<WheelController>();
-            foreach (var w in GetComponentsInChildren<WheelController>(true)) if (w != null && w.transform.parent == transform) list.Add(w);
-            _wheels = list.ToArray();
-        }
-        private void OnCollisionEnter(Collision col) { if (col.impulse.magnitude > BumpImpulse) _bumped = true; }   // rammed, shot, blown...
-        private void Unhold() { if (_held) { _rb.constraints = _baseConstraints; _held = false; } }
-        private void OnDisable() { if (_rb != null) Unhold(); }
-    }
-
-    // The wheels of the car the player drives never touch the player (2.3.0). The game isolates the driver from the hull by layer (Drive 7
-    // vs Car 8), but the wheel colliders - NWH's own wheel mesh colliders and the game's wheel_hub sphere (0.7 x the tyre radius) - are on
-    // layer 2, which collides with the driver. Stock wheels never reach the seats; a raised suspension or big truck wheels push them into
-    // the cabin, and PhysX shoving the driver and the car apart every step is the vibration. Twice a second: every layer-2 collider of the
-    // player's car is ignored for the player's colliders (NWH rebuilds its colliders when the wheel size changes; a changed set re-applies).
-    internal static class WheelContacts
-    {
-        private static float _next; private static long _sig; private static GameObject _car;
-        private static readonly List<Collider> _p = new List<Collider>(), _c = new List<Collider>();
-
-        internal static void Tick()
-        {
-            if (Time.unscaledTime < _next) return;
-            _next = Time.unscaledTime + 0.5f;
-            var car = PlayerRef.PlayerCar; var player = PlayerRef.Player;
-            if (car == null || player == null) { _car = null; _sig = 0; return; }
-            _p.Clear(); _c.Clear();
-            player.GetComponentsInChildren(true, _p);
-            car.GetComponentsInChildren(true, _c);
-            long sig = car.GetInstanceID();
-            foreach (var c in _p) if (c != null) sig = sig * 31 + c.GetInstanceID();
-            foreach (var c in _c) if (c != null && c.gameObject.layer == 2) sig = sig * 31 + c.GetInstanceID();
-            if (car == _car && sig == _sig) return;
-            _car = car; _sig = sig;
-            int n = 0;
-            foreach (var c in _c)
-            {
-                if (c == null || c.gameObject.layer != 2 || c.transform.IsChildOf(player)) continue;
-                foreach (var p in _p) if (p != null) { Physics.IgnoreCollision(p, c, true); n++; }
-            }
-            if (n > 0) Plugin.Verbose("Wheel contacts: " + n + " wheel collider pairs of " + car.name + " ignored for the player");
         }
     }
 }

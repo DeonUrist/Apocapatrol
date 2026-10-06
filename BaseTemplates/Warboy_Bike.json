@@ -1,0 +1,27 @@
+{
+    "schema": 2,
+    "name": "Warboy_Bike",
+    "body": "Motorcycle",
+    "kind": "motorcycle",
+    "lootPreset": "",
+    "rams": "Pedestrians",
+    "driver": "Sprokka",
+    "passenger": "",
+    "rider": "Warboy",
+    "riderPos": [-0.05, 1.209, -0.458],
+    "bumpers": [],
+    "fillFuel": true,
+    "releaseHandbrake": true,
+    "parts": [
+        { "parent": -1, "hinge": "parts/model/steering_parent/steering_hinge/hinge_headlight", "prefab": "Headlight" },
+        { "parent": -1, "hinge": "parts/model/steering_parent/steering_hinge/steering front/collider#2", "prefab": "wire_plate", "pos": [0.0962, 0.3161, 0.1482], "rot": [1.7422, 271.0537, 157.8272] },
+        { "parent": -1, "hinge": "hinge_seat_driver", "prefab": "poloska_seat_front" },
+        { "parent": -1, "hinge": "hinge_exhaust", "prefab": "exhaust_motorcycle", "hingePos": [0.15, -0.5, -0.05], "hingeRot": [4, 0, 0] },
+        { "parent": -1, "hinge": "hinge_engine", "prefab": "594cc I2 23HP 39Nm Gasoline" },
+        { "parent": -1, "hinge": "hinge_radiator", "prefab": "radiator_truck_ultra", "hingePos": [0, 0.2, -0.45], "hingeRot": [300, 0, 0] },
+        { "parent": 5, "hinge": "", "prefab": "blastlance_1", "pos": [0.8735, 0.1657, 0.361], "rot": [7.1011, 327.9982, 306.2433] },
+        { "parent": -1, "hinge": "hinge_wheel_F", "prefab": "motorcycle_wheel" },
+        { "parent": -1, "hinge": "hinge_wheel_M", "prefab": "motorcycle_wheel" }
+    ],
+    "source": "Apocatemplater (Apocapatrol) 2.2.0, 2026-10-06 08:13, from Motorcycle(Clone)161"
+}

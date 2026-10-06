@@ -19,7 +19,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.4.0";
+        public const string VERSION = "2.5.0";
 
         internal static ManualLogSource Log;
 
@@ -56,7 +56,7 @@ namespace Apocapatrol
         internal static ConfigEntry<float> ExplodedLootPercent;
         // [AI]
         internal static ConfigEntry<bool> AiInvertSteering, AiOverlay, CustomPaintjobs;
-        internal static ConfigEntry<bool> SpawnWarning, RaiderMusic, RiderLances, HideFsmWarnings, TurretSpotEditor, FuryRoad, SuspensionLiftCenterOfMass, StandstillDamping;
+        internal static ConfigEntry<bool> SpawnWarning, RaiderMusic, RiderLances, HideFsmWarnings, TurretSpotEditor, FuryRoad, SuspensionLiftCenterOfMass;
         internal static ConfigEntry<float> RiderRange, RiderIntervalMin, RiderIntervalMax, RiderLanceSpeed, RiderMaxThrowAngle, RiderJumpRange, WitnessMeChance, RiderLeapSpeed, RiderBlastDamage, RiderBlastRadius, TurretThigh, TurretKnee, TurretHipHeight, RiderLeapReachPercent, RiderBailRange;
         internal static ConfigEntry<string> RiderLanceOffset, RiderLanceRotation;
         internal static ConfigEntry<float> AiDriveByOffset;
@@ -282,8 +282,7 @@ namespace Apocapatrol
             RiderLanceRotation = H.Bind("Combat", "RiderLanceRotation", "0, 0, 0", "Warboy's lance prop: rotation in the throwing hand, degrees x, y, z");
             RiderLeapReachPercent = H.Bind("Combat", "RiderLeapReachPercent", 80f, new ConfigDescription("\"Witness me!\": the Warboy only leaps at a car within this % of his longest jump (RiderLeapSpeed x 1.2 s, the speeds of both cars counted)", new AcceptableValueRange<float>(10f, 100f)));
             RiderBailRange = H.Bind("Combat", "RiderBailRange", 6f, new ConfigDescription("A Warboy on a motorcycle who cannot turn to you jumps off when you are closer than this, m", new AcceptableValueRange<float>(1f, 30f)));
-            SuspensionLiftCenterOfMass = H.Bind("Combat", "SuspensionLiftCenterOfMass", true, "A template's lifted suspension lowers the car's centre of mass by the lift (Part Adjustment uses the same rule)");
-            StandstillDamping = H.Bind("Combat", "StandstillDamping", true, "A parked car (under 0.3 m/s, no engine torque) is held still, so a lifted chassis on heavy wheels does not shake in place (same rule as Part Adjustment)");
+            SuspensionLiftCenterOfMass = H.Bind("Combat", "SuspensionLiftCenterOfMass", true, "A raider car with a suspension lift kit carries its centre of mass lower (0.3 m, plus 1.5 x any extra lift of the body), so tall cars on big wheels do not flip in turns (Part Adjustment uses the same rule)");
             RiderLeapSpeed = H.Bind("Combat", "RiderLeapSpeed", 11f, new ConfigDescription("\"Witness me!\": the leap's ground speed relative to the rider's car, m/s - a long, flat jump, no lob", new AcceptableValueRange<float>(5f, 40f)));
             RiderBlastDamage = H.Bind("Combat", "RiderBlastDamage", 60f, new ConfigDescription("\"Witness me!\": damage of the rider's blast at its centre (in your car too); falls to a third at the edge", new AcceptableValueRange<float>(0f, 300f)));
             RiderBlastRadius = H.Bind("Combat", "RiderBlastRadius", 7f, new ConfigDescription("\"Witness me!\": reach of the rider's blast, m (damage and the shove of your car)", new AcceptableValueRange<float>(1f, 20f)));

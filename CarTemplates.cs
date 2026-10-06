@@ -26,25 +26,7 @@ namespace Apocapatrol
             foreach (string resource in asm.GetManifestResourceNames().Where(n => n.StartsWith(Prefix, StringComparison.Ordinal) && n.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
                 using (var stream = asm.GetManifestResourceStream(resource)) using (var reader = new StreamReader(stream)) _defaults[resource.Substring(Prefix.Length, resource.Length - Prefix.Length - 5)] = reader.ReadToEnd();
             foreach (var pair in _defaults) { string path = EditorStore.SafePath(Folder, pair.Key + ".json"); if (!File.Exists(path)) EditorStore.AtomicWrite(path, pair.Value); }
-            UpgradeMotorcycleLoot(); MigrateLegacy(); Refresh(true);
-        }
-        private static void UpgradeMotorcycleLoot()
-        {
-            string shipped;
-            if (!_defaults.TryGetValue("motorcycle_template", out shipped)) return;
-            string path = EditorStore.SafePath(Folder, "motorcycle_template.json");
-            try
-            {
-                var old = TemplateFile.FromJson(File.ReadAllText(path));
-                if (old.lootPreset != "car-standard") return;
-                old.lootPreset = "car-empty";
-                // Only update the unchanged 2.0.2 default; preserve edited templates and loot profiles.
-                if (old.ToJson() != TemplateFile.FromJson(shipped).ToJson()) return;
-                string backup = Path.Combine(_root, "TemplateUpgradeBackups"); Directory.CreateDirectory(backup);
-                File.Copy(path, EditorStore.UniquePath(backup, "motorcycle_template-2_0_2", ".json"));
-                EditorStore.AtomicWrite(path, old.ToJson());
-            }
-            catch (Exception e) { Warn("Motorcycle loot upgrade: " + e.Message); }
+            MigrateLegacy(); Refresh(true);
         }
         private static void MigrateLegacy()
         {

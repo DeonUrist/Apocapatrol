@@ -1,0 +1,25 @@
+{
+    "schema": 2,
+    "name": "Blast_Bike",
+    "body": "Motorcycle",
+    "kind": "motorcycle",
+    "lootPreset": "",
+    "rams": "Pedestrians",
+    "driver": "Sprokka",
+    "passenger": "",
+    "bumpers": [],
+    "fillFuel": true,
+    "releaseHandbrake": true,
+    "parts": [
+        { "parent": -1, "hinge": "parts/model/steering_parent/steering_hinge/hinge_headlight", "prefab": "Headlight" },
+        { "parent": -1, "hinge": "parts/model/steering_parent/steering_hinge/steering front/collider#10", "prefab": "wire_plate", "pos": [-0.3667, 0.0268, 0.1305], "rot": [36.287, 298.42, 0.6558] },
+        { "parent": -1, "hinge": "hinge_seat_driver", "prefab": "seat_motorcycle" },
+        { "parent": -1, "hinge": "hinge_exhaust", "prefab": "exhaust_motorcycle" },
+        { "parent": -1, "hinge": "hinge_engine", "prefab": "594cc I2 23HP 39Nm Gasoline" },
+        { "parent": -1, "hinge": "hinge_radiator", "prefab": "radiator_motorcycle" },
+        { "parent": -1, "hinge": "hinge_wheel_F", "prefab": "motorcycle_wheel" },
+        { "parent": -1, "hinge": "hinge_wheel_M", "prefab": "motorcycle_wheel" },
+        { "parent": -1, "hinge": "", "prefab": "blastlance_1", "pos": [0.0224, 0.1801, -0.1937], "rot": [28.8657, 123.3551, 329.5679] }
+    ],
+    "source": "Apocatemplater (Apocapatrol) 2.0.11, 2026-10-06 04:26, from Motorcycle(Clone)26"
+}

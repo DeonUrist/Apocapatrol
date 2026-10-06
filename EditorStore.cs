@@ -25,26 +25,13 @@ namespace Apocapatrol
             Root = Path.GetFullPath(root); StatePath = Path.Combine(Root, "PatrolsAndLoot.json");
             Directory.CreateDirectory(Root);
             Data = Defaults();
-            if (!File.Exists(StatePath)) { Save(); UpgradeMotorcycleDefault(); return; }
+            if (!File.Exists(StatePath)) { Save(); return; }
             try { Data = EditorData.FromJson(File.ReadAllText(StatePath)); }
             catch (Exception e)
             {
                 File.Copy(StatePath, UniquePath(Root, "PatrolsAndLoot.invalid-" + DateTime.Now.ToString("yyyyMMddHHmmss"), ".json"));
                 if (Plugin.Log != null) Plugin.Log.LogWarning("Editor settings invalid; preserved a copy and loaded defaults: " + e.Message);
             }
-            UpgradeMotorcycleDefault();
-        }
-
-        private static void UpgradeMotorcycleDefault()
-        {
-            string marker = Path.Combine(Root, "motorcycle-template-upgrade.txt");
-            if (File.Exists(marker)) return;
-            var bikers = Data.Patrols.FirstOrDefault(g => g.Id == "basic-bikers");
-            if (bikers != null && bikers.Templates.SequenceEqual(new[] { "Halfbreed_Basic", "Halfbreed_Basic", "Halfbreed_Basic" }))
-            {
-                bikers.Templates = new List<string> { "motorcycle_template", "motorcycle_template", "motorcycle_template" }; Save();
-            }
-            File.WriteAllText(marker, "2.0.2 motorcycle default added; custom rosters are preserved.");
         }
 
         internal static void Save() { AtomicWrite(StatePath, Data.ToJson()); }

@@ -1,404 +1,403 @@
 {
   "schema": 2,
-  "patrols": [
-    {
-      "id": "basic-cars",
-      "name": "Basic enemy cars",
+  "patrols": [{
+      "id": "acf5d3370dde43f081082217f3de58ea",
+      "name": "Buzzard Tiny",
       "minKm": 0,
       "minBosses": 0,
-      "chance": 45,
-      "templates": [
-        "PipeRat_Basic",
-        "Poloska_Basic",
-        "TinyTyrant_Basic"
-      ],
-      "uniformCargo": false
-    },
-    {
-      "id": "advanced-cars",
-      "name": "Advanced enemy cars",
-      "minKm": 30,
+      "chance": 5,
+      "uniformCargo": false,
+      "templates": ["Fast_Blast_Bike"],
+      "allowedCargo": []
+    }, {
+      "id": "e75a27ea1511439894ec01486e9fb340",
+      "name": "Buzzard Small",
+      "minKm": 10,
+      "minBosses": 0,
+      "chance": 5,
+      "uniformCargo": false,
+      "templates": ["Porcupine", "Fast_Blast_Bike", "Fast_Blast_Bike"],
+      "allowedCargo": []
+    }, {
+      "id": "d8e44a4078c14163aea04359f8377a05",
+      "name": "Buzzard Medium",
+      "minKm": 20,
       "minBosses": 1,
-      "chance": 35,
-      "templates": [
-        "PipeRat_Advanced",
-        "Poloska_Basic",
-        "Junker_Basic"
-      ],
-      "uniformCargo": false
-    },
-    {
-      "id": "super-cars",
-      "name": "Super advanced enemy cars",
-      "minKm": 50,
+      "chance": 10,
+      "uniformCargo": false,
+      "templates": ["Fast_Blast_Bike", "Fast_Blast_Bike", "Porcupine", "Porcupine"],
+      "allowedCargo": []
+    }, {
+      "id": "3981e4cff8124cd29c0f04e93201016b",
+      "name": "Buzzard Big",
+      "minKm": 30,
       "minBosses": 3,
-      "chance": 20,
-      "templates": [
-        "Junker_Advanced",
-        "Junker_Basic",
-        "PipeRat_Advanced",
-        "Poloska_Basic",
-        "TinyTyrant_Advanced"
-      ],
-      "uniformCargo": false
-    },
-    {
+      "chance": 10,
+      "uniformCargo": false,
+      "templates": ["Porcupine", "Porcupine", "Porcupine", "Spikeback_Motorcycle", "Spikeback_Motorcycle"],
+      "allowedCargo": []
+    }, {
       "id": "basic-bikers",
       "name": "Basic bikers",
       "minKm": 0,
       "minBosses": 0,
-      "chance": 25,
-      "templates": [
-        "motorcycle_template",
-        "motorcycle_template",
-        "motorcycle_template"
-      ],
-      "uniformCargo": false
-    },
-    {
+      "chance": 35,
+      "uniformCargo": false,
+      "templates": ["Bike", "Bike", "Bike"],
+      "allowedCargo": []
+    }, {
       "id": "advanced-bikers",
       "name": "Advanced bikers",
-      "minKm": 30,
+      "minKm": 20,
       "minBosses": 1,
-      "chance": 20,
-      "templates": [
-        "Halfbreed_Basic",
-        "Halfbreed_Basic",
-        "Halfbreed_Basic",
-        "Halfbreed_Advanced",
-        "Halfbreed_Advanced"
-      ],
-      "uniformCargo": false
-    },
-    {
+      "chance": 30,
+      "uniformCargo": false,
+      "templates": ["Bike", "Blast_Bike", "Blast_Bike", "Spikeback_Motorcycle", "Spikeback_Motorcycle"],
+      "allowedCargo": []
+    }, {
       "id": "super-bikers",
       "name": "Super bikers",
-      "minKm": 50,
+      "minKm": 30,
+      "minBosses": 3,
+      "chance": 25,
+      "uniformCargo": false,
+      "templates": ["Junker_Advanced", "Blast_Bike", "Blast_Bike", "Spikeback_Motorcycle", "Spikeback_Motorcycle", "Spikeback_Motorcycle"],
+      "allowedCargo": []
+    }, {
+      "id": "186bed2c2d6d4f8d82fe633f68d257f0",
+      "name": "Chariots",
+      "minKm": 40,
+      "minBosses": 3,
+      "chance": 15,
+      "uniformCargo": false,
+      "templates": ["Chariot", "Chariot", "Chariot", "Chariot", "Chariot"],
+      "allowedCargo": []
+    }, {
+      "id": "a35ae35051c04229b17d6bd120678acd",
+      "name": "Biker Horde",
+      "minKm": 60,
+      "minBosses": 4,
+      "chance": 10,
+      "uniformCargo": false,
+      "templates": ["Chariot", "Bike", "Bike", "Bike", "Bike", "Bike", "Bike", "Bike"],
+      "allowedCargo": []
+    }, {
+      "id": "basic-cars",
+      "name": "Scout",
+      "minKm": 0,
+      "minBosses": 0,
+      "chance": 45,
+      "uniformCargo": false,
+      "templates": [],
+      "allowedCargo": []
+    }, {
+      "id": "0d3af2727da24a8e8ec0a9bcfff1a469",
+      "name": "Small patrol",
+      "minKm": 10,
+      "minBosses": 0,
+      "chance": 15,
+      "uniformCargo": false,
+      "templates": ["Piperat_Bandit", "Piperat_Bandit", "Piperat_Scout"],
+      "allowedCargo": []
+    }, {
+      "id": "cd12b479eb734eec82261b20e759ffe5",
+      "name": "Medium Patrol",
+      "minKm": 20,
+      "minBosses": 1,
+      "chance": 15,
+      "uniformCargo": false,
+      "templates": ["Piperat_Bandit", "Piperat_Bandit", "Weak_Warboy"],
+      "allowedCargo": []
+    }, {
+      "id": "ac00a5b23a63476089be4c5c254081ae",
+      "name": "Large Patrol",
+      "minKm": 30,
+      "minBosses": 2,
+      "chance": 15,
+      "uniformCargo": false,
+      "templates": ["Tiny_Tyrant", "Piperat_Bandit", "Piperat_Bandit", "Bike_with_Rider_Scrud", "Bike_with_Rider_Scrud", "Junker_Advanced"],
+      "allowedCargo": []
+    }, {
+      "id": "6a60d08117104ffe8226b05602233a22",
+      "name": "Warboys Band",
+      "minKm": 40,
       "minBosses": 3,
       "chance": 10,
-      "templates": [
-        "Junker_Advanced",
-        "Halfbreed_Basic",
-        "Halfbreed_Basic",
-        "Halfbreed_Basic",
-        "Halfbreed_Advanced",
-        "Halfbreed_Advanced",
-        "Halfbreed_Advanced"
-      ],
-      "uniformCargo": false
-    }
-  ],
-  "convoys": [
-    {
-      "id": "basic-truck",
-      "name": "Basic empty truck convoy",
-      "minKm": 5,
-      "minBosses": 0,
-      "chance": 0,
-      "templates": [
-        "Rustcargo_Basic",
-        "Junker_Basic",
-        "Junker_Basic",
-        "PipeRat_Basic",
-        "Poloska_Basic",
-        "TinyTyrant_Basic",
-        "PipeRat_Advanced"
-      ],
       "uniformCargo": false,
-      "allowedCargo": [
-        "truck-empty"
-      ]
-    },
-    {
-      "id": "advanced-truck",
-      "name": "Advanced empty truck convoy",
-      "minKm": 20,
-      "minBosses": 3,
-      "chance": 0,
-      "templates": [
-        "Rustcargo_Advanced",
-        "Junker_Advanced",
-        "Junker_Basic",
-        "PipeRat_Advanced",
-        "Poloska_Basic",
-        "TinyTyrant_Advanced",
-        "Poloska_Advanced"
-      ],
+      "templates": ["Weak_Warboy", "Weak_Warboy", "Junker_Warboy", "Junker_Warboy", "Warboy_Tyrant"],
+      "allowedCargo": []
+    }, {
+      "id": "243b27017e1a47459fcb6b0a1588d444",
+      "name": "Warboy Army",
+      "minKm": 50,
+      "minBosses": 4,
+      "chance": 15,
       "uniformCargo": false,
-      "allowedCargo": [
-        "truck-empty"
-      ]
-    },
-    {
+      "templates": ["Warboy_Armored_Tyrant", "Warboy_Tyrant", "Warboy_Tyrant", "Junker_Warboy", "Junker_Warboy", "Warboy_Bike", "Warboy_Bike"],
+      "allowedCargo": []
+    }, {
+      "id": "612abe3afec4428cbd984104ca16d6b7",
+      "name": "War Rig",
+      "minKm": 60,
+      "minBosses": 5,
+      "chance": 10,
+      "uniformCargo": false,
+      "templates": ["War_rig", "Warboy_Armored_Tyrant", "Warboy_Tyrant", "Junker_Warboy", "Junker_Warboy", "Weak_Warboy", "Weak_Warboy", "Warboy_Bike", "Warboy_Bike"],
+      "allowedCargo": []
+    }],
+  "convoys": [{
       "id": "basic-loot",
       "name": "Basic loot convoy",
       "minKm": 5,
       "minBosses": 0,
       "chance": 70,
-      "templates": [
-        "Rustcargo_Loot",
-        "Junker_Basic",
-        "Junker_Basic",
-        "PipeRat_Basic",
-        "Poloska_Basic",
-        "TinyTyrant_Basic",
-        "PipeRat_Advanced"
-      ],
-      "uniformCargo": false,
-      "allowedCargo": [
-        "truck-food",
-        "truck-water",
-        "truck-gasoline",
-        "truck-diesel",
-        "truck-medicine",
-        "truck-weapons",
-        "truck-drugs",
-        "truck-mechanic",
-        "truck-corpses",
-        "truck-rats"
-      ]
-    },
-    {
+      "uniformCargo": true,
+      "templates": ["Rustcargo_Loot", "Piperat_Bandit", "Piperat_Bandit", "Tiny_Tyrant", "Blast_Bike", "Blast_Bike"],
+      "allowedCargo": ["truck-food", "truck-water", "truck-gasoline", "truck-diesel", "truck-medicine", "truck-weapons", "truck-drugs", "truck-mechanic", "truck-corpses", "truck-rats"]
+    }, {
       "id": "advanced-loot",
       "name": "Advanced loot convoy",
       "minKm": 20,
-      "minBosses": 3,
+      "minBosses": 2,
       "chance": 30,
-      "templates": [
-        "Rustcargo_Loot_Advanced",
-        "Junker_Advanced",
-        "Junker_Basic",
-        "PipeRat_Advanced",
-        "Poloska_Basic",
-        "TinyTyrant_Advanced",
-        "Poloska_Advanced"
-      ],
+      "uniformCargo": true,
+      "templates": ["Rustcargo_Loot_Advanced", "Junker_Warboy", "Junker_Warboy", "Junker_Advanced", "Junker_Advanced", "Weak_Warboy", "Weak_Warboy"],
+      "allowedCargo": ["truck-food", "truck-water", "truck-gasoline", "truck-diesel", "truck-medicine", "truck-weapons", "truck-drugs", "truck-mechanic", "truck-corpses", "truck-rats"]
+    }, {
+      "id": "49f6d10dca3f42b0b43e3b582412e5d8",
+      "name": "Huge Convoy",
+      "minKm": 30,
+      "minBosses": 3,
+      "chance": 10,
       "uniformCargo": false,
-      "allowedCargo": [
-        "truck-food",
-        "truck-water",
-        "truck-gasoline",
-        "truck-diesel",
-        "truck-medicine",
-        "truck-weapons",
-        "truck-drugs",
-        "truck-mechanic",
-        "truck-corpses",
-        "truck-rats"
-      ]
-    }
-  ],
-  "carLoot": [
-    {
+      "templates": ["Rustcargo_Loot_Advanced", "Rustcargo_Loot_Advanced", "Warboy_Armored_Tyrant", "Warboy_Armored_Tyrant", "Warboy_Armored_Tyrant", "Junker_Warboy", "Junker_Warboy", "Bike_with_Rider_Scrud", "Bike_with_Rider_Scrud"],
+      "allowedCargo": []
+    }, {
+      "id": "44928a87a9fc4dddbff29723e97a886b",
+      "name": "War Rig Convoy",
+      "minKm": 50,
+      "minBosses": 4,
+      "chance": 10,
+      "uniformCargo": false,
+      "templates": ["War_rig", "Rustcargo_Loot_Advanced", "Rustcargo_Loot_Advanced", "Warboy_Armored_Tyrant", "Warboy_Armored_Tyrant", "Junker_Warboy", "Junker_Warboy", "Piperat_Bandit", "Piperat_Bandit", "Piperat_Bandit"],
+      "allowedCargo": []
+    }],
+  "carLoot": [{
       "id": "car-standard",
       "name": "Standard car loot",
+      "textureKey": "",
       "default": true,
-      "items": [
-        {
+      "spawnChance": 10,
+      "items": [{
+          "id": "ammo_box_12gauge",
+          "chance": 25
+        }, {
           "id": "ammo_box_9mm",
-          "chance": 70
-        },
-        {
+          "chance": 25
+        }, {
+          "id": "ammo_box_22",
+          "chance": 25
+        }, {
+          "id": "ammo_box_762mm",
+          "chance": 10
+        }, {
+          "id": "ammo_box_556mm",
+          "chance": 10
+        }, {
           "id": "bandage_1",
-          "chance": 30
-        }
-      ],
-      "textureKey": ""
-    },
-    {
+          "chance": 50
+        }]
+    }, {
       "id": "car-medical",
       "name": "Medical car loot",
+      "textureKey": "",
       "default": true,
-      "items": [
-        {
+      "spawnChance": 10,
+      "items": [{
           "id": "bandage_1",
           "chance": 150
-        },
-        {
+        }, {
           "id": "first_aid_1",
           "chance": 50
-        }
-      ],
-      "textureKey": ""
-    },
-    {
+        }]
+    }, {
       "id": "car-empty",
       "name": "Empty car loot",
+      "textureKey": "",
       "default": true,
-      "items": [],
-      "textureKey": ""
-    }
-  ],
-  "truckLoot": [
-    {
+      "spawnChance": 10,
+      "items": []
+    }, {
+      "id": "1d0931cf231649258983af7128986a96",
+      "name": "Chariot Loot",
+      "textureKey": "",
+      "default": false,
+      "spawnChance": 10,
+      "items": [{
+          "id": "ammo_box_762mm",
+          "chance": 50
+        }, {
+          "id": "ammo_box_556mm",
+          "chance": 50
+        }]
+    }],
+  "truckLoot": [{
       "id": "truck-food",
       "name": "Food cargo",
+      "textureKey": "cargo_food",
       "default": true,
-      "items": [
-        {
+      "spawnChance": 18,
+      "items": [{
           "id": "dogfood_can",
           "chance": 800
-        }
-      ],
-      "textureKey": "cargo_food",
-      "spawnChance": 18
-    },
-    {
+        }]
+    }, {
       "id": "truck-water",
       "name": "Water cargo",
+      "textureKey": "Water",
       "default": true,
-      "items": [
-        {
+      "spawnChance": 14,
+      "items": [{
           "id": "Water_Can_Plastic",
           "chance": 400
-        },
-        {
+        }, {
           "id": "Water_Barrel",
           "chance": 50
-        }
-      ],
-      "textureKey": "cargo_water",
-      "spawnChance": 14
-    },
-    {
+        }]
+    }, {
       "id": "truck-gasoline",
       "name": "Gasoline cargo",
+      "textureKey": "Gasoline",
       "default": true,
-      "items": [
-        {
+      "spawnChance": 11,
+      "items": [{
           "id": "Gasoline_Can",
           "chance": 400
-        },
-        {
+        }, {
           "id": "Gasoline_Barrel",
           "chance": 50
-        }
-      ],
-      "textureKey": "cargo_gasoline",
-      "spawnChance": 11
-    },
-    {
+        }]
+    }, {
       "id": "truck-diesel",
       "name": "Diesel cargo",
+      "textureKey": "Diesel",
       "default": true,
-      "items": [
-        {
+      "spawnChance": 11,
+      "items": [{
           "id": "Diesel_Can",
           "chance": 400
-        },
-        {
+        }, {
           "id": "Diesel_Barrel",
           "chance": 50
-        }
-      ],
-      "textureKey": "cargo_diesel",
-      "spawnChance": 11
-    },
-    {
+        }]
+    }, {
       "id": "truck-medicine",
       "name": "Medical cargo",
+      "textureKey": "Medicine",
       "default": true,
-      "items": [
-        {
+      "spawnChance": 11,
+      "items": [{
           "id": "bandage_1",
           "chance": 500
-        },
-        {
+        }, {
           "id": "first_aid_1",
           "chance": 250
-        }
-      ],
-      "textureKey": "cargo_medicine",
-      "spawnChance": 11
-    },
-    {
+        }]
+    }, {
       "id": "truck-weapons",
       "name": "Weapons cargo",
+      "textureKey": "Weapons",
       "default": true,
-      "items": [
-        {
+      "spawnChance": 11,
+      "items": [{
           "id": "akms",
           "chance": 250
-        },
-        {
+        }, {
           "id": "ammo_box_big_762mm",
           "chance": 550
-        }
-      ],
-      "textureKey": "cargo_weapons",
-      "spawnChance": 11
-    },
-    {
+        }]
+    }, {
       "id": "truck-drugs",
       "name": "Drugs cargo",
+      "textureKey": "Drugs",
       "default": true,
-      "items": [
-        {
+      "spawnChance": 7,
+      "items": [{
           "id": "alcohol_canister",
           "chance": 200
-        },
-        {
+        }, {
           "id": "weed_bag",
           "chance": 300
-        },
-        {
+        }, {
           "id": "plant_weed",
           "chance": 100
-        }
-      ],
-      "textureKey": "cargo_drugs",
-      "spawnChance": 7
-    },
-    {
+        }]
+    }, {
       "id": "truck-mechanic",
       "name": "Mechanic cargo",
+      "textureKey": "Mechanic",
       "default": true,
-      "items": [
-        {
+      "spawnChance": 7,
+      "items": [{
           "id": "Repairbox_Small",
           "chance": 300
-        },
-        {
+        }, {
           "id": "MotorOil_Can_Big",
           "chance": 100
-        }
-      ],
-      "textureKey": "cargo_mechanic",
-      "spawnChance": 7
-    },
-    {
+        }]
+    }, {
       "id": "truck-corpses",
       "name": "Corpses cargo",
+      "textureKey": "Corpses",
       "default": true,
-      "items": [
-        {
+      "spawnChance": 7,
+      "items": [{
           "id": "Scraffa_Dead",
           "chance": 400
-        }
-      ],
-      "textureKey": "cargo_food",
-      "spawnChance": 7
-    },
-    {
+        }]
+    }, {
       "id": "truck-rats",
       "name": "Rats cargo",
+      "textureKey": "Rats",
       "default": true,
-      "items": [
-        {
+      "spawnChance": 3,
+      "items": [{
           "id": "Rat_Dead",
           "chance": 700
-        }
-      ],
-      "textureKey": "cargo_food",
-      "spawnChance": 3
-    },
-    {
+        }]
+    }, {
       "id": "truck-empty",
       "name": "Empty truck loot",
-      "default": true,
-      "items": [],
       "textureKey": "",
-      "spawnChance": 0
-    }
+      "default": true,
+      "spawnChance": 0,
+      "items": []
+    }],
+  "templateOrder": [
+    "Example_PipeRat",
+    "Junker_Advanced",
+    "Junker_Basic",
+    "Bike",
+    "PipeRat_Basic",
+    "Bike",
+    "Bike_with_Rider_Scrud",
+    "Spikeback_Motorcycle",
+    "Blast_Bike",
+    "Chariot",
+    "Fast_Blast_Bike",
+    "Piperat_Scout",
+    "Piperat_Bandit",
+    "Porcupine",
+    "Tiny_Tyrant",
+    "Big_Tyrant",
+    "Warboy_Bike",
+    "Weak_Warboy",
+    "Junker_Warboy",
+    "Warboy_Tyrant",
+    "Rustcargo_Loot",
+    "Rustcargo_Loot_Advanced",
+    "Bike_with_Rider_Flexa",
+    "War_rig",
+    "Warboy_Armored_Tyrant"
   ]
 }
