@@ -54,9 +54,13 @@ namespace Apocapatrol
         internal bool Exploded;               // self-destructed: a dead chassis, removed beyond Explode.RemoveDistance
         internal string CargoKey = "";        // loot type at build (Food, Water, ...; "" = none): the container texture, kept across saves
         internal string TemplateName = "";    // the template this car was built from (2.1.0; "" for restored cars) - the rider spot tweaker saves into it
-        internal GameObject Rider;            // the blast-lance thrower on the roof, or null (not saved: a restored car has none)
-        internal Transform RiderAnchor;       // its spot (Apocapatrol.RiderPos under the car)
-        internal string RiderPrefab = "";
+        // human turrets (2.2.0; slot 0 = the 2.1.0 rider): the body on each spot (null once it jumped, leapt or died) and the spot itself.
+        // Not saved: a restored car has none.
+        internal readonly GameObject[] Riders = new GameObject[3];
+        internal readonly Transform[] RiderAnchors = new Transform[3];
+        internal GameObject Rider { get { foreach (var r in Riders) if (r != null) return r; return null; } }
+        internal Transform RiderAnchor { get { foreach (var a in RiderAnchors) if (a != null) return a; return null; } }
+        internal void DropRider(GameObject go) { for (int i = 0; i < Riders.Length; i++) if (Riders[i] == go) Riders[i] = null; }
 
         internal static PatrolMarker Attach(GameObject car, string bodyPrefab, string driverPrefab, GameObject driver,
             string passengerPrefab, GameObject passenger, RamTargets rams)

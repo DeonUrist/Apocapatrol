@@ -20,6 +20,10 @@ namespace Apocapatrol
         private bool _bike;                   // on a motorcycle: the driving arms reach out to the handlebar grips, not to a wheel
         private Quaternion _seatRotation;
         private bool _logged;
+        // 2.2.0 human turret gunner: the whole body turns to the target (360), crouched on a roof (squat legs, gun up) or seated on a
+        // motorcycle (seated legs, arms down until it aims)
+        private bool _turret, _turretSeated;
+        private float _turretYaw;
 
         internal static Pose Apply(GameObject occupant, Transform anchor, string humanType)
         {
@@ -88,6 +92,13 @@ namespace Apocapatrol
             _seatRotation = _root.localRotation;
         }
 
+        internal void ConfigureTurret(bool seated)
+        {
+            _turret = true; _turretSeated = seated;
+            _lockSeatRotation = false;
+            _turretYaw = 0f;
+        }
+
         // the occupant changed seats (passenger promoted to driver): follow the new anchor, no passenger aiming any more
         internal void Reseat(Transform anchor)
         {
@@ -138,6 +149,7 @@ namespace Apocapatrol
                 int mask = d2 > 300f * 300f ? 15 : d2 > 120f * 120f ? 3 : 0;
                 if (mask != 0 && (++_lodFrame & mask) != 0) return;
             }
+            if (_turret) { TurretPose(); return; }
             if (_lockSeatRotation) _root.localRotation = _seatRotation;
             var right = _anchor.right;
             var up = _anchor.up;
@@ -192,6 +204,57 @@ namespace Apocapatrol
             _root.position += target - pivot;
 
             if (!_logged) { _logged = true; Plugin.Verbose("Pose: applied, hips at " + target + " root at " + _root.position); }
+        }
+
+        private void TurretPose()
+        {
+            // the whole body turns about the spot's up toward the target (no limit); back to the car's forward without one
+            float wantedYaw = 0f, wantedPitch = 0f;
+            if (_aimActive && _spine2 != null)
+            {
+                var local = _anchor.InverseTransformDirection(_aimPoint - _spine2.position);
+                float flat = Mathf.Sqrt(local.x * local.x + local.z * local.z);
+                if (flat > 0.001f)
+                {
+                    wantedYaw = Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg;
+                    wantedPitch = Mathf.Clamp(Mathf.Atan2(local.y, flat) * Mathf.Rad2Deg, -Plugin.MaxAimPitch.Value, Plugin.MaxAimPitch.Value);
+                }
+            }
+            else wantedYaw = _turretYaw * 0.995f;   // idle: stays roughly where it looked, easing home slowly
+            float step = Plugin.AimTurnSpeed.Value * Time.deltaTime;
+            _turretYaw = Mathf.MoveTowardsAngle(_turretYaw, wantedYaw, step);
+            _aimPitch = Mathf.MoveTowardsAngle(_aimPitch, wantedPitch, step);
+            _root.rotation = _anchor.rotation * Quaternion.Euler(0f, _turretYaw, 0f);
+            var right = _root.right; var up = _root.up;
+
+            float thigh, knee, hip;
+            if (_turretSeated) { thigh = Plugin.PoseThigh.Value; knee = Plugin.PoseKnee.Value; hip = 0.08f; }   // the spot = the seat surface
+            else { thigh = Plugin.TurretThigh.Value; knee = Plugin.TurretKnee.Value; hip = Plugin.TurretHipHeight.Value; }
+            float spread = _turretSeated ? 0f : 10f;   // a squat opens the knees a little
+            Swing(_lUpLeg, -thigh, right); Swing(_lUpLeg, -spread, up); Swing(_lLeg, knee, right);
+            Swing(_rUpLeg, -thigh, right); Swing(_rUpLeg, spread, up); Swing(_rLeg, knee, right);
+
+            // arms: the gun up (the human's shooting profile) - on a motorcycle only while it aims, the idle arms (down) otherwise
+            if (_armPose != null && (!_turretSeated || _aimActive))
+            {
+                ApplyBone(_lArm, _lForeArm, _armPose.LeftArm, right, up, false);
+                ApplyBone(_lForeArm, _lHand, _armPose.LeftElbow, right, up, false);
+                ApplyBone(_lHand, _lForeArm, _armPose.LeftHand, right, up, true);
+                ApplyBone(_rArm, _rForeArm, _armPose.RightArm, right, up, false);
+                ApplyBone(_rForeArm, _rHand, _armPose.RightElbow, right, up, false);
+                ApplyBone(_rHand, _rForeArm, _armPose.RightHand, right, up, true);
+                ApplyWeapons();
+            }
+
+            _aimYaw = 0f;   // the body already faces the target: the spine only pitches
+            AimSpine(_spine, 0.25f, up, right);
+            AimSpine(_spine1, 0.35f, up, right);
+            AimSpine(_spine2, 0.40f, up, right);
+
+            var target = _anchor.position + _anchor.up * hip;
+            var pivot = _hips != null ? _hips.position : _root.position;
+            _root.position += target - pivot;
+            if (!_logged) { _logged = true; Plugin.Verbose("Pose: human turret " + (_turretSeated ? "seated" : "crouched") + ", hips at " + target); }
         }
 
         private static void Swing(Transform bone, float degrees, Vector3 axis)

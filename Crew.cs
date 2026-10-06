@@ -175,7 +175,7 @@ namespace Apocapatrol
             if (_vacated) return;
             _vacated = true;
             var mk = Marker;   // a blast-lance rider on the roof jumps off with the crew
-            if (mk != null && mk.Rider != null) { var g = mk.Rider.GetComponent<RiderGuard>(); if (g != null) g.JumpOff(why); }
+            if (mk != null) foreach (var r in mk.Riders.ToArray()) { var g = r != null ? r.GetComponent<RiderGuard>() : null; if (g != null) g.JumpOff(why); }
             Explode.Schedule(this, _car, Marker, why);
         }
 

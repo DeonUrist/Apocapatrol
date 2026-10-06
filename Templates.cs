@@ -18,8 +18,11 @@ namespace Apocapatrol
         internal RamTargets Rams = RamTargets.Pedestrians;
         internal string Body = "", Wheel = "", Engine = "", Radiator = "", SteeringWheel = "", Exhaust = "", Seat = "", PassengerSeat = "";
         internal string Driver = "", Passenger = "";
-        internal string Rider = "";           // blast-lance thrower on the roof (2.1.0); "" = none
-        internal float[] RiderPos = new float[0];   // frame-local feet position, empty = auto (top of the car)
+        // human turrets (2.2.0; turret 1 = the 2.1.0 blast-lance rider): "Warboy" / a non-ranged human = blast lances, a ranged human = a gunner;
+        // "" = none. Spots: frame-local feet positions, empty = automatic
+        internal readonly string[] Turrets = { "", "", "" };
+        internal readonly float[][] TurretPos = { new float[0], new float[0], new float[0] };
+        internal string Rider { get { return Turrets[0]; } }
         internal string RearWheel = "";       // wheel item for hinge_wheel_RL/RR; "" = the same as Wheel
         internal string[] Bumpers = null;     // front bumper rolled per build from these ("" = none); null = never a bumper
         internal bool FillFuel = true, ReleaseHandbrake = true;

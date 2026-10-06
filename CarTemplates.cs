@@ -142,7 +142,6 @@ namespace Apocapatrol
                 Weight = Math.Max(0f, f.weight),
                 Driver = S(f.driver),
                 Passenger = S(f.passenger),
-                Rider = S(f.rider), RiderPos = f.riderPos ?? new float[0],
                 LootPreset = S(f.lootPreset),
                 Bumpers = f.bumpers != null && f.bumpers.Length > 0 ? f.bumpers.Select(S).ToArray() : null,
                 FillFuel = f.fillFuel, ReleaseHandbrake = f.releaseHandbrake,
@@ -151,6 +150,7 @@ namespace Apocapatrol
                 Origin = origin,
             };
             if (t.LootPreset.Length == 0 && f.schema < 2) t.LootPreset = t.IsTruck ? (f.cargo.Length > 0 ? "truck-food" : "truck-empty") : "car-standard";
+            for (int i = 0; i < 3; i++) { t.Turrets[i] = S(f.Turret(i)); t.TurretPos[i] = f.TurretPos(i) ?? new float[0]; }
             t.Rams = S(f.rams).Length > 0 ? CarTemplate.ParseRams(S(f.rams)) : (t.IsTruck ? RamTargets.Cars : RamTargets.Pedestrians);
             foreach (var p in parts)   // for the menu summary / Describe
             {

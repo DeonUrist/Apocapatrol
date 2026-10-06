@@ -37,7 +37,8 @@ namespace Apocapatrol
         }
         private readonly EditorSession _session = new EditorSession();
         private Transform _draftCar;
-        private string _templateName = "", _driverName = "Scraffa", _passengerName = "Sprokka", _lootId = "", _riderName = "None";
+        private string _templateName = "", _driverName = "Scraffa", _passengerName = "Sprokka", _lootId = "";
+        private readonly string[] _turrets = { "None", "None", "None" };   // human turrets 1-3 as the dropdowns show them
         private Action _afterDraw;
         private bool _truck;
         private bool _bike;   // the true motorcycle (no rear, no seats behind): its templates carry no loot setting at all
@@ -57,7 +58,7 @@ namespace Apocapatrol
             string how; var car = FindCar(out how); if (car == null) return;
             if (!_session.Acquire()) return;
             _draftCar = car; _truck = PrefabName(car.name).Equals("Rustcargo", StringComparison.OrdinalIgnoreCase) && FrameChildren(car, "PhysicsLock").Any();
-            _templateName = ""; _driverName = "Scraffa"; _passengerName = "None"; _riderName = "None"; _ledgerDropdown.Close();
+            _templateName = ""; _driverName = "Scraffa"; _passengerName = "None"; _turrets[0] = _turrets[1] = _turrets[2] = "None"; _ledgerDropdown.Close();
             _bike = MotorcycleIntegration.IsBody(PrefabName(car.name));
             var profiles = _truck ? EditorStore.Data.TruckLoot : EditorStore.Data.CarLoot; _lootId = _bike ? "" : !_truck && profiles.Any(p => p.Id == "car-empty") ? "car-empty" : profiles.Count > 0 ? profiles[0].Id : "";
         }
@@ -86,33 +87,45 @@ namespace Apocapatrol
             LedgerSkin.Window(_rect); LedgerSkin.Header(_rect.width);
             GUI.enabled = enabled && !_ledgerDropdown.IsOpen;
             if (LedgerSkin.Button(new Rect(_rect.width - 96, 24, 70, 34), "CLOSE", gameFont: true, transparent: true)) _afterDraw = Close;
-            var box = new Rect((_rect.width - 600) / 2, 104, 600, 474); LedgerSkin.Panel(box);
+            var box = new Rect((_rect.width - 600) / 2, 92, 600, 496); LedgerSkin.Panel(box);
             float x = box.x + 22, input = x + 160, w = box.width - 204;
-            LedgerSkin.Label(new Rect(x, box.y + 22, box.width - 44, 26), "Save vehicle template", LedgerSkin.DialogTitle);
-            LedgerSkin.Label(new Rect(x, box.y + 53, box.width - 44, 20), (_truck ? "Storage truck" : "Vehicle") + " · " + PrefabName(_draftCar.name), LedgerSkin.Small, LedgerSkin.Muted);
-            LedgerSkin.Label(new Rect(x, box.y + 88, 144, 34), "Template name");
-            _templateName = GUI.TextField(new Rect(input, box.y + 88, w, 34), _templateName, LedgerSkin.Input);
-            if (_templateName.Length == 0 && GUI.GetNameOfFocusedControl() == "") LedgerSkin.Label(new Rect(input + 10, box.y + 88, w - 20, 34), "Automatic name", null, LedgerSkin.Muted);
+            const float Row = 42f;
+            LedgerSkin.Label(new Rect(x, box.y + 18, box.width - 44, 26), "Save vehicle template", LedgerSkin.DialogTitle);
+            LedgerSkin.Label(new Rect(x, box.y + 47, box.width - 44, 20), (_truck ? "Storage truck" : "Vehicle") + " · " + PrefabName(_draftCar.name), LedgerSkin.Small, LedgerSkin.Muted);
+            float y0 = box.y + 78;
+            LedgerSkin.Label(new Rect(x, y0, 144, 34), "Template name");
+            _templateName = GUI.TextField(new Rect(input, y0, w, 34), _templateName, LedgerSkin.Input);
+            if (_templateName.Length == 0 && GUI.GetNameOfFocusedControl() == "") LedgerSkin.Label(new Rect(input + 10, y0, w - 20, 34), "Automatic name", null, LedgerSkin.Muted);
             var people = new[] { "None", "Scraffa", "Spanna", "Sprokka", "Boltjaw", "Flexa", "Lugnut", "Scrud" }.Select(n => new KeyValuePair<string, string>(n, n)).ToList();
-            DraftLedgerDropdown(new Rect(input, box.y + 135, w, 34), "Driver", _driverName, people, value => _driverName = value, box.yMax - 84);
-            DraftLedgerDropdown(new Rect(input, box.y + 182, w, 34), "Passenger", _passengerName, people, value => _passengerName = value, box.yMax - 84);
+            DraftLedgerDropdown(new Rect(input, y0 + Row, w, 34), "Driver", _driverName, people, value => _driverName = value, box.yMax - 84);
+            DraftLedgerDropdown(new Rect(input, y0 + Row * 2, w, 34), "Passenger", _passengerName, people, value => _passengerName = value, box.yMax - 84);
             var profiles = _truck ? EditorStore.Data.TruckLoot : EditorStore.Data.CarLoot;
             var profile = profiles.FirstOrDefault(p => p.Id == _lootId);
+            float yl = y0 + Row * 3;
             if (_bike)
             {
-                LedgerSkin.Label(new Rect(x, box.y + 229, 144, 34), "Car loot");
-                LedgerSkin.Label(new Rect(input, box.y + 229, w, 34), "None - a motorcycle carries no loot", null, LedgerSkin.Muted);
+                LedgerSkin.Label(new Rect(x, yl, 144, 34), "Car loot");
+                LedgerSkin.Label(new Rect(input, yl, w, 34), "None - a motorcycle carries no loot", null, LedgerSkin.Muted);
             }
             else if (!_truck)
             {
-                LedgerSkin.Label(new Rect(x, box.y + 229, 144, 34), "Car loot");
-                var anchor = new Rect(input, box.y + 229, w, 34);
+                LedgerSkin.Label(new Rect(x, yl, 144, 34), "Car loot");
+                var anchor = new Rect(input, yl, w, 34);
                 if (LedgerSkin.Dropdown(anchor, profile != null ? profile.Name : "None")) _ledgerDropdown.Open(anchor, new[] { new KeyValuePair<string, string>("", "None") }.Concat(profiles.Select(p => new KeyValuePair<string, string>(p.Id, p.Name))).ToList(), _lootId, value => _lootId = value, box.yMax - 84);
             }
-            if (!_truck && !_bike) DraftLedgerDropdown(new Rect(input, box.y + 276, w, 34), "Blastlance rider", _riderName, people, value => _riderName = value, box.yMax - 84);
-            else { LedgerSkin.Label(new Rect(x, box.y + 276, 144, 34), "Blastlance rider"); LedgerSkin.Label(new Rect(input, box.y + 276, w, 34), "None - cars only", null, LedgerSkin.Muted); }
-            LedgerSkin.Label(new Rect(x, box.y + 333, box.width - 44, 20), "Attached parts and adjusted hinges are recorded automatically.", LedgerSkin.Small, LedgerSkin.Muted);
-            LedgerSkin.Label(new Rect(x, box.y + 350, box.width - 44, 20), "Stored in PlayerTemplates. Locked cargo items are excluded.", LedgerSkin.Small, LedgerSkin.Muted);
+            // human turrets: 3 on a car's roof, 1 on a motorcycle, none on a truck
+            int slots = Rider.Slots(PrefabName(_draftCar.name), _truck, false);
+            var turretChoices = Rider.TurretChoices.Select(n => new KeyValuePair<string, string>(n, n)).ToList();
+            for (int i = 0; i < 3; i++)
+            {
+                float yt = y0 + Row * (4 + i); int k = i;
+                string label = "Human turret " + (i + 1);
+                if (i < slots) DraftLedgerDropdown(new Rect(input, yt, w, 34), label, _turrets[i], turretChoices, value => _turrets[k] = value, box.yMax - 84);
+                else { LedgerSkin.Label(new Rect(x, yt, 144, 34), label); LedgerSkin.Label(new Rect(input, yt, w, 34), _truck ? "None - not on trucks" : "None - a motorcycle takes one", null, LedgerSkin.Muted); }
+            }
+            float yn = y0 + Row * 7 + 2;
+            LedgerSkin.Label(new Rect(x, yn, box.width - 44, 20), "Warboy = Scraffa with blast lances; a gunner crouches on the roof and shoots all around.", LedgerSkin.Small, LedgerSkin.Muted);
+            LedgerSkin.Label(new Rect(x, yn + 18, box.width - 44, 20), "Attached parts and adjusted hinges are recorded automatically. Stored in PlayerTemplates.", LedgerSkin.Small, LedgerSkin.Muted);
             LedgerSkin.Rule(x, box.yMax - 73, box.width - 44);
             if (LedgerSkin.Button(new Rect(box.xMax - 213, box.yMax - 55, 77, 34), "Cancel")) _afterDraw = Close;
             if (LedgerSkin.Button(new Rect(box.xMax - 128, box.yMax - 55, 106, 34), "Save template", primary: true))
@@ -120,6 +133,8 @@ namespace Apocapatrol
             LedgerSkin.Rule(6, 590, _rect.width - 12);
             GUI.enabled = enabled; _ledgerDropdown.Draw();
         }
+        private string TurretFor(int i, string body) { return i < Rider.Slots(body, _truck, false) ? Rider.Stored(_turrets[i]) : ""; }
+
         private void DraftLedgerDropdown(Rect r, string label, string value, List<KeyValuePair<string, string>> people, Action<string> setter, float bottom)
         {
             LedgerSkin.Label(new Rect(r.x - 160, r.y, 144, 34), label);
@@ -366,8 +381,8 @@ namespace Apocapatrol
                 rams = kind == "truck" ? "Cars" : "Pedestrians",
                 driver = hasDriverSeat ? (_driverName == "None" ? "" : _driverName) : "",
                 passenger = hasPassengerSeat ? (_passengerName == "None" ? "" : _passengerName) : "",
-                rider = _truck || _bike || _riderName == "None" ? "" : _riderName,
                 parts = w.Parts.ToArray(),
+                rider = TurretFor(0, body), rider2 = TurretFor(1, body), rider3 = TurretFor(2, body),
                 source = "Apocatemplater (" + Plugin.NAME + ") " + Plugin.VERSION + ", " + DateTime.Now.ToString("yyyy-MM-dd HH:mm") + ", from " + car.name,
             };
             string path = Path.Combine(dir, name + ".json");

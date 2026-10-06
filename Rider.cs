@@ -18,18 +18,38 @@ namespace Apocapatrol
         internal const string Projectile = "blastlance_1_explode";   // what the player's blast lance [Attack] FSM creates and pushes at 30 m/s
         internal const string LanceItem = "blastlance_1";             // the item, used as the visual in the rider's hand
 
-        internal static GameObject Seat(GameObject car, PatrolMarker marker, string prefabName, float[] localPos)
+        // ------------------------------------------------------------ human turrets (2.2.0)
+        internal const string Warboy = "Warboy", WarboyPrefab = "Scraffa";
+        // what the editors offer: a Warboy (blast lances, "Witness me!") or a ranged crew human (a gunner); "None" first, the rest A-Z
+        internal static readonly string[] TurretChoices = { "None", "Boltjaw", "Flexa", "Lugnut", "Scrud", "Sprokka", Warboy };
+        internal static bool IsGunner(string who) { return !string.IsNullOrEmpty(who) && Array.Exists(PassengerGuard.RangedHumans, n => string.Equals(n, who.Trim(), StringComparison.OrdinalIgnoreCase)); }
+        // a stored value as the editors show it: "" = None, a ranged human as is, anything else (Warboy, the 2.1.x "Scraffa") = Warboy
+        internal static string Display(string stored) { return string.IsNullOrEmpty(stored) ? "None" : IsGunner(stored) ? stored.Trim() : Warboy; }
+        internal static string Stored(string display) { return string.IsNullOrEmpty(display) || display == "None" ? "" : display; }
+        internal static bool IsBikeBody(string body) { return MotorcycleIntegration.IsBody(body) || string.Equals(body, "Halfbreed", StringComparison.OrdinalIgnoreCase); }
+        // turret spots a vehicle has: 3 on a car (roof), 1 on a motorcycle, none on a truck
+        internal static int Slots(string body, bool truck, bool motorcycleKind)
         {
+            if (truck || string.Equals(body, "Rustcargo", StringComparison.OrdinalIgnoreCase)) return 0;
+            return motorcycleKind || IsBikeBody(body) ? 1 : 3;
+        }
+
+        internal static GameObject Seat(GameObject car, PatrolMarker marker, int slot, string who, float[] localPos)
+        {
+            bool gunner = IsGunner(who);
+            string prefabName = gunner ? who.Trim() : string.Equals(who, Warboy, StringComparison.OrdinalIgnoreCase) ? WarboyPrefab : who.Trim();
             var prefab = Prefabs.FindAny(prefabName);
-            if (prefab == null) { Plugin.Log.LogWarning("Rider prefab not found: " + prefabName); return null; }
-            var anchor = new GameObject("Apocapatrol.RiderPos").transform;
+            if (prefab == null) { Plugin.Log.LogWarning("Human turret prefab not found: " + prefabName); return null; }
+            bool bike = IsBikeBody(TemplateExporter.PrefabName(car.name));
+            var anchor = new GameObject("Apocapatrol.RiderPos" + (slot > 0 ? (slot + 1).ToString() : "")).transform;
             anchor.SetParent(car.transform, false);
-            anchor.localPosition = localPos != null && localPos.Length == 3 ? new Vector3(localPos[0], localPos[1], localPos[2]) : AutoSpot(car);
+            anchor.localPosition = localPos != null && localPos.Length == 3 ? new Vector3(localPos[0], localPos[1], localPos[2]) : AutoSpot(car, slot, bike);
             anchor.localRotation = Quaternion.identity;
 
             var go = UnityEngine.Object.Instantiate(prefab, anchor.position, anchor.rotation);
             go.SetActive(true);
-            Crew.MuteAi(go);                       // no mover / detection / attack FSMs: the guard does the throwing
+            if (gunner) PassengerGuard.Prepare(go, Plugin.RangedCombat.Value);   // ranged-only rewiring, everything but combat muted (before Start)
+            else Crew.MuteAi(go);                  // no mover / detection / attack FSMs: the guard does the throwing
             PassengerGuard.NeutralizeContact(go);  // melee / fire-contact damage FSMs and hitbox off (a passive body that can be shot)
             go.name = prefab.name + "(Rider)";
             var carCols = car.GetComponentsInChildren<Collider>(true);
@@ -40,17 +60,31 @@ namespace Apocapatrol
             root.isKinematic = true;
             root.interpolation = RigidbodyInterpolation.None;
             go.transform.SetParent(anchor, true);
-            marker.Rider = go; marker.RiderAnchor = anchor; marker.RiderPrefab = prefab.name;
-            go.AddComponent<RiderGuard>().Init(car, marker, anchor, prefab.name);
-            Plugin.Verbose("Rider: " + go.name + " on " + car.name + " at local " + anchor.localPosition.ToString("F2"));
+            slot = Mathf.Clamp(slot, 0, 2);
+            marker.Riders[slot] = go; marker.RiderAnchors[slot] = anchor;
+            go.AddComponent<RiderGuard>().Init(car, marker, anchor, prefab.name, slot, gunner, bike);
+            if (gunner)
+            {
+                // a gunner: the passenger's vanilla ranged combat, all around (360), crouched on the roof / seated on a bike
+                var pose = Pose.Apply(go, anchor, prefab.name);
+                PassengerGuard.AttachTurret(go, car, anchor);
+                pose.ConfigureTurret(bike);
+            }
+            Plugin.Verbose("Human turret " + (slot + 1) + ": " + go.name + (gunner ? " (gunner)" : " (Warboy)") + " on " + car.name + " at local " + anchor.localPosition.ToString("F2"));
             return go;
         }
 
-        // the top of the car: the highest point of its renderers (parts included - plates on the roof count), centred, over the frame's middle
-        internal static Vector3 AutoSpot(GameObject car)
+        // the automatic spot (feet). Car: turret 1 on the top of the car (the highest point of its renderers, centred), turrets 2 and 3 behind
+        // it to the left and right, on whatever roof is under them. Motorcycle: behind the driver on the seat.
+        internal static Vector3 AutoSpot(GameObject car, int slot, bool bike)
         {
             var ct = car.transform;
-            bool any = false; var b = new Bounds();
+            if (bike)
+            {
+                var sit = Patrol.FindChild(ct, "sitPos");
+                if (sit != null) return ct.InverseTransformPoint(sit.position) + new Vector3(0f, -0.25f, -0.55f);   // the seat behind the driver (feet / seat surface)
+            }
+            bool any = false; var b = new Bounds();   // frame-local bounds of the renderers
             foreach (var r in car.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null || !r.enabled || r.GetType().Name == "ParticleSystemRenderer") continue;
@@ -58,11 +92,40 @@ namespace Apocapatrol
                 for (var a = r.transform; a != null && a != ct; a = a.parent)
                     if (a.name.IndexOf("(Driver)", StringComparison.Ordinal) >= 0 || a.name.IndexOf("(Passenger)", StringComparison.Ordinal) >= 0 || a.name.IndexOf("(Rider)", StringComparison.Ordinal) >= 0 || a.name == "PhysicsLock") { occupant = true; break; }
                 if (occupant) continue;
-                if (!any) { b = r.bounds; any = true; } else b.Encapsulate(r.bounds);
+                var wb = r.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var c = ct.InverseTransformPoint(new Vector3((i & 1) == 0 ? wb.min.x : wb.max.x, (i & 2) == 0 ? wb.min.y : wb.max.y, (i & 4) == 0 ? wb.min.z : wb.max.z));
+                    if (!any) { b = new Bounds(c, Vector3.zero); any = true; } else b.Encapsulate(c);
+                }
             }
-            if (!any) return new Vector3(0f, 1.2f, 0f);
-            var top = ct.InverseTransformPoint(new Vector3(b.center.x, b.max.y, b.center.z));
-            return new Vector3(0f, top.y + 0.02f, top.z);
+            if (!any) return new Vector3(slot == 1 ? -0.4f : slot == 2 ? 0.4f : 0f, 1.2f, slot > 0 ? -0.6f : 0f);
+            // the world-AABB corners overestimate a turned car; the top over the middle is still right
+            var top = TopAt(car, new Vector3(b.center.x, b.max.y, b.center.z), b.max.y);
+            if (slot == 0) return new Vector3(0f, top + 0.02f, b.center.z);
+            float x = Mathf.Min(0.45f, b.extents.x * 0.4f) * (slot == 1 ? -1f : 1f), z = b.center.z - Mathf.Min(0.7f, b.extents.z * 0.3f);
+            return new Vector3(x, TopAt(car, new Vector3(x, b.max.y, z), top) + 0.02f, z);
+        }
+
+        // the highest car surface under a frame-local point (a ray down onto the car's own colliders); fallback when none
+        private static readonly RaycastHit[] _downHits = new RaycastHit[32];
+        private static float TopAt(GameObject car, Vector3 local, float fallback)
+        {
+            var ct = car.transform;
+            var from = ct.TransformPoint(local) + ct.up * 1.5f;
+            int n = Physics.RaycastNonAlloc(from, -ct.up, _downHits, 6f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float best = float.MinValue;
+            for (int i = 0; i < n; i++)
+            {
+                var c = _downHits[i].collider;
+                if (c == null || !c.transform.IsChildOf(ct)) continue;
+                bool occupant = false;
+                for (var a = c.transform; a != null && a != ct; a = a.parent) if (a.name.IndexOf("(", StringComparison.Ordinal) >= 0 && (a.name.EndsWith("(Driver)", StringComparison.Ordinal) || a.name.EndsWith("(Passenger)", StringComparison.Ordinal) || a.name.EndsWith("(Rider)", StringComparison.Ordinal))) { occupant = true; break; }
+                if (occupant) continue;
+                float y = ct.InverseTransformPoint(_downHits[i].point).y;
+                if (y > best) best = y;
+            }
+            return best > float.MinValue ? best : fallback;
         }
 
         // Apocaplayer's humanoid clips (Apocaplayer.Anims.Get(name)) - null without the mod or the clip
@@ -261,8 +324,12 @@ namespace Apocapatrol
         private PlayableGraph _graph; private bool _graphOk;
         private AnimationMixerPlayable _mixer; private AnimationClipPlayable _idle, _throw, _jump;
         private float _throwLen = 1.2f, _jumpLen = 1f;
-        private readonly float[] _w = new float[3];
+        private readonly float[] _w = new float[4];
         private Mode _mode = Mode.Riding;
+        private int _slot; private bool _gunner, _bike;   // 2.2.0: turret spot 0..2, a gunner (PassengerGuard shoots, Pose crouches / seats), on a motorcycle
+        private float _standAt = -1f;                      // a Warboy on a bike stands up (crouch -> stand blend) before the leap
+        private float _nextIgnore;
+        private AnimationClipPlayable _stand;
         private bool _released, _inClose, _kamikazeArmed;
         private float _nextWitness;
         private Pilot _pilot;
@@ -274,12 +341,13 @@ namespace Apocapatrol
         private Collider[] _carCols = new Collider[0], _myCols = new Collider[0];
         private static readonly RaycastHit[] _hits = new RaycastHit[16];
         private const float ReleaseFraction = 0.42f;   // where in the Throw clip the lance leaves the hand
+        private const float StandSeconds = 0.5f;       // a Warboy on a motorcycle: crouch -> stand before the leap
         private const float AfterScream = 0.35f;       // pause between the end of "Witness me!" and the leap, s - the player's chance to get away
         private float _windUp = 1.85f;
 
-        internal void Init(GameObject car, PatrolMarker marker, Transform anchor, string prefab)
+        internal void Init(GameObject car, PatrolMarker marker, Transform anchor, string prefab, int slot, bool gunner, bool bike)
         {
-            _car = car; _marker = marker; _anchor = anchor; _prefab = prefab;
+            _car = car; _marker = marker; _anchor = anchor; _prefab = prefab; _slot = slot; _gunner = gunner; _bike = bike;
             _carRb = car.GetComponent<Rigidbody>();
             _health = GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == "Health");
             _nextThrow = Time.time + UnityEngine.Random.Range(2f, 4f);
@@ -289,6 +357,7 @@ namespace Apocapatrol
             _carCols = car.GetComponentsInChildren<Collider>(true);
             _myCols = GetComponentsInChildren<Collider>(true);
             _side = Vector3.Dot(anchor.position - car.transform.position, car.transform.right) >= 0f ? 1f : (UnityEngine.Random.value < 0.5f ? -1f : 1f);
+            if (_gunner) return;   // a gunner keeps its gun and its own animator; Pose + PassengerGuard do the rest
             HideOwnWeapons();
             BuildGraph();
             BuildLance();
@@ -301,20 +370,22 @@ namespace Apocapatrol
                 var idle = Rider.Clip("CrouchIdle") ?? Rider.Clip("RifleCrouchIdle") ?? Rider.Clip("Idle");
                 var thr = Rider.Clip("Throw");
                 var jump = Rider.Clip("Jump");
+                var stand = Rider.Clip("Idle");
                 if (_anim == null || idle == null) { if (_anim == null) Plugin.Verbose("Rider: no Animator on " + name); return; }
                 if (!_anim.isHuman) { Plugin.Verbose("Rider: " + name + "'s Animator is not humanoid - Apocaplayer clips cannot drive it"); return; }
                 _anim.applyRootMotion = false;
                 _graph = PlayableGraph.Create("Apocapatrol.Rider");
                 _graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
                 var output = AnimationPlayableOutput.Create(_graph, "rider", _anim);
-                _mixer = AnimationMixerPlayable.Create(_graph, 3);
+                _mixer = AnimationMixerPlayable.Create(_graph, 4);
                 _idle = AnimationClipPlayable.Create(_graph, idle);
                 _throw = AnimationClipPlayable.Create(_graph, thr ?? idle);
                 _jump = AnimationClipPlayable.Create(_graph, jump ?? idle);
+                _stand = AnimationClipPlayable.Create(_graph, stand ?? idle);
                 _throwLen = thr != null ? Mathf.Max(0.4f, thr.length) : 1.2f;
                 _jumpLen = jump != null ? Mathf.Max(0.3f, jump.length) : 1f;
-                _graph.Connect(_idle, 0, _mixer, 0); _graph.Connect(_throw, 0, _mixer, 1); _graph.Connect(_jump, 0, _mixer, 2);
-                _w[0] = 1f; _mixer.SetInputWeight(0, 1f); _mixer.SetInputWeight(1, 0f); _mixer.SetInputWeight(2, 0f);
+                _graph.Connect(_idle, 0, _mixer, 0); _graph.Connect(_throw, 0, _mixer, 1); _graph.Connect(_jump, 0, _mixer, 2); _graph.Connect(_stand, 0, _mixer, 3);
+                _w[0] = 1f; _mixer.SetInputWeight(0, 1f); _mixer.SetInputWeight(1, 0f); _mixer.SetInputWeight(2, 0f); _mixer.SetInputWeight(3, 0f);
                 _throw.Pause(); _jump.Pause();
                 output.SetSourcePlayable(_mixer);
                 _graph.Play();
@@ -324,7 +395,7 @@ namespace Apocapatrol
             catch (Exception e) { Plugin.Log.LogWarning("Rider: animation graph: " + e.Message); _graphOk = false; }
         }
 
-        // 0 = crouch idle, 1 = throw, 2 = jump (one-shots restart from 0)
+        // 0 = crouch idle, 1 = throw, 2 = jump (one-shots restart from 0), 3 = standing idle
         private void Play(int clip)
         {
             if (!_graphOk) return;
@@ -336,7 +407,7 @@ namespace Apocapatrol
         {
             if (!_graphOk) return;
             float step = Time.deltaTime / Mathf.Max(0.01f, seconds);
-            for (int i = 0; i < 3; i++) { _w[i] = Mathf.MoveTowards(_w[i], i == target ? 1f : 0f, step); _mixer.SetInputWeight(i, _w[i]); }
+            for (int i = 0; i < 4; i++) { _w[i] = Mathf.MoveTowards(_w[i], i == target ? 1f : 0f, step); _mixer.SetInputWeight(i, _w[i]); }
         }
 
         // the blast lance item as a prop in the throwing hand: no FSMs, no physics, no colliders
@@ -390,10 +461,13 @@ namespace Apocapatrol
             if (_mode == Mode.Dismount) { Hop(); return; }
             if (_car == null || _anchor == null) { Destroy(this); return; }
             if (transform.parent == null || !Alive()) { Die(); return; }
-            if (Time.time >= _nextHide) { _nextHide = Time.time + 0.5f; HideOwnWeapons(); }
+            if (!_gunner && Time.time >= _nextHide) { _nextHide = Time.time + 0.5f; HideOwnWeapons(); }
+            // weapon props toggled by the game drop their collision ignores with the car (a kinematic body would shove it): re-applied
+            if (Time.time >= _nextIgnore) { _nextIgnore = Time.time + 1f; Patrol.IgnoreCollisionsIfChanged(gameObject, _car, _carCols); }
 
             // the player took this car, or it blew up: off the roof
             if (PlayerRef.PlayerCar == _car) { JumpOff("the player took the car"); return; }
+            if (_gunner) return;   // a gunner's fight is PassengerGuard's (vanilla ranged combat, all around)
 
             Vector3 tpos, tvel; GameObject tcar;
             bool has = PlayerRef.Target(out tpos, out tvel, out tcar);
@@ -403,16 +477,20 @@ namespace Apocapatrol
             if (_mode == Mode.Witness)
             {
                 Face(to.sqrMagnitude > 0.01f ? to : _car.transform.forward);
-                Blend(0, 0.15f);
+                // on a motorcycle he crouches on the seat: after the scream he stands up first (crouch -> stand blend), then leaps
+                bool standing = _bike && _standAt >= 0f;
+                Blend(standing ? 3 : 0, standing ? StandSeconds * 0.8f : 0.15f);
                 Escort();
                 if (Time.time - _modeStart >= _windUp)
                 {
+                    if (_bike && _standAt < 0f) { _standAt = Time.time; return; }
+                    if (_bike && Time.time - _standAt < StandSeconds) return;
                     // aimed at where the player is NOW and will be; only a jump that lands goes - else he waits (the driver closes in)
                     Vector3 launch; float flight;
                     if (CanLeap(tvel, tcar, out launch, out flight)) Leap(launch, flight);
                     else if (Time.time - _modeStart > _windUp + 5f)
                     {
-                        _mode = Mode.Riding; _nextWitness = Time.time + 3f;
+                        _mode = Mode.Riding; _nextWitness = Time.time + 3f; _standAt = -1f;
                         Plugin.Verbose("Rider: " + name + " - no jump that can hit, back to throwing");
                     }
                 }
@@ -619,7 +697,7 @@ namespace Apocapatrol
                 Plugin.Verbose("Rider: " + name + " blew up at " + at);
             }
             catch (Exception e) { Plugin.Log.LogWarning("Rider: detonate: " + e.Message); }
-            if (_marker != null && _marker.Rider == gameObject) _marker.Rider = null;
+            if (_marker != null) _marker.DropRider(gameObject);
             Destroy(gameObject);
         }
 
@@ -629,6 +707,7 @@ namespace Apocapatrol
         {
             if (_mode == Mode.Flying || _mode == Mode.Dismount || _mode == Mode.Done || _car == null) return;
             if (!Alive()) { Die(); return; }
+            if (_gunner) StopGunner();
             var cv = CarVel();
             _vel = _car.transform.right * _side * 3.2f + Vector3.up * 4.2f + cv * 0.7f;
             Unseat();
@@ -671,14 +750,22 @@ namespace Apocapatrol
                 if (health > 0f) { Patrol.SetHealth(mob, health); mob.AddComponent<Patrol.LateHealth>().Value = health; }
                 Plugin.Verbose("Rider: " + mob.name + " landed and fights on foot");
             }
-            if (_marker != null && _marker.Rider == gameObject) _marker.Rider = null;
+            if (_marker != null) _marker.DropRider(gameObject);
             Destroy(gameObject);
+        }
+
+        // a gunner leaving its spot: no more seated / crouched pose, no shooting in mid-air (the landed mob fights on with its own AI)
+        private void StopGunner()
+        {
+            var pg = GetComponent<PassengerGuard>(); if (pg != null) Destroy(pg);
+            var pose = GetComponent<Pose>(); if (pose != null) Destroy(pose);
+            foreach (var f in GetComponents<PlayMakerFSM>()) if (f != null && (f.FsmName == "Attack" || f.FsmName == "Damage Ranged")) f.enabled = false;
         }
 
         // leaves the roof anchor: free kinematic body, no more collisions to ignore, the lance prop stays in the hand
         private void Unseat()
         {
-            if (_marker != null && _marker.Rider == gameObject) _marker.Rider = null;   // the car no longer carries it (Explode won't bail it again)
+            if (_marker != null) _marker.DropRider(gameObject);   // the car no longer carries it (Explode won't bail it again)
             transform.SetParent(null, true);
             var up = Quaternion.LookRotation(Vector3.ProjectOnPlane(transform.forward, Vector3.up).sqrMagnitude > 1e-4f ? Vector3.ProjectOnPlane(transform.forward, Vector3.up) : Vector3.forward, Vector3.up);
             transform.rotation = up;
@@ -689,7 +776,7 @@ namespace Apocapatrol
             _mode = Mode.Done;
             if (_graphOk) { _graph.Destroy(); _graphOk = false; }   // the ragdoll / death takes over
             if (Lance != null) Destroy(Lance.gameObject);
-            if (_marker != null && _marker.Rider == gameObject) _marker.Rider = null;
+            if (_marker != null) _marker.DropRider(gameObject);
         }
 
         private void OnDestroy()
@@ -760,38 +847,44 @@ namespace Apocapatrol
         }
     }
 
-    // What the rider-spot tweaker (Apocaspotter, a separate plugin) uses. Public on purpose.
+    // The turret spot editor ([Debug] TurretSpotEditor, TurretSpotter.cs) and the old Apocaspotter plugin (slot 1 only) use this. Public on purpose.
     public static class RiderApi
     {
         public static bool InGame() { var p = UnityEngine.Object.FindObjectOfType<Patrol>(); return p != null && p.InGame(); }
 
-        // every live raider car that has a rider spot
+        // every live raider car that has a turret spot
         public static List<GameObject> Cars()
         {
             var list = new List<GameObject>();
             foreach (var m in PatrolMarker.All) if (m != null && m.RiderAnchor != null) list.Add(m.gameObject);
             return list;
         }
-        public static Transform Anchor(GameObject car) { var m = car != null ? car.GetComponent<PatrolMarker>() : null; return m != null ? m.RiderAnchor : null; }
-        public static GameObject Rider(GameObject car) { var m = car != null ? car.GetComponent<PatrolMarker>() : null; return m != null ? m.Rider : null; }
+        private static PatrolMarker M(GameObject car) { return car != null ? car.GetComponent<PatrolMarker>() : null; }
+        public static Transform Anchor(GameObject car) { var m = M(car); return m != null ? m.RiderAnchor : null; }
+        public static Transform Anchor(GameObject car, int slot) { var m = M(car); return m != null && slot >= 0 && slot < 3 ? m.RiderAnchors[slot] : null; }
+        public static int Slot(GameObject car, Transform anchor) { var m = M(car); return m != null ? Array.IndexOf(m.RiderAnchors, anchor) : -1; }
+        public static GameObject Rider(GameObject car) { var m = M(car); return m != null ? m.Rider : null; }
+        public static GameObject Rider(GameObject car, int slot) { var m = M(car); return m != null && slot >= 0 && slot < 3 ? m.Riders[slot] : null; }
         public static Transform Lance(GameObject car) { var r = Rider(car); var g = r != null ? r.GetComponent<RiderGuard>() : null; return g != null ? g.Lance : null; }
-        public static string TemplateName(GameObject car) { var m = car != null ? car.GetComponent<PatrolMarker>() : null; return m != null ? m.TemplateName : ""; }
+        public static Transform Lance(GameObject car, int slot) { var r = Rider(car, slot); var g = r != null ? r.GetComponent<RiderGuard>() : null; return g != null ? g.Lance : null; }
+        public static string TemplateName(GameObject car) { var m = M(car); return m != null ? m.TemplateName : ""; }
 
         public static void MoveAnchor(GameObject car, Vector3 localDelta) { var a = Anchor(car); if (a != null) a.localPosition += localDelta; }
+        public static string SaveAnchor(GameObject car) { var a = Anchor(car); return SaveAnchor(car, Math.Max(0, Slot(car, a))); }
 
-        // writes the anchor's frame-local position into the car's template file as "riderPos"
-        public static string SaveAnchor(GameObject car)
+        // writes the spot's frame-local position into the car's template file: riderPos / riderPos2 / riderPos3
+        public static string SaveAnchor(GameObject car, int slot)
         {
-            var a = Anchor(car); string name = TemplateName(car);
-            if (a == null || string.IsNullOrEmpty(name)) return "no rider spot / template on this car";
+            var a = Anchor(car, slot); string name = TemplateName(car);
+            if (a == null || string.IsNullOrEmpty(name)) return "no turret " + (slot + 1) + " spot / template on this car";
             var t = CarTemplate.Find(name);
             if (t == null || string.IsNullOrEmpty(t.SourcePath) || !System.IO.File.Exists(t.SourcePath)) return "template file of " + name + " not found";
             var file = TemplateFile.FromJson(System.IO.File.ReadAllText(t.SourcePath));
             var p = a.localPosition;
-            file.riderPos = new[] { Round(p.x), Round(p.y), Round(p.z) };
+            file.SetTurretPos(slot, new[] { Round(p.x), Round(p.y), Round(p.z) });
             EditorStore.AtomicWrite(t.SourcePath, file.ToJson());
             CarTemplates.Refresh(true);
-            return "riderPos " + Apocapatrol.Rider.FormatV3(p) + " saved into " + System.IO.Path.GetFileName(t.SourcePath);
+            return "turret " + (slot + 1) + " spot " + Apocapatrol.Rider.FormatV3(p) + " saved into " + System.IO.Path.GetFileName(t.SourcePath);
         }
 
         // the lance prop's offset in the throwing hand (every live rider), saved into the Apocapatrol config

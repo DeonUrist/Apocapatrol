@@ -64,7 +64,18 @@ namespace Apocapatrol
             Crew.MuteAi(fsms, ranged && combatAllowed ? CombatFsms : null);
         }
 
-        private bool CombatAllowed { get { return Plugin.RangedCombat.Value; } }
+        // a human turret gunner (2.2.0) also needs [Combat] HumanTurrets
+        private bool _turret;
+        private bool CombatAllowed { get { return Plugin.RangedCombat.Value && (!_turret || Plugin.RiderLances.Value); } }
+
+        // a gunner on a turret spot (roof / motorcycle seat): passenger combat, but all around - no fire arc, the Pose turns the whole body
+        internal static PassengerGuard AttachTurret(GameObject who, GameObject car, Transform anchor)
+        {
+            Attach(who, car, anchor);
+            var guard = who.GetComponent<PassengerGuard>();
+            guard._turret = true;
+            return guard;
+        }
 
         // A shooting mob at the wheel: like a passenger, but it only shoots in bursts at random intervals and sits in the
         // generic driver pose (hands on the wheel) in between.
@@ -252,7 +263,7 @@ namespace Apocapatrol
                 {
                     var flat = Vector3.ProjectOnPlane(aimPoint - _passenger.transform.position, _car.transform.up);
                     if (flat.sqrMagnitude > 0.001f)
-                        ok = Mathf.Abs(Vector3.SignedAngle(_car.transform.forward, flat, _car.transform.up)) <= Plugin.FireArc.Value
+                        ok = (_turret || Mathf.Abs(Vector3.SignedAngle(_car.transform.forward, flat, _car.transform.up)) <= Plugin.FireArc.Value)
                           && (aimPoint - _passenger.transform.position).magnitude <= Plugin.ShootDistance.Value;
                 }
                 _canFire = ok;

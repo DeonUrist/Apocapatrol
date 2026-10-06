@@ -23,6 +23,14 @@ namespace Apocapatrol
         public string passenger = "";
         public string rider = "";           // 2.1.0: a blast-lance thrower on the roof (crew prefab); "" = none. Not for trucks / motorcycles
         public float[] riderPos = new float[0];   // frame-local spot of the rider's feet; empty = the top of the car, computed at build
+        // 2.2.0 human turrets: rider = turret 1 ("Warboy" = Scraffa with blast lances, or a ranged crew prefab = a gunner); rider2 / rider3 =
+        // turrets 2 and 3 (cars only; a motorcycle takes turret 1 only, trucks none), each with its own spot
+        public string rider2 = "", rider3 = "";
+        public float[] riderPos2 = new float[0], riderPos3 = new float[0];
+        public string Turret(int i) { return i == 0 ? rider : i == 1 ? rider2 : rider3; }
+        public float[] TurretPos(int i) { return i == 0 ? riderPos : i == 1 ? riderPos2 : riderPos3; }
+        public void SetTurret(int i, string v) { v = v ?? ""; if (i == 0) rider = v; else if (i == 1) rider2 = v; else rider3 = v; }
+        public void SetTurretPos(int i, float[] p) { p = p ?? new float[0]; if (i == 0) riderPos = p; else if (i == 1) riderPos2 = p; else riderPos3 = p; }
         public string lootPreset = "";
         public string cargo = "";           // "" none | "Random" (rolled by the [Loot] chances) | a loot key (Food ...) | an item spec "a:2;b:1-3"
         public string[] bumpers = new string[0];   // a front bumper rolled per build ("" = none), only if no part sits on hinge_bumper_front
@@ -33,6 +41,12 @@ namespace Apocapatrol
         private bool CargoTruck { get { return string.Equals(body, "Rustcargo", StringComparison.OrdinalIgnoreCase) || Array.Exists((kind ?? "").Split(';', ','), k => k.Trim().Equals("truck", StringComparison.OrdinalIgnoreCase)); } }
 
         // ------------------------------------------------------------ write
+        private static void V3(StringBuilder sb, string key, float[] v)
+        {
+            if (v == null || v.Length != 3) return;
+            sb.Append("    \"").Append(key).Append("\": [").Append(v[0].ToString("0.####", CultureInfo.InvariantCulture)).Append(", ").Append(v[1].ToString("0.####", CultureInfo.InvariantCulture)).Append(", ").Append(v[2].ToString("0.####", CultureInfo.InvariantCulture)).Append("],\n");
+        }
+
         public string ToJson()
         {
             var sb = new StringBuilder();
@@ -41,7 +55,11 @@ namespace Apocapatrol
             if (!CargoTruck || !string.IsNullOrEmpty(lootPreset)) P(sb, "lootPreset", lootPreset);   // a truck's lootPreset = a fixed cargo option (editor "E")
             P(sb, "rams", rams); P(sb, "driver", driver); P(sb, "passenger", passenger);
             P(sb, "rider", rider);
-            if (riderPos != null && riderPos.Length == 3) { sb.Append("    \"riderPos\": [").Append(riderPos[0].ToString("0.####", CultureInfo.InvariantCulture)).Append(", ").Append(riderPos[1].ToString("0.####", CultureInfo.InvariantCulture)).Append(", ").Append(riderPos[2].ToString("0.####", CultureInfo.InvariantCulture)).Append("],\n"); }
+            V3(sb, "riderPos", riderPos);
+            if (!string.IsNullOrEmpty(rider2)) P(sb, "rider2", rider2);
+            V3(sb, "riderPos2", riderPos2);
+            if (!string.IsNullOrEmpty(rider3)) P(sb, "rider3", rider3);
+            V3(sb, "riderPos3", riderPos3);
 
             sb.Append("    \"bumpers\": [");
             for (int i = 0; i < (bumpers ?? new string[0]).Length; i++) { if (i > 0) sb.Append(", "); Json.Str(sb, bumpers[i]); }
@@ -94,6 +112,8 @@ namespace Apocapatrol
             f.spawns = Json.Bool(root, "spawns", f.spawns); f.weight = Json.Num(root, "weight", f.weight);
             f.rams = Json.Text(root, "rams", f.rams); f.driver = Json.Text(root, "driver", f.driver); f.passenger = Json.Text(root, "passenger", f.passenger);
             f.rider = Json.Text(root, "rider", f.rider); f.riderPos = Json.Floats(root, "riderPos");
+            f.rider2 = Json.Text(root, "rider2", f.rider2); f.riderPos2 = Json.Floats(root, "riderPos2");
+            f.rider3 = Json.Text(root, "rider3", f.rider3); f.riderPos3 = Json.Floats(root, "riderPos3");
             f.lootPreset = f.CargoTruck ? "" : Json.Text(root, "lootPreset", f.lootPreset);
             f.cargo = Json.Text(root, "cargo", f.cargo);
             f.fillFuel = Json.Bool(root, "fillFuel", f.fillFuel); f.releaseHandbrake = Json.Bool(root, "releaseHandbrake", f.releaseHandbrake);
