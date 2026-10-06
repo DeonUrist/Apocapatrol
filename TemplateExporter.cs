@@ -358,8 +358,10 @@ namespace Apocapatrol
             w.Walk(car, car, bodyAsset, -1);
             if (bodyAsset == null) w.Notes.Add("no frame asset named \"" + body + "\" - set \"body\" by hand");
 
-            bool hasPassengerSeat = w.Parts.Any(p => p.parent < 0 && p.hinge.EndsWith("hinge_seat_passenger", StringComparison.Ordinal));
-            bool hasDriverSeat = w.Parts.Any(p => p.parent < 0 && p.hinge.EndsWith("hinge_seat_driver", StringComparison.Ordinal));
+            // the Rustliner bus has its bench seats built in (no seat hinges for parts): a passenger rides anyway (2.3.4)
+            bool bus = body.Equals("Rustliner", StringComparison.OrdinalIgnoreCase);
+            bool hasPassengerSeat = bus || w.Parts.Any(p => p.parent < 0 && p.hinge.EndsWith("hinge_seat_passenger", StringComparison.Ordinal));
+            bool hasDriverSeat = bus || w.Parts.Any(p => p.parent < 0 && p.hinge.EndsWith("hinge_seat_driver", StringComparison.Ordinal));
             string kind = _truck ? "truck"
                         : string.Equals(body, "Junker", StringComparison.OrdinalIgnoreCase) ? "junker" : (string.Equals(body, "Halfbreed", StringComparison.OrdinalIgnoreCase) || MotorcycleIntegration.IsBody(body)) ? "motorcycle" : "small";
 
