@@ -19,7 +19,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.3.0";
+        public const string VERSION = "2.3.1";
 
         internal static ManualLogSource Log;
 
@@ -56,8 +56,8 @@ namespace Apocapatrol
         internal static ConfigEntry<float> ExplodedLootPercent;
         // [AI]
         internal static ConfigEntry<bool> AiInvertSteering, AiOverlay, CustomPaintjobs;
-        internal static ConfigEntry<bool> SpawnWarning, RaiderMusic, RiderLances, HideFsmWarnings, TurretSpotEditor, FuryRoad;
-        internal static ConfigEntry<float> RiderRange, RiderIntervalMin, RiderIntervalMax, RiderLanceSpeed, RiderMaxThrowAngle, RiderJumpRange, WitnessMeChance, RiderLeapSpeed, RiderBlastDamage, RiderBlastRadius, TurretThigh, TurretKnee, TurretHipHeight, RiderLeapReachPercent, RiderBailRange;
+        internal static ConfigEntry<bool> SpawnWarning, RaiderMusic, RiderLances, HideFsmWarnings, TurretSpotEditor, FuryRoad, CarProbe;
+        internal static ConfigEntry<float> RiderRange, RiderIntervalMin, RiderIntervalMax, RiderLanceSpeed, RiderMaxThrowAngle, RiderJumpRange, WitnessMeChance, RiderLeapSpeed, RiderBlastDamage, RiderBlastRadius, TurretThigh, TurretKnee, TurretHipHeight, RiderLeapReachPercent, RiderBailRange, SuspensionLiftCenterOfMass;
         internal static ConfigEntry<string> RiderLanceOffset, RiderLanceRotation;
         internal static void SaveConfig() { try { _instance.Config.Save(); } catch (Exception e) { Log.LogWarning("Config save: " + e.Message); } }
         private static Plugin _instance;
@@ -217,6 +217,9 @@ namespace Apocapatrol
                 "(a wounded rider always does). 100 = every time", new AcceptableValueRange<float>(0f, 100f)));
             RiderLanceOffset = Config.Bind("Debug", "RiderLanceOffset", "0, 0, 0", "Warboy's lance prop: position in the throwing hand, hand-local metres x, y, z (the turret spot editor saves it here)");
             RiderLanceRotation = Config.Bind("Debug", "RiderLanceRotation", "0, 0, 0", "Warboy's lance prop: rotation in the throwing hand, degrees x, y, z (the turret spot editor saves it here)");
+            CarProbe = Config.Bind("Debug", "CarProbe", false,
+                "Logs what the car you sit in is doing (each wheel's suspension state and every collision contact of the car) every half second - " +
+                "to find the source of a vibration. Off when done: it fills the log");
             TurretSpotEditor = Config.Bind("Debug", "TurretSpotEditor", false,
                 "Glowing markers on the human turret spots of the nearest raider car and numpad keys to move them: 8/2 forward/back, 4/6 left/right, " +
                 "7/9 down/up (Shift = x5), 0 = next turret, * = spot <-> Warboy lance in the hand (1/3 yaw, +/- pitch, / roll), 5 = save " +
@@ -285,6 +288,7 @@ namespace Apocapatrol
             RiderIntervalMax = H.Bind("Combat", "RiderIntervalMax", 9f, new ConfigDescription("Longest pause between two of a rider's throws, s", new AcceptableValueRange<float>(1f, 120f)));
             RiderLeapReachPercent = H.Bind("Combat", "RiderLeapReachPercent", 80f, new ConfigDescription("\"Witness me!\": the Warboy only leaps at a car within this % of his longest jump (RiderLeapSpeed x 1.2 s, the speeds of both cars counted)", new AcceptableValueRange<float>(10f, 100f)));
             RiderBailRange = H.Bind("Combat", "RiderBailRange", 6f, new ConfigDescription("A Warboy on a motorcycle who cannot turn to you jumps off when you are closer than this, m", new AcceptableValueRange<float>(1f, 30f)));
+            SuspensionLiftCenterOfMass = H.Bind("Combat", "SuspensionLiftCenterOfMass", 1f, new ConfigDescription("A template's lifted suspension lowers the car's centre of mass by this fraction of the lift (Part Adjustment 1.2.1 uses the same rule)", new AcceptableValueRange<float>(0f, 2f)));
             RiderLeapSpeed = H.Bind("Combat", "RiderLeapSpeed", 11f, new ConfigDescription("\"Witness me!\": the leap's ground speed relative to the rider's car, m/s - a long, flat jump, no lob", new AcceptableValueRange<float>(5f, 40f)));
             RiderBlastDamage = H.Bind("Combat", "RiderBlastDamage", 60f, new ConfigDescription("\"Witness me!\": damage of the rider's blast at its centre (in your car too); falls to a third at the edge", new AcceptableValueRange<float>(0f, 300f)));
             RiderBlastRadius = H.Bind("Combat", "RiderBlastRadius", 7f, new ConfigDescription("\"Witness me!\": reach of the rider's blast, m (damage and the shove of your car)", new AcceptableValueRange<float>(1f, 20f)));

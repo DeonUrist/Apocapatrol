@@ -145,6 +145,7 @@ namespace Apocapatrol
         private readonly List<Mount> _mounts = new List<Mount>();
         private readonly List<Axle> _axles = new List<Axle>();
         private Rigidbody _body;
+        private long _comSig; private float _nextCom; private bool _comShifted;
 
         private sealed class Mount { internal Transform T; internal Vector3 Baseline; internal float Center; internal bool Lifted; }
         private sealed class Axle { internal Transform Branch; internal bool Lifted; internal float Left, Right; internal Vector3 Center; }
@@ -239,7 +240,31 @@ namespace Apocapatrol
             _model.localPosition = _modelPos + Vector3.up * Height;
             _hinge.localPosition = _hingePos + _hinge.parent.InverseTransformVector(transform.TransformVector(Vector3.up * Height));
             foreach (var m in _mounts) ApplyMount(m);
+            ApplyCenterOfMass(true);
             if (_body != null) _body.WakeUp();
+        }
+
+        // a lifted body (Height < 0 = mounts down, body up) keeps its centre of mass where it was: the Rigidbody's automatic centre (nothing
+        // in the game or NWH sets one) lowered by SuspensionLiftCenterOfMass x the lift - same rule and default as Part Adjustment 1.2.1
+        private void ApplyCenterOfMass(bool force)
+        {
+            if (_body == null) return;
+            long sig = 17;
+            foreach (var c in GetComponentsInChildren<Collider>(false)) if (c != null && c.enabled && !c.isTrigger) sig = sig * 31 + c.GetInstanceID();
+            if (!force && sig == _comSig) return;
+            _comSig = sig;
+            float lift = Mathf.Max(0f, -Height) * Mathf.Clamp(Plugin.SuspensionLiftCenterOfMass.Value, 0f, 2f);
+            if (lift <= 0f) { if (_comShifted) { _body.ResetCenterOfMass(); _comShifted = false; } return; }
+            _body.ResetCenterOfMass();
+            _body.centerOfMass = _body.centerOfMass - Vector3.up * lift;
+            _comShifted = true;
+        }
+
+        private void FixedUpdate()
+        {
+            if (!_comShifted || Time.time < _nextCom) return;
+            _nextCom = Time.time + 1f;
+            ApplyCenterOfMass(false);
         }
 
         private void ApplyMount(Mount m)
@@ -281,6 +306,59 @@ namespace Apocapatrol
             RefreshCenters();
             if (!Suspension.KitFitted(gameObject) && (Width != 1f || Height != 0f)) { Apply(); return; }
             foreach (var x in _mounts) ApplyMount(x);
+        }
+    }
+
+    // [Debug] CarProbe (2.3.1): what the car the player sits in is doing while it should stand still - every half second each wheel's NWH
+    // state (grounded, spring compression, load, slips, angular velocity) and the car's velocity, plus every collision contact of the car's
+    // Rigidbody (the car-side collider and layer, the other collider and layer) - to find a vibration's source.
+    internal sealed class CarProbe : MonoBehaviour
+    {
+        private float _next; private readonly Dictionary<string, float> _seen = new Dictionary<string, float>();
+        private Rigidbody _rb;
+
+        internal static void Tick()
+        {
+            if (Plugin.CarProbe == null || !Plugin.CarProbe.Value) return;
+            var car = PlayerRef.PlayerCar;
+            if (car != null && car.GetComponent<CarProbe>() == null) car.AddComponent<CarProbe>();
+        }
+
+        private void Update()
+        {
+            if (!Plugin.CarProbe.Value || PlayerRef.PlayerCar != gameObject) { Destroy(this); return; }
+            if (Time.time < _next) return;
+            _next = Time.time + 0.5f;
+            if (_rb == null) _rb = GetComponent<Rigidbody>();
+            var sb = new System.Text.StringBuilder("Probe " + name + ": v " + (_rb != null ? _rb.velocity.magnitude.ToString("0.00") : "?") + " m/s, w " + (_rb != null ? _rb.angularVelocity.magnitude.ToString("0.00") : "?")
+                + ", COM " + (_rb != null ? _rb.centerOfMass.ToString("F2") : "?"));
+            foreach (var wc in GetComponentsInChildren<WheelController>(true))
+            {
+                if (wc.transform.parent != transform) continue;
+                sb.Append(" | ").Append(wc.name.Replace("hinge_wheel_", "")).Append(wc.IsGrounded ? " G" : " air").Append(" c ").Append(wc.SpringCompression.ToString("0.00"))
+                  .Append(" load ").Append(wc.Load.ToString("0")).Append(" slip ").Append(wc.LongitudinalSlip.ToString("0.00")).Append('/').Append(wc.LateralSlip.ToString("0.00"))
+                  .Append(" rpm ").Append(wc.RPM.ToString("0")).Append(" r ").Append(wc.Radius.ToString("0.00"));
+            }
+            Plugin.Log.LogInfo(sb.ToString());
+        }
+
+        private string PathOf(Transform t)
+        {
+            var sb = new System.Text.StringBuilder(t.name);
+            for (var a = t.parent; a != null && a != transform; a = a.parent) sb.Insert(0, a.name + "/");
+            return sb.ToString();
+        }
+
+        private void OnCollisionStay(Collision col)
+        {
+            if (!Plugin.CarProbe.Value || col.contactCount == 0) return;
+            var c = col.GetContact(0);
+            string key = (c.thisCollider != null ? c.thisCollider.name : "?") + "|" + (c.otherCollider != null ? c.otherCollider.name : "?");
+            float last;
+            if (_seen.TryGetValue(key, out last) && Time.time - last < 2f) return;
+            _seen[key] = Time.time;
+            Plugin.Log.LogInfo("Probe contact: car collider '" + (c.thisCollider != null ? PathOf(c.thisCollider.transform) : "?") + "' (layer " + (c.thisCollider != null ? LayerMask.LayerToName(c.thisCollider.gameObject.layer) : "?")
+                + ") touches '" + (c.otherCollider != null ? c.otherCollider.name : "?") + "' (layer " + (c.otherCollider != null ? LayerMask.LayerToName(c.otherCollider.gameObject.layer) : "?") + ") at " + c.point.ToString("F2") + ", impulse " + col.impulse.magnitude.ToString("0.0"));
         }
     }
 
