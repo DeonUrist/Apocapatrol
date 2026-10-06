@@ -294,7 +294,19 @@ namespace Apocapatrol
             }
             if (_blast == null) return;
             var rb = car.GetComponent<Rigidbody>();
-            var at = (rb != null ? rb.worldCenterOfMass : car.transform.position) + Vector3.up * 0.3f;
+            BlastAt((rb != null ? rb.worldCenterOfMass : car.transform.position) + Vector3.up * 0.3f);
+        }
+
+        // the harmless blast effect at a point (also the "Witness me!" rider's explosion, 2.1.4; its damage is Rider.Kaboom's own)
+        internal static void BlastAt(Vector3 at)
+        {
+            if (!_blastLooked)
+            {
+                _blastLooked = true;
+                _blast = Prefabs.FindAny(BlastPrefab);
+                if (_blast == null) Plugin.Log.LogWarning("Explode: " + BlastPrefab + " prefab not found; no blast effect");
+            }
+            if (_blast == null) return;
             var fx = UnityEngine.Object.Instantiate(_blast, at, Quaternion.identity);
             int off = 0;
             foreach (var f in fx.GetComponentsInChildren<PlayMakerFSM>(true))

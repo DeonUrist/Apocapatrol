@@ -149,6 +149,54 @@ namespace Apocapatrol
             bomb.AddComponent<Detonator>();
         }
 
+        // 2.1.4 "Witness me!" leap: a long, flat jump - the ground speed relative to the thrower's car is fixed (hSpeed), the flight time is
+        // when that ground track meets the target's predicted ground track, and the vertical part just has to land on it (a low arc: no lob).
+        // false when the target runs away faster than that, the jump would take over 1.6 s, or it would need more than 35 degrees up.
+        internal static bool FlatLeap(Vector3 from, Vector3 baseVel, Vector3 target, Vector3 targetVel, float hSpeed, out Vector3 launch, out float time)
+        {
+            var r = target - from; r.y = 0f;
+            var w = targetVel - baseVel; w.y = 0f;
+            float a = Vector3.Dot(w, w) - hSpeed * hSpeed, b = 2f * Vector3.Dot(r, w), c = Vector3.Dot(r, r);
+            time = -1f;
+            if (Mathf.Abs(a) < 1e-4f) { if (b < 0f) time = -c / b; }
+            else
+            {
+                float disc = b * b - 4f * a * c;
+                if (disc >= 0f)
+                {
+                    float sq = Mathf.Sqrt(disc), t1 = (-b - sq) / (2f * a), t2 = (-b + sq) / (2f * a);
+                    float lo = Mathf.Min(t1, t2), hi = Mathf.Max(t1, t2);
+                    time = lo > 0.05f ? lo : hi > 0.05f ? hi : -1f;
+                }
+            }
+            if (time <= 0f) { launch = Vector3.zero; return false; }
+            time = Mathf.Max(time, 0.25f);
+            launch = U(from, baseVel, target, targetVel, Physics.gravity, time);
+            return time <= 1.6f && Elevation(launch) <= 35f;
+        }
+
+        // 2.1.4: the rider's own blast - no lance, no FSM event, nothing that can fail to go off: the exploder zombie's blast effect (sound,
+        // fire, physics shove of loose things) at the spot, our damage to the player within RiderBlastRadius (full at the centre, a third at
+        // the edge; in the car too) and a shove of the player's car away from it
+        internal static void Kaboom(Vector3 at, string who)
+        {
+            try { Explode.BlastAt(at); } catch (Exception e) { Plugin.Log.LogWarning("Rider: blast effect: " + e.Message); }
+            try
+            {
+                float radius = Plugin.RiderBlastRadius.Value;
+                var player = PlayerRef.Player;
+                if (player == null) return;
+                float d = Vector3.Distance(player.position + Vector3.up * 0.9f, at);
+                var car = PlayerRef.PlayerCar;
+                var crb = car != null ? car.GetComponent<Rigidbody>() : null;
+                if (crb != null) d = Mathf.Min(d, Mathf.Max(0f, Vector3.Distance(crb.worldCenterOfMass, at) - 2f));   // the car's hull is ~2 m around its centre
+                if (d <= radius) Ram.HurtPlayer(Plugin.RiderBlastDamage.Value * Mathf.Lerp(1f, 0.33f, d / radius), "Rider " + who + " blast");
+                if (crb != null && !crb.isKinematic && d <= radius) crb.AddExplosionForce(crb.mass * 5f, at, radius * 1.5f, 0.5f, ForceMode.Impulse);
+                Plugin.Verbose("Rider: " + who + " blast at " + at + ", the player " + d.ToString("0.0") + " m away");
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("Rider: blast damage: " + e.Message); }
+        }
+
         internal static float Elevation(Vector3 v) { return Mathf.Asin(Mathf.Clamp(v.normalized.y, -1f, 1f)) * Mathf.Rad2Deg; }
 
         // "Witness me!" - Sounds/witness-me.wav (16-bit PCM, normalised to the game's human_hurt voice: -23.8 LUFS, peak -5.6 dBTP) as a
@@ -216,6 +264,8 @@ namespace Apocapatrol
         private readonly float[] _w = new float[3];
         private Mode _mode = Mode.Riding;
         private bool _released, _inClose, _kamikazeArmed;
+        private float _nextWitness;
+        private Pilot _pilot;
         private float _modeStart, _nextThrow, _nextHide, _lanceBackAt;
         private Vector3 _vel;                       // flight velocity (witness jump / dismount hop)
         private float _side = 1f;
@@ -354,23 +404,40 @@ namespace Apocapatrol
             {
                 Face(to.sqrMagnitude > 0.01f ? to : _car.transform.forward);
                 Blend(0, 0.15f);
-                if (Time.time - _modeStart >= _windUp) Leap(tpos, tvel, tcar);   // aimed at where the player is NOW: driving off during the scream works
+                Escort();
+                if (Time.time - _modeStart >= _windUp)
+                {
+                    // aimed at where the player is NOW and will be; only a jump that lands goes - else he waits (the driver closes in)
+                    Vector3 launch; float flight;
+                    if (CanLeap(tvel, tcar, out launch, out flight)) Leap(launch, flight);
+                    else if (Time.time - _modeStart > _windUp + 5f)
+                    {
+                        _mode = Mode.Riding; _nextWitness = Time.time + 3f;
+                        Plugin.Verbose("Rider: " + name + " - no jump that can hit, back to throwing");
+                    }
+                }
                 return;
             }
 
             Face(has && dist < Plugin.RiderRange.Value * 1.5f && to.sqrMagnitude > 0.01f ? to : _car.transform.forward);
 
-            // "Witness me!": the player drives close - always when this rider is wounded, else WitnessMeChance % once per approach
+            // "Witness me!": the player's car comes within throwing range - always when this rider is wounded, else WitnessMeChance % once per
+            // approach. Armed, the driver pulls up alongside, matching the player's heading and speed (Pilot escort); the scream starts once the
+            // player is within RiderJumpRange, both cars go the same way (not head-on / apart) and a flat jump lands on the player's car.
             if (Plugin.RiderLances.Value && has && tcar != null && _mode == Mode.Riding)
             {
-                var tc = tcar.GetComponent<Rigidbody>();
-                float near = ((tc != null ? tc.worldCenterOfMass : tcar.transform.position) - transform.position).magnitude;
-                if (near <= Plugin.RiderJumpRange.Value)
+                float near = (LeapAim(tcar) - transform.position).magnitude;
+                if (near <= Plugin.RiderRange.Value)
                 {
                     if (!_inClose) { _inClose = true; _kamikazeArmed = UnityEngine.Random.Range(0f, 100f) < Plugin.WitnessMeChance.Value; }
-                    if (_kamikazeArmed || Wounded()) { StartWitness(); return; }
+                    if (_kamikazeArmed || Wounded())
+                    {
+                        Escort();
+                        Vector3 launch; float flight;
+                        if (near <= Plugin.RiderJumpRange.Value && Time.time >= _nextWitness && CanLeap(tvel, tcar, out launch, out flight)) { StartWitness(); return; }
+                    }
                 }
-                else if (near > Plugin.RiderJumpRange.Value + 4f) _inClose = false;
+                else if (near > Plugin.RiderRange.Value + 8f) _inClose = false;
             }
             else _inClose = false;
 
@@ -460,20 +527,42 @@ namespace Apocapatrol
             Plugin.Verbose("Rider: " + name + " - WITNESS ME! (" + (Wounded() ? "wounded" : "chance roll") + ")");
         }
 
-        // off the roof at half the lance's speed, on the intercept course to the player's car (predicted), as a live bomb
-        private void Leap(Vector3 tpos, Vector3 tvel, GameObject tcar)
+        private Vector3 LeapFrom() { return transform.position + Vector3.up * 0.9f; }
+        private static Vector3 LeapAim(GameObject tcar)
         {
-            var aim = tpos;
-            if (tcar != null) { var tc = tcar.GetComponent<Rigidbody>(); aim = (tc != null ? tc.worldCenterOfMass : tcar.transform.position) + Vector3.up * 0.4f; }
-            var from = transform.position + Vector3.up * 0.9f;
-            Vector3 launch; float flight;
-            float speed = Plugin.RiderLanceSpeed.Value * 0.6f;   // 2.1.3: a bit further than half the lance's throw
-            if (!Rider.Solve(from, CarVel(), aim, tvel, speed, out launch, out flight)) Plugin.Verbose("Rider: the leap falls short - jumps anyway");
+            var tc = tcar.GetComponent<Rigidbody>();
+            return (tc != null ? tc.worldCenterOfMass : tcar.transform.position) + Vector3.up * 0.4f;
+        }
+
+        // the driver helps: Pilot drives alongside the player while this is refreshed
+        private void Escort()
+        {
+            if (_pilot == null && _car != null) _pilot = _car.GetComponent<Pilot>();
+            if (_pilot != null) _pilot.EscortUntil = Time.time + 0.6f;
+        }
+
+        // a jump that lands: both cars not going opposite ways or apart (> 60 degrees between their headings, both moving), and a flat jump
+        // at RiderLeapSpeed meets the player's car on its predicted course
+        private bool CanLeap(Vector3 tvel, GameObject tcar, out Vector3 launch, out float flight)
+        {
+            launch = Vector3.zero; flight = 0f;
+            if (tcar == null) return false;
+            var cv = CarVel(); cv.y = 0f; var pv = tvel; pv.y = 0f;
+            if (cv.magnitude > 3f && pv.magnitude > 3f && Vector3.Angle(cv, pv) > 60f) return false;
+            return Rider.FlatLeap(LeapFrom(), CarVel(), LeapAim(tcar), tvel, Plugin.RiderLeapSpeed.Value, out launch, out flight);
+        }
+
+        // off the roof in a long flat jump on the intercept course to the player's car, as a live bomb. His FSMs are off for the flight: the
+        // game cannot kill and swap him for a corpse mid-air (2.1.3's "the boy died, nothing blew up")
+        private void Leap(Vector3 launch, float flight)
+        {
             _vel = launch + CarVel();
             Unseat();
+            foreach (var f in GetComponentsInChildren<PlayMakerFSM>(true)) if (f != null) { f.Fsm.RestartOnEnable = false; f.enabled = false; }
+            if (Lance != null) Lance.gameObject.SetActive(true);
             Play(2);
             _mode = Mode.Flying; _modeStart = Time.time;
-            Plugin.Verbose("Rider: " + name + " leaps at the player's car, " + flight.ToString("0.00") + " s");
+            Plugin.Verbose("Rider: " + name + " leaps at the player's car, " + flight.ToString("0.00") + " s, " + Rider.Elevation(launch).ToString("0") + " deg up");
         }
 
         private void Fly()
@@ -499,7 +588,10 @@ namespace Apocapatrol
             transform.position += step;
             var flat = new Vector3(_vel.x, 0f, _vel.z);
             if (flat.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(flat.normalized, Vector3.up);
-            if (Time.time - _modeStart > 4f || !Alive()) Detonate(transform.position + Vector3.up * 0.9f);
+            // touching the player's car even if no collider was swept (fast, thin parts): blows up there
+            var pc = PlayerRef.PlayerCar;
+            if (pc != null && (LeapAim(pc) - (transform.position + Vector3.up * 0.9f)).sqrMagnitude < 2.2f * 2.2f) { Detonate(transform.position + Vector3.up * 0.9f); return; }
+            if (Time.time - _modeStart > 4f) Detonate(transform.position + Vector3.up * 0.9f);
         }
 
         private bool Own(Collider c)
@@ -509,13 +601,13 @@ namespace Apocapatrol
             return Lance != null && c.transform.IsChildOf(Lance);
         }
 
-        // the blast: the blast lance's own projectile set off at the spot (its Explosion FSM: DamageFlammable -> explode), the rider's carcass thrown
+        // the blast (Rider.Kaboom: no lance physics), the rider's carcass thrown
         private void Detonate(Vector3 at)
         {
             _mode = Mode.Done;
+            Rider.Kaboom(at, name);
             try
             {
-                Rider.Boom(at);
                 var dead = Prefabs.FindAny(_prefab + "_Dead");
                 if (dead != null)
                 {
@@ -602,6 +694,7 @@ namespace Apocapatrol
 
         private void OnDestroy()
         {
+            if (_mode == Mode.Flying && gameObject.scene.isLoaded && Time.timeScale > 0f) { _mode = Mode.Done; Rider.Kaboom(transform.position + Vector3.up * 0.9f, name); }   // removed mid-air by something else: still goes off
             if (_graphOk) { try { _graph.Destroy(); } catch (Exception) { } _graphOk = false; }
             if (Lance != null) Destroy(Lance.gameObject);
         }

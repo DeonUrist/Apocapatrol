@@ -70,6 +70,8 @@ namespace Apocapatrol
         private float _roll;                                               // current body roll, degrees (+ = right side higher = leaning left)
 
         internal PilotState State { get { return _state; } }
+        internal float EscortUntil;                                        // 2.1.4: a "Witness me!" rider wants a ride alongside the player until then
+        private float _nextEscortLog;
 
         internal static Pilot Attach(GameObject car)
         {
@@ -164,7 +166,10 @@ namespace Apocapatrol
             }
             else if (_state == PilotState.Idle) Enter(PilotState.Charge, "target in range");
 
-            switch (_state)
+            bool escort = Time.time < EscortUntil && tcar != null && _hasTarget
+                && (_state == PilotState.Charge || _state == PilotState.Turnaround || _state == PilotState.Overshoot);
+            if (escort) StepEscort(tpos, tvel, speed, forwardSpeed, dt);
+            else switch (_state)
             {
                 case PilotState.Charge: StepCharge(tpos, tvel, speed, forwardSpeed, dt, false); break;
                 case PilotState.Turnaround: StepCharge(tpos, tvel, speed, forwardSpeed, dt, true); break;
@@ -190,6 +195,54 @@ namespace Apocapatrol
         }
 
         // ------------------------------------------------------------ states
+
+        // 2.1.4 escort: the rider on the roof is about to leap ("Witness me!"), so the driver runs alongside the player's car - same heading,
+        // same speed, a lane 5 m to the side it is already on - instead of ramming or passing. Player (nearly) stopped, or we face the other
+        // way: the normal charge / turnaround until we are going the same way.
+        private void StepEscort(Vector3 tpos, Vector3 tvel, float speed, float forwardSpeed, float dt)
+        {
+            var tv = Flat(tvel); float ts = tv.magnitude;
+            var fwd = Flat(_tf.forward).normalized;
+            if (ts < 3f) { StepCharge(tpos, tvel, speed, forwardSpeed, dt, false); return; }
+            var dir = tv / ts;
+            if (Vector3.Dot(fwd, dir) < -0.2f) { StepCharge(tpos, tvel, speed, forwardSpeed, dt, _state == PilotState.Turnaround); return; }
+            if (Gear() <= 0) Shift(1);
+
+            var right = Vector3.Cross(Vector3.up, dir);
+            var rel = Flat(_tf.position - tpos);
+            float side = Vector3.Dot(rel, right) >= 0f ? 1f : -1f;
+            float along = Vector3.Dot(rel, dir);                                   // + = ahead of the player
+            float ahead = Mathf.Max(along, -25f) + 8f + speed * 0.4f;              // a point on our lane a bit ahead of us
+            var lanePoint = tpos + right * side * 5f + dir * ahead;
+            var toAim = Flat(lanePoint - _tf.position);
+            float aimAngle = toAim.sqrMagnitude > 1e-3f ? Vector3.SignedAngle(fwd, toAim.normalized, Vector3.up) : 0f;
+
+            float desired = Mathf.Clamp(aimAngle / Plugin.AiSteerAngle.Value, -1f, 1f);
+            float avoidSteer, avoidThrottle, avoidBrake;
+            Sense(speed, out avoidSteer, out avoidThrottle, out avoidBrake);
+            desired = Mathf.Clamp(desired + avoidSteer, -1f, 1f);
+            float maxSteer = Mathf.Min(MaxSteerFor(speed), RollSafeSteer(speed));
+            float wanted = desired;
+            desired = Mathf.Clamp(desired, -maxSteer, maxSteer);
+            float steer = MoveSteer(desired, dt);
+
+            // speed: the player's, plus catching up from behind / dropping back when ahead (abreast = along 0)
+            float want = ts + Mathf.Clamp(-along * 0.4f, -6f, 8f);
+            float err = want - forwardSpeed;
+            float max = Plugin.AiThrottle.Value;
+            float throttle = err > 0f ? max * Mathf.Clamp(err * 0.3f, 0.15f, 1f) : 0f;
+            float brakes = err < -2f ? Mathf.Clamp(-err * 0.08f, 0f, 0.6f) : 0f;
+            if (Mathf.Abs(wanted) > 0.15f && speed > 4f && LateralFor(speed, Mathf.Abs(wanted)) > _rollLimit) { throttle = 0f; brakes = Mathf.Max(brakes, 0.35f); }
+            throttle *= avoidThrottle; brakes = Mathf.Max(brakes, avoidBrake);
+            LeanGuard(ref steer, ref throttle, ref brakes);
+            Apply(throttle, steer, brakes);
+            if (Plugin.VerboseLog.Value && Time.time >= _nextEscortLog)
+            {
+                _nextEscortLog = Time.time + 2f;
+                Plugin.Verbose("Pilot: " + _car.name + " escorts the player for its rider: " + along.ToString("0") + " m " + (along >= 0f ? "ahead" : "behind")
+                    + ", " + (side > 0f ? "right" : "left") + " side, " + (forwardSpeed * 3.6f).ToString("0") + "/" + (want * 3.6f).ToString("0") + " km/h");
+            }
+        }
 
         private void StepCharge(Vector3 tpos, Vector3 tvel, float speed, float forwardSpeed, float dt, bool turning)
         {

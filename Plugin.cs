@@ -19,7 +19,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.1.3";
+        public const string VERSION = "2.1.4";
 
         internal static ManualLogSource Log;
 
@@ -56,8 +56,8 @@ namespace Apocapatrol
         internal static ConfigEntry<float> ExplodedLootPercent;
         // [AI]
         internal static ConfigEntry<bool> AiInvertSteering, AiOverlay, CustomPaintjobs;
-        internal static ConfigEntry<bool> SpawnWarning, RaiderMusic, RiderLances;
-        internal static ConfigEntry<float> RiderRange, RiderIntervalMin, RiderIntervalMax, RiderLanceSpeed, RiderMaxThrowAngle, RiderJumpRange, WitnessMeChance;
+        internal static ConfigEntry<bool> SpawnWarning, RaiderMusic, RiderLances, HideFsmWarnings;
+        internal static ConfigEntry<float> RiderRange, RiderIntervalMin, RiderIntervalMax, RiderLanceSpeed, RiderMaxThrowAngle, RiderJumpRange, WitnessMeChance, RiderLeapSpeed, RiderBlastDamage, RiderBlastRadius;
         internal static ConfigEntry<string> RiderLanceOffset, RiderLanceRotation;
         internal static void SaveConfig() { try { _instance.Config.Save(); } catch (Exception e) { Log.LogWarning("Config save: " + e.Message); } }
         private static Plugin _instance;
@@ -154,6 +154,7 @@ namespace Apocapatrol
         private void Awake()
         {
             Log = Logger; _instance = this;
+            try { QuietFsm.Install(); } catch (Exception e) { Log.LogWarning("QuietFsm: " + e.Message); }
             try { MotorcycleIntegration.Install(); }
             catch (Exception e) { Log.LogError("Motorcycle save hook not installed (saved motorcycles may not load): " + e); }
             Paint.Init(Info.Location);
@@ -170,6 +171,9 @@ namespace Apocapatrol
             SpawnWarning = Config.Bind("General", "SpawnWarning", true,
                 "When raiders spawn (an automatic patrol or convoy, or a test spawn from the editor) a red warning appears top left for a few " +
                 "seconds: \"You hear a sound of distant engines\". Template spawns do not show it. Off = no warning");
+            HideFsmWarnings = Config.Bind("General", "Hide missing-FSM warnings", true,
+                "The game's own FSMs constantly look for an \"ID\" FSM on things that have none, and each miss prints \"Could not find FSM: ID on " +
+                "GameObject: ...\" to the log. On = those warnings are not printed (the lookup works the same). Off = vanilla");
             RaiderMusic = Config.Bind("General", "Raider music", true,
                 "A raider car built from a template that has a cassette in its radio plays it at full volume from the moment it spawns, " +
                 "until you switch the radio off. Off = the cassette sits in the radio, silent, as in a parked car");
@@ -268,6 +272,9 @@ namespace Apocapatrol
             RiderJumpRange = H.Bind("Combat", "RiderJumpRange", 15f, new ConfigDescription("\"Witness me!\": the rider leaps when your car is closer than this, m", new AcceptableValueRange<float>(3f, 30f)));
             RiderIntervalMin = H.Bind("Combat", "RiderIntervalMin", 5f, new ConfigDescription("Shortest pause between two of a rider's throws, s", new AcceptableValueRange<float>(1f, 60f)));
             RiderIntervalMax = H.Bind("Combat", "RiderIntervalMax", 9f, new ConfigDescription("Longest pause between two of a rider's throws, s", new AcceptableValueRange<float>(1f, 120f)));
+            RiderLeapSpeed = H.Bind("Combat", "RiderLeapSpeed", 16f, new ConfigDescription("\"Witness me!\": the leap's ground speed relative to the rider's car, m/s - a long, flat jump, no lob", new AcceptableValueRange<float>(5f, 40f)));
+            RiderBlastDamage = H.Bind("Combat", "RiderBlastDamage", 60f, new ConfigDescription("\"Witness me!\": damage of the rider's blast at its centre (in your car too); falls to a third at the edge", new AcceptableValueRange<float>(0f, 300f)));
+            RiderBlastRadius = H.Bind("Combat", "RiderBlastRadius", 7f, new ConfigDescription("\"Witness me!\": reach of the rider's blast, m (damage and the shove of your car)", new AcceptableValueRange<float>(1f, 20f)));
             RiderLanceSpeed = H.Bind("Combat", "RiderLanceSpeed", 30f, new ConfigDescription("Throw speed of a rider's lance, m/s (the player's is 30)", new AcceptableValueRange<float>(5f, 80f)));
             StuckPedalChance = H.Bind("Driving", "StuckPedalChance", 5f, new ConfigDescription(
                 "% chance that a killed driver's gas pedal stays stuck; otherwise the gas is released and the car rolls to a stop",
