@@ -719,6 +719,17 @@ namespace Apocapatrol
             anchor.SetParent(car.transform, false);
             anchor.position = sit.position + (hp.position - hd.position);
             anchor.rotation = sit.rotation;
+            // the Rustliner bus (2.3.6): no passenger seat part - he sits on the small broken chair behind the driver's side door, turned
+            // 90 degrees left (facing across the aisle): the anchor goes over the chair's seat collider, the hips end up just above it
+            var chair = FindChild(car.transform, "chair_2_broken");
+            if (chair != null)
+            {
+                var col = chair.GetComponentInChildren<Collider>(true);
+                var top = col != null ? new Vector3(col.bounds.center.x, col.bounds.max.y, col.bounds.center.z) : chair.position;
+                anchor.position = top + car.transform.up * (0.08f - Plugin.DriverOffsetY.Value);   // Pose puts the hips at anchor + DriverOffset
+                anchor.rotation = car.transform.rotation * Quaternion.Euler(0f, -90f, 0f);
+                Plugin.Verbose("Passenger on the bus chair at local " + car.transform.InverseTransformPoint(anchor.position).ToString("F2"));
+            }
             var pax = SeatOccupant(car, prefabName, anchor, "Passenger", true, health);
             if (pax == null) { UnityEngine.Object.Destroy(anchor.gameObject); return null; }
             PassengerGuard.Attach(pax, car, anchor);
@@ -733,9 +744,10 @@ namespace Apocapatrol
             var prefab = Prefabs.FindAny(prefabName);
             if (prefab == null) { Plugin.Log.LogWarning(role + " prefab not found: " + prefabName); return null; }
 
+            // along the anchor's axes (= the car's for every seat but the bus chair, which faces sideways)
             var off = new Vector3(Plugin.DriverOffsetX.Value, Plugin.DriverOffsetY.Value, Plugin.DriverOffsetZ.Value);
-            var pos = anchor.position + car.transform.right * off.x + car.transform.up * off.y + car.transform.forward * off.z;
-            var rot = Quaternion.LookRotation(car.transform.forward, car.transform.up);
+            var pos = anchor.position + anchor.right * off.x + anchor.up * off.y + anchor.forward * off.z;
+            var rot = Quaternion.LookRotation(anchor.forward, anchor.up);
             var go = UnityEngine.Object.Instantiate(prefab, pos, rot);
             go.SetActive(true);
             if (passenger) PassengerGuard.Prepare(go, Plugin.RangedCombat.Value);

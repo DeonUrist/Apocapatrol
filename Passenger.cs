@@ -263,8 +263,9 @@ namespace Apocapatrol
                 if (target != null)
                 {
                     var flat = Vector3.ProjectOnPlane(aimPoint - _passenger.transform.position, _car.transform.up);
+                    var facing = _anchor != null ? _anchor.forward : _car.transform.forward;   // the seat's facing (the bus chair looks sideways)
                     if (flat.sqrMagnitude > 0.001f)
-                        ok = ((_turret && _turretArc <= 0f) || Mathf.Abs(Vector3.SignedAngle(_car.transform.forward, flat, _car.transform.up)) <= (_turret ? _turretArc : Plugin.FireArc.Value))
+                        ok = ((_turret && _turretArc <= 0f) || Mathf.Abs(Vector3.SignedAngle(facing, flat, _car.transform.up)) <= (_turret ? _turretArc : Plugin.FireArc.Value))
                           && (aimPoint - _passenger.transform.position).magnitude <= Plugin.ShootDistance.Value;
                 }
                 _canFire = ok;
