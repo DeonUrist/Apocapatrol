@@ -318,8 +318,8 @@ namespace Apocapatrol
     // restored as soon as the car moves. Part Adjustment 1.2.3 has the same component; whichever mod attached one first owns a car.
     internal sealed class StandstillDamper : MonoBehaviour
     {
-        internal const float StillSpeed = 0.6f, FreeSpeed = 1.2f, StiffnessAtRest = 0.25f, SpinBleed = 0.5f, DamperAtRest = 3f;
-        private Rigidbody _rb; private bool _boosted;
+        internal const float StillSpeed = 0.6f, FreeSpeed = 1.2f, StiffnessAtRest = 0.25f, SpinBleed = 0.5f, DamperAtRest = 3f, HoldSpeed = 0.3f, UnholdSpeed = 0.5f;
+        private Rigidbody _rb; private bool _boosted, _held; private RigidbodyConstraints _baseConstraints;
         private WheelController[] _wheels = new WheelController[0]; private float[] _baseStiffness = new float[0], _baseBump = new float[0], _baseRebound = new float[0]; private float _nextWheels;
 
         internal static void Attach(GameObject car)
@@ -357,6 +357,17 @@ namespace Apocapatrol
                     _wheels[i].DamperReboundRate = Mathf.Lerp(_baseRebound[i], _baseRebound[i] * DamperAtRest, k);
                 }
             _rb.angularVelocity *= 1f - SpinBleed * k;
+            // parked (under 0.3 m/s): the body cannot roll or pitch at all - the roll <-> sideways-grip loop has nothing to work with. The
+            // suspension still carries the car, sideways grip still holds it on a slope; released above 0.5 m/s (a push, the gas)
+            float speed = _rb.velocity.magnitude;
+            if (!_held && speed < HoldSpeed)
+            {
+                _baseConstraints = _rb.constraints;
+                _rb.constraints = _baseConstraints | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+                _rb.angularVelocity = Vector3.zero;
+                _held = true;
+            }
+            else if (_held && speed > UnholdSpeed) Unhold();
         }
 
         private void Collect()
@@ -369,7 +380,8 @@ namespace Apocapatrol
             for (int i = 0; i < _wheels.Length; i++) { _baseStiffness[i] = _wheels[i].LateralFrictionStiffness; _baseBump[i] = _wheels[i].DamperBumpRate; _baseRebound[i] = _wheels[i].DamperReboundRate; }
         }
         private void Restore() { for (int i = 0; i < _wheels.Length; i++) if (_wheels[i] != null) { _wheels[i].LateralFrictionStiffness = _baseStiffness[i]; _wheels[i].DamperBumpRate = _baseBump[i]; _wheels[i].DamperReboundRate = _baseRebound[i]; } }
-        private void Release() { if (_boosted) { Restore(); _boosted = false; } }
+        private void Unhold() { if (_held) { _rb.constraints = _baseConstraints; _held = false; } }
+        private void Release() { Unhold(); if (_boosted) { Restore(); _boosted = false; } }
         private void OnDisable() { if (_rb != null) Release(); }
     }
 
