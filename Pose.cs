@@ -20,8 +20,8 @@ namespace Apocapatrol
         private bool _bike;                   // on a motorcycle: the driving arms reach out to the handlebar grips, not to a wheel
         private Quaternion _seatRotation;
         private bool _logged;
-        // 2.2.0 human turret gunner: the whole body turns to the target (360), crouched on a roof (squat legs, gun up) or seated on a
-        // motorcycle (seated legs, arms down until it aims)
+        // 2.2.0 human turret gunner: crouched on a roof (squat legs, gun up, the whole body turns to the target, 360) or seated on a
+        // motorcycle (2.2.1: sits straight, seated legs, arms down until it aims, the upper body turns at most Rider.BikeArc)
         private bool _turret, _turretSeated;
         private float _turretYaw;
 
@@ -217,14 +217,16 @@ namespace Apocapatrol
                 if (flat > 0.001f)
                 {
                     wantedYaw = Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg;
+                    if (_turretSeated) wantedYaw = Mathf.Clamp(wantedYaw, -Rider.BikeArc, Rider.BikeArc);
                     wantedPitch = Mathf.Clamp(Mathf.Atan2(local.y, flat) * Mathf.Rad2Deg, -Plugin.MaxAimPitch.Value, Plugin.MaxAimPitch.Value);
                 }
             }
-            else wantedYaw = _turretYaw * 0.995f;   // idle: stays roughly where it looked, easing home slowly
+            else wantedYaw = _turretSeated ? 0f : _turretYaw * 0.995f;   // idle: roof - stays roughly where it looked, easing home slowly; bike - straight
             float step = Plugin.AimTurnSpeed.Value * Time.deltaTime;
             _turretYaw = Mathf.MoveTowardsAngle(_turretYaw, wantedYaw, step);
             _aimPitch = Mathf.MoveTowardsAngle(_aimPitch, wantedPitch, step);
-            _root.rotation = _anchor.rotation * Quaternion.Euler(0f, _turretYaw, 0f);
+            // roof: the whole body turns; motorcycle seat: the body sits straight, the upper body turns (spine, at most BikeArc)
+            _root.rotation = _turretSeated ? _anchor.rotation : _anchor.rotation * Quaternion.Euler(0f, _turretYaw, 0f);
             var right = _root.right; var up = _root.up;
 
             float thigh, knee, hip;
@@ -246,7 +248,7 @@ namespace Apocapatrol
                 ApplyWeapons();
             }
 
-            _aimYaw = 0f;   // the body already faces the target: the spine only pitches
+            _aimYaw = _turretSeated ? _turretYaw : 0f;   // roof: the body already faces the target, the spine only pitches
             AimSpine(_spine, 0.25f, up, right);
             AimSpine(_spine1, 0.35f, up, right);
             AimSpine(_spine2, 0.40f, up, right);

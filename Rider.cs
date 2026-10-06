@@ -20,6 +20,7 @@ namespace Apocapatrol
 
         // ------------------------------------------------------------ human turrets (2.2.0)
         internal const string Warboy = "Warboy", WarboyPrefab = "Scraffa";
+        internal const float BikeArc = 55f;   // 2.2.1: on a motorcycle a turret sits straight and turns only its upper body this far left / right
         // what the editors offer: a Warboy (blast lances, "Witness me!") or a ranged crew human (a gunner); "None" first, the rest A-Z
         internal static readonly string[] TurretChoices = { "None", "Boltjaw", "Flexa", "Lugnut", "Scrud", "Sprokka", Warboy };
         internal static bool IsGunner(string who) { return !string.IsNullOrEmpty(who) && Array.Exists(PassengerGuard.RangedHumans, n => string.Equals(n, who.Trim(), StringComparison.OrdinalIgnoreCase)); }
@@ -67,7 +68,7 @@ namespace Apocapatrol
             {
                 // a gunner: the passenger's vanilla ranged combat, all around (360), crouched on the roof / seated on a bike
                 var pose = Pose.Apply(go, anchor, prefab.name);
-                PassengerGuard.AttachTurret(go, car, anchor);
+                PassengerGuard.AttachTurret(go, car, anchor, bike ? BikeArc : 0f);
                 pose.ConfigureTurret(bike);
             }
             Plugin.Verbose("Human turret " + (slot + 1) + ": " + go.name + (gunner ? " (gunner)" : " (Warboy)") + " on " + car.name + " at local " + anchor.localPosition.ToString("F2"));
@@ -328,7 +329,7 @@ namespace Apocapatrol
         private Mode _mode = Mode.Riding;
         private int _slot; private bool _gunner, _bike;   // 2.2.0: turret spot 0..2, a gunner (PassengerGuard shoots, Pose crouches / seats), on a motorcycle
         private float _standAt = -1f;                      // a Warboy on a bike stands up (crouch -> stand blend) before the leap
-        private float _nextIgnore;
+        private float _nextIgnore, _outOfArc;
         private AnimationClipPlayable _stand;
         private bool _released, _inClose, _kamikazeArmed;
         private float _nextWitness;
@@ -499,6 +500,16 @@ namespace Apocapatrol
 
             Face(has && dist < Plugin.RiderRange.Value * 1.5f && to.sqrMagnitude > 0.01f ? to : _car.transform.forward);
 
+            // on a motorcycle he can only turn BikeArc degrees from the bike's nose: the player close by and out of that arc for a second
+            // (beside or behind him) -> he jumps off and fights on foot
+            bool inArc = !_bike || !has || ArcOff(to) <= Rider.BikeArc;
+            if (_bike && Plugin.RiderLances.Value && has && !inArc && dist <= Plugin.RiderJumpRange.Value && _mode == Mode.Riding)
+            {
+                _outOfArc += Time.deltaTime;
+                if (_outOfArc > 1f) { JumpOff("cannot turn to the player"); return; }
+            }
+            else _outOfArc = 0f;
+
             // "Witness me!": the player's car comes within throwing range - always when this rider is wounded, else WitnessMeChance % once per
             // approach. Armed, the driver pulls up alongside, matching the player's heading and speed (Pilot escort); the scream starts once the
             // player is within RiderJumpRange, both cars go the same way (not head-on / apart) and a flat jump lands on the player's car.
@@ -512,7 +523,7 @@ namespace Apocapatrol
                     {
                         Escort();
                         Vector3 launch; float flight;
-                        if (near <= Plugin.RiderJumpRange.Value && Time.time >= _nextWitness && CanLeap(tvel, tcar, out launch, out flight)) { StartWitness(); return; }
+                        if (inArc && near <= Plugin.RiderJumpRange.Value && Time.time >= _nextWitness && CanLeap(tvel, tcar, out launch, out flight)) { StartWitness(); return; }
                     }
                 }
                 else if (near > Plugin.RiderRange.Value + 8f) _inClose = false;
@@ -521,7 +532,7 @@ namespace Apocapatrol
 
             if (!Plugin.RiderLances.Value) { Blend(0, 0.15f); return; }
 
-            if (_mode == Mode.Riding && has && dist > 3f && dist <= Plugin.RiderRange.Value && Time.time >= _nextThrow && (_marker == null || !_marker.Exploded))
+            if (_mode == Mode.Riding && has && inArc && dist > 3f && dist <= Plugin.RiderRange.Value && Time.time >= _nextThrow && (_marker == null || !_marker.Exploded))
             {
                 // only within the lance's real reach: a flat throw (<= RiderMaxThrowAngle up) at the lance's speed must hit the predicted spot
                 Vector3 launch; float flight;
@@ -555,11 +566,25 @@ namespace Apocapatrol
         private Vector3 HandPos() { return _hand != null ? _hand.position : transform.position + Vector3.up * 1.2f; }
         private Vector3 CarVel() { return _carRb != null ? _carRb.velocity : Vector3.zero; }
 
+        // degrees between the vehicle's nose and a direction, about the vehicle's up
+        private float ArcOff(Vector3 dir)
+        {
+            var up = _car.transform.up;
+            var f = Vector3.ProjectOnPlane(_car.transform.forward, up); dir = Vector3.ProjectOnPlane(dir, up);
+            return f.sqrMagnitude < 1e-4f || dir.sqrMagnitude < 1e-4f ? 0f : Mathf.Abs(Vector3.SignedAngle(f, dir, up));
+        }
+
         private void Face(Vector3 dir)
         {
             var up = _car != null ? _car.transform.up : Vector3.up;
             dir = Vector3.ProjectOnPlane(dir, up);
             if (dir.sqrMagnitude < 1e-4f) return;
+            if (_bike && _car != null)
+            {
+                // on a motorcycle: at most BikeArc degrees off the nose
+                var f = Vector3.ProjectOnPlane(_car.transform.forward, up);
+                if (f.sqrMagnitude > 1e-4f) dir = Quaternion.AngleAxis(Mathf.Clamp(Vector3.SignedAngle(f, dir, up), -Rider.BikeArc, Rider.BikeArc), up) * f;
+            }
             var want = Quaternion.LookRotation(dir.normalized, up);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, want, 240f * Time.deltaTime);
         }

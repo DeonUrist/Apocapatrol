@@ -65,15 +65,15 @@ namespace Apocapatrol
         }
 
         // a human turret gunner (2.2.0) also needs [Combat] HumanTurrets
-        private bool _turret;
+        private bool _turret; private float _turretArc;   // arc 0 = all around (roof); a motorcycle seat: BikeArc
         private bool CombatAllowed { get { return Plugin.RangedCombat.Value && (!_turret || Plugin.RiderLances.Value); } }
 
         // a gunner on a turret spot (roof / motorcycle seat): passenger combat, but all around - no fire arc, the Pose turns the whole body
-        internal static PassengerGuard AttachTurret(GameObject who, GameObject car, Transform anchor)
+        internal static PassengerGuard AttachTurret(GameObject who, GameObject car, Transform anchor, float arc)
         {
             Attach(who, car, anchor);
             var guard = who.GetComponent<PassengerGuard>();
-            guard._turret = true;
+            guard._turret = true; guard._turretArc = arc;
             return guard;
         }
 
@@ -263,7 +263,7 @@ namespace Apocapatrol
                 {
                     var flat = Vector3.ProjectOnPlane(aimPoint - _passenger.transform.position, _car.transform.up);
                     if (flat.sqrMagnitude > 0.001f)
-                        ok = (_turret || Mathf.Abs(Vector3.SignedAngle(_car.transform.forward, flat, _car.transform.up)) <= Plugin.FireArc.Value)
+                        ok = ((_turret && _turretArc <= 0f) || Mathf.Abs(Vector3.SignedAngle(_car.transform.forward, flat, _car.transform.up)) <= (_turret ? _turretArc : Plugin.FireArc.Value))
                           && (aimPoint - _passenger.transform.position).magnitude <= Plugin.ShootDistance.Value;
                 }
                 _canFire = ok;
