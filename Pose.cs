@@ -17,6 +17,7 @@ namespace Apocapatrol
         private float _aimYaw, _aimPitch;
         private bool _lockSeatRotation;
         private bool _useProfile = true;      // per-human arm/weapon profile (shooting pose) vs the generic driver arms
+        private bool _bike;                   // on a motorcycle: the driving arms reach out to the handlebar grips, not to a wheel
         private Quaternion _seatRotation;
         private bool _logged;
 
@@ -25,9 +26,19 @@ namespace Apocapatrol
             var p = occupant.GetComponent<Pose>() ?? occupant.AddComponent<Pose>();
             p._root = occupant.transform;
             p._anchor = anchor;
+            p._bike = IsBike(anchor);
             Plugin.HumanArmPoses.TryGetValue(humanType ?? "", out p._armPose);
             p.FindBones();
             return p;
+        }
+
+        // the vehicle the seat belongs to is a motorcycle body (Motorcycle = the true bike, Halfbreed)
+        private static bool IsBike(Transform anchor)
+        {
+            var root = anchor != null ? anchor.root : null;
+            if (root == null) return false;
+            string body = TemplateExporter.PrefabName(root.name);
+            return MotorcycleIntegration.IsBody(body) || string.Equals(body, "Halfbreed", System.StringComparison.OrdinalIgnoreCase);
         }
 
         private void FindBones()
@@ -148,8 +159,10 @@ namespace Apocapatrol
             else
             {
                 float arm = Plugin.PoseArm.Value, elbow = Plugin.PoseElbow.Value;
-                Swing(_lArm, -arm, right); Swing(_lArm, Plugin.PoseLeftArmCloser.Value, up); Swing(_lForeArm, -elbow, right);
-                Swing(_rArm, -arm, right); Swing(_rArm, -Plugin.PoseRightArmCloser.Value, up); Swing(_rForeArm, -elbow, right);
+                float lIn = Plugin.PoseLeftArmCloser.Value, rIn = Plugin.PoseRightArmCloser.Value;
+                if (_bike) { arm = Plugin.PoseBikeArm.Value; lIn = rIn = -Plugin.PoseBikeArmSpread.Value; }   // hands apart on the grips
+                Swing(_lArm, -arm, right); Swing(_lArm, lIn, up); Swing(_lForeArm, -elbow, right);
+                Swing(_rArm, -arm, right); Swing(_rArm, -rIn, up); Swing(_rForeArm, -elbow, right);
             }
 
             // Arms remain permanently in the driver pose. Rotate that fixed upper-body pose through the spine only.

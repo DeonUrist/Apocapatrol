@@ -19,7 +19,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.0.11";
+        public const string VERSION = "2.0.12";
 
         internal static ManualLogSource Log;
 
@@ -75,7 +75,7 @@ namespace Apocapatrol
         // hidden pose settings (PoseConfiguration = true exposes them)
         internal static PoseFloat DriverOffsetX, DriverOffsetY, DriverOffsetZ;
         internal static PoseBool PoseEnabled;
-        internal static PoseFloat PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLeftLegCloser, PoseRightLegCloser, PoseLeftArmCloser, PoseRightArmCloser;
+        internal static PoseFloat PoseThigh, PoseKnee, PoseArm, PoseElbow, PoseLeftLegCloser, PoseRightLegCloser, PoseLeftArmCloser, PoseRightArmCloser, PoseBikeArm, PoseBikeArmSpread;
 
         // fixed values that used to be settings
         internal const float SpawnDistance = 8f;          // m in front of the player (template spawner)
@@ -360,6 +360,8 @@ namespace Apocapatrol
             PoseRightLegCloser = PoseFloat.Create(Config, "Pose", "RightLegCloser", 10f, "Right leg inward angle", closerRange, exposePose);
             PoseLeftArmCloser = PoseFloat.Create(Config, "Pose", "LeftArmCloser", 10f, "Fallback left arm inward angle", closerRange, exposePose);
             PoseRightArmCloser = PoseFloat.Create(Config, "Pose", "RightArmCloser", 10f, "Fallback right arm inward angle", closerRange, exposePose);
+            PoseBikeArm = PoseFloat.Create(Config, "Pose", "BikeArmAngle", 55f, "Motorcycle riders (Motorcycle, Halfbreed): arm angle down to the handlebar", bodyRange, exposePose);
+            PoseBikeArmSpread = PoseFloat.Create(Config, "Pose", "BikeArmSpread", 22f, "Motorcycle riders: each arm this far outward, hands on the handlebar grips", closerRange, exposePose);
             PoseElbow = PoseFloat.Create(Config, "Pose", "ElbowAngle", 25f, "Fallback elbow angle", bodyRange, exposePose);
 
             foreach (var human in HumanTypes)

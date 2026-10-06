@@ -1,4 +1,6 @@
-# Apocapatrol 2.0.11
+# Apocapatrol 2.0.12
+
+2.0.12: motorcycle riders (Motorcycle, Halfbreed) hold their arms apart on the handlebar grips instead of together.
 
 2.0.11: drivers (cars, trucks, motorcycles) always sit in the driving pose, also with a gun and also a passenger who took the wheel;
 they switch to the shooting pose only while they actually fire, then back to the wheel.
