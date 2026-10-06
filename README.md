@@ -1,4 +1,8 @@
-# Apocapatrol 2.0.15
+# Apocapatrol 2.0.16
+
+2.0.16: raider cars no longer roll over in turns. The driving AI knows how top-heavy its car is (track width and the height of its
+centre of mass) and keeps the turn within what the chassis can take: less lock at speed, braking for a turn it cannot make at its speed,
+and steering straightened when the body starts to lean. Low cars drive as before; lifted ones on big wheels take their turns wider.
 
 2.0.15 fixes 2.0.13/2.0.14: templates saved or edited with those versions lost their driver, passenger and rams lines (the car spawned
 empty). Re-save or press E on such a template once to put the crew back.

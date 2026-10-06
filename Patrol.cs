@@ -1619,6 +1619,13 @@ namespace Apocapatrol
             catch (Exception) { return "?"; }
         }
 
+        // NWH steering.maximumSteerAngle (degrees), 0 when unknown
+        internal static float MaxSteerAngle(GameObject car)
+        {
+            try { var h = Of(car); var s = h != null ? Get(h.Vc, "steering") : null; var a = s != null ? Get(s, "maximumSteerAngle") : null; return a is float ? (float)a : 0f; }
+            catch (Exception) { return 0f; }
+        }
+
         internal static void SetHandbrake(GameObject car, float value)
         {
             try { var h = Of(car); if (h == null || !Set(h.Input, "Handbrake", value)) Plugin.Verbose("no input.Handbrake"); }

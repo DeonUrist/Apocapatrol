@@ -63,6 +63,11 @@ namespace Apocapatrol
         private int _senseStep;                                            // feelers run every 2nd physics step (every 4th far from the target)
         private float _senseSteer, _senseThrottle = 1f, _senseBrake;       // last feeler result, reused on the skipped steps
         private int _gear; private float _gearNext;                        // NWH gear, read by reflection 5x a second instead of every step
+        // rollover guard (2.0.16): the lateral acceleration this chassis can take before it tips = g x half track / COM height (x margin),
+        // from the wheel hinges and a ground ray under the centre of mass; the steering at speed is capped so v^2 x curvature stays under it,
+        // the car brakes for a turn it cannot take at its speed, and a chassis already leaning outward gets its steering and gas cut
+        private float _rollLimit = 8f, _wheelbase = 2.5f, _tanSteer = 0.7f, _nextGeometry;
+        private float _roll;                                               // current body roll, degrees (+ = right side higher = leaning left)
 
         internal PilotState State { get { return _state; } }
 
@@ -73,6 +78,7 @@ namespace Apocapatrol
             var marker = car.GetComponent<PatrolMarker>();
             p._rams = marker != null ? marker.Rams : RamTargets.Pedestrians;
             p.Enter(PilotState.Charge, "start");
+            p._nextGeometry = 0f;
             if (!All.Contains(p)) All.Add(p);
             Plugin.Verbose("Pilot: driving AI on " + car.name + ", rams " + p._rams);
             return p;
@@ -111,6 +117,8 @@ namespace Apocapatrol
             Vector3 vel = _rb != null ? _rb.velocity : Vector3.zero;
             float speed = vel.magnitude;
             float forwardSpeed = Vector3.Dot(vel, _tf.forward);
+            if (Time.time >= _nextGeometry) { _nextGeometry = Time.time + 10f; Geometry(); }
+            _roll = Mathf.Asin(Mathf.Clamp(Vector3.Dot(_tf.right, Vector3.up), -1f, 1f)) * Mathf.Rad2Deg;
 
             if (_hasTarget)
             {
@@ -217,7 +225,8 @@ namespace Apocapatrol
             bool ramming = _ramsTarget && _dist < Plugin.AiRamDistance.Value && Mathf.Abs(_angle) < 35f && (_feelerHit[0] < 0f || _feelerHit[0] > _dist);
             if (!ramming) desired = Mathf.Clamp(desired + avoidSteer, -1f, 1f);
 
-            float maxSteer = MaxSteerFor(speed);
+            float maxSteer = Mathf.Min(MaxSteerFor(speed), RollSafeSteer(speed));
+            float wanted = desired;                                                     // before the caps: how hard it needs to turn
             desired = Mathf.Clamp(desired, -maxSteer, maxSteer);
             float steer = MoveSteer(desired, dt);
 
@@ -226,8 +235,11 @@ namespace Apocapatrol
             float throttle = max * Mathf.Lerp(1f, taper, Mathf.InverseLerp(4f, 10f, speed));   // ...but only once rolling (need speed to turn)
             float brakes = 0f;
             if (speed > Plugin.AiTurnSafeSpeed.Value && absAngle > 40f) { throttle = 0f; brakes = 0.5f; }
+            // the turn it wants would tip it at this speed: off the gas and brake until the speed fits the turn (tall, lifted chassis)
+            if (Mathf.Abs(wanted) > 0.15f && speed > 4f && LateralFor(speed, Mathf.Abs(wanted)) > _rollLimit) { throttle = 0f; brakes = Mathf.Max(brakes, 0.35f); }
             if (turning && speed > 6f) throttle = Mathf.Min(throttle, max * 0.7f);
             if (!ramming) { throttle *= avoidThrottle; brakes = Mathf.Max(brakes, avoidBrake); }
+            LeanGuard(ref steer, ref throttle, ref brakes);
             Apply(throttle, steer, brakes);
 
             // passed the target: it is behind us and close to our track
@@ -255,8 +267,11 @@ namespace Apocapatrol
             if (Gear() <= 0) Shift(1);
             float avoidSteer, avoidThrottle, avoidBrake;
             Sense(speed, out avoidSteer, out avoidThrottle, out avoidBrake);
-            float steer = MoveSteer(Mathf.Clamp(avoidSteer, -MaxSteerFor(speed), MaxSteerFor(speed)), dt);
-            Apply(Plugin.AiThrottle.Value * avoidThrottle, steer, avoidBrake);
+            float cap = Mathf.Min(MaxSteerFor(speed), RollSafeSteer(speed));
+            float steer = MoveSteer(Mathf.Clamp(avoidSteer, -cap, cap), dt);
+            float throttle = Plugin.AiThrottle.Value * avoidThrottle, brakes = avoidBrake;
+            LeanGuard(ref steer, ref throttle, ref brakes);
+            Apply(throttle, steer, brakes);
             float ran = Flat(_tf.position - _runStart).magnitude;
             if (ran >= Plugin.AiRunOutMeters.Value || _stateTime >= Plugin.AiRunOutMaxSeconds.Value)
             { Enter(PilotState.Turnaround, "ran out " + ran.ToString("0") + " m"); return; }
@@ -338,6 +353,57 @@ namespace Apocapatrol
         private float MaxSteerFor(float speed)
         {
             return Mathf.Lerp(1f, Plugin.AiMaxSteerAtSpeed.Value, Mathf.InverseLerp(5f, 20f, speed));
+        }
+
+        // ------------------------------------------------------------ rollover guard
+
+        // Track width (hinge_wheel_FL <-> FR), wheelbase (FL <-> RL) and the centre of mass height over the ground (a ray down from the
+        // COM past the car's own colliders) -> the lateral acceleration the chassis takes before the inner wheels lift: g x (track/2) / h,
+        // with a 0.8 margin. A low PipeRat lands near 10 m/s^2 (above the tyres' grip: no change to how it drives); a lifted one on truck
+        // wheels with plates on the roof around 6, which is what tipped it. Also NWH's maximum steer angle for the curvature of a steering input.
+        private void Geometry()
+        {
+            try
+            {
+                var fl = Patrol.FindChild(_tf, "hinge_wheel_FL"); var fr = Patrol.FindChild(_tf, "hinge_wheel_FR"); var rl = Patrol.FindChild(_tf, "hinge_wheel_RL");
+                float track = fl != null && fr != null ? Mathf.Abs(Vector3.Dot(fr.position - fl.position, _tf.right)) : 1.5f;
+                if (fl != null && rl != null) _wheelbase = Mathf.Max(1.2f, Mathf.Abs(Vector3.Dot(rl.position - fl.position, _tf.forward)));
+                var com = _rb != null ? _rb.worldCenterOfMass : _tf.position;
+                float h = 0.7f;
+                int n = Physics.RaycastNonAlloc(com + Vector3.up * 0.2f, Vector3.down, _hits, 6f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                float best = -1f;
+                for (int i = 0; i < n; i++) { var c = _hits[i].collider; if (c == null || c.transform.IsChildOf(_tf)) continue; if (best < 0f || _hits[i].distance < best) best = _hits[i].distance; }
+                if (best >= 0f) h = Mathf.Clamp(best - 0.2f, 0.3f, 2.5f);
+                _rollLimit = Mathf.Clamp(9.81f * (Mathf.Max(0.8f, track) * 0.5f) / h * 0.8f, 2.5f, 30f);
+                float maxAngle = Nwh.MaxSteerAngle(_car);
+                _tanSteer = Mathf.Tan(Mathf.Clamp(maxAngle > 1f ? maxAngle : 35f, 10f, 60f) * Mathf.Deg2Rad);
+                if (Plugin.VerboseLog.Value) Plugin.Verbose("Pilot: " + _car.name + " track " + track.ToString("0.00") + " m, wheelbase " + _wheelbase.ToString("0.00") + " m, COM " + h.ToString("0.00") + " m up -> roll limit " + _rollLimit.ToString("0.0") + " m/s^2");
+            }
+            catch (Exception e) { Plugin.Verbose("Pilot: geometry: " + e.Message); }
+        }
+
+        // lateral acceleration (m/s^2) of this speed at this steering input (bicycle model: curvature = tan(steer x maxAngle) / wheelbase)
+        private float LateralFor(float speed, float steer) { return speed * speed * (steer * _tanSteer) / _wheelbase; }
+
+        // the steering input at which the lateral acceleration reaches the roll limit at this speed (1 = no cap)
+        private float RollSafeSteer(float speed)
+        {
+            if (speed < 3f) return 1f;
+            return Mathf.Clamp(_rollLimit * _wheelbase / (speed * speed * _tanSteer), 0.08f, 1f);
+        }
+
+        // The body leans outward in the turn (the inner wheels unload): from 5 degrees the steering and the gas are cut in proportion,
+        // from 10 degrees the gas is off and it brakes, beyond 16 the wheel is centred - better a missed turn than a car on its roof.
+        private void LeanGuard(ref float steer, ref float throttle, ref float brakes)
+        {
+            float lean = Mathf.Abs(_roll);
+            if (lean < 5f) return;
+            bool outward = Mathf.Sign(_roll) == Mathf.Sign(steer) && Mathf.Abs(steer) > 0.02f;   // right turn (+steer) lifts the right side (+roll)
+            if (!outward && lean < 12f) return;                                                  // a slope, not the turn
+            float cut = Mathf.Clamp01(1f - (lean - 5f) / 8f);
+            steer *= cut; throttle *= cut;
+            if (lean >= 10f) { throttle = 0f; brakes = Mathf.Max(brakes, 0.3f); }
+            if (lean >= 16f) steer = 0f;
         }
 
         private float MoveSteer(float desired, float dt)
@@ -576,6 +642,7 @@ namespace Apocapatrol
             return _car.name + ": " + _state + " (" + _why + ")  " + (vel.magnitude * 3.6f).ToString("0") + " km/h  gear " + Nwh.Gear(_car)
                 + "  target " + _dist.ToString("0") + " m @ " + _angle.ToString("0") + "°  steer " + _steer.ToString("0.00")
                 + "  thr " + _throttle.ToString("0.00") + "  brk " + _brakes.ToString("0.00") + Feelers()
+                + "  roll " + _roll.ToString("0") + "°/" + _rollLimit.ToString("0")
                 + "  recovers " + _recoverCount
                 + (_state == PilotState.Recover ? "  rear " + (_rearClear < 0f ? "clear" : _rearClear.ToString("0.0") + " m") : "")
                 + (_pushTime > 0f ? "  push " + _pushTime.ToString("0.0") + " s " + _pushName : "");
