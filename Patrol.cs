@@ -952,6 +952,15 @@ namespace Apocapatrol
                 if (anchor != null && sit != null) side = Vector3.Dot(anchor.position - sit.position, car.transform.right) >= 0f ? 1f : -1f;
             }
             var from = (anchor != null ? anchor.position : car.transform.position) + car.transform.right * side * VehicleRules.ExitDistance(car.name) + Vector3.up * 1.5f;
+            var facing = Vector3.ProjectOnPlane(car.transform.right * side, Vector3.up);
+            // the Rustliner bus (2.3.8): everybody leaves through the door in the back (hinge_door_parent/hinge_door_L, the rear door), the
+            // truck's exit distance behind it - a sideways exit lands them inside the bus
+            var rearDoor = TemplateExporter.PrefabName(car.name).Equals("Rustliner", StringComparison.OrdinalIgnoreCase) ? FindChild(car.transform, "hinge_door_parent") : null;
+            if (rearDoor != null)
+            {
+                from = rearDoor.position - car.transform.forward * VehicleRules.ExitDistance(car.name) + Vector3.up * 1.5f;
+                facing = Vector3.ProjectOnPlane(-car.transform.forward, Vector3.up);
+            }
             var pos = from + Vector3.down * 1.2f;
             var hits = Physics.RaycastAll(from, Vector3.down, 6f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             float best = float.MaxValue;
@@ -959,7 +968,7 @@ namespace Apocapatrol
                 if (h.collider != null && !h.collider.transform.IsChildOf(car.transform) && !h.collider.transform.IsChildOf(pax.transform) && h.distance < best)
                 { best = h.distance; pos = h.point; }
             float groundY = pos.y;
-            var rot = Quaternion.LookRotation(Vector3.ProjectOnPlane(car.transform.right * side, Vector3.up).normalized, Vector3.up);
+            var rot = Quaternion.LookRotation(facing.sqrMagnitude > 1e-4f ? facing.normalized : car.transform.forward, Vector3.up);
 
             if (prefab == null)
             {
