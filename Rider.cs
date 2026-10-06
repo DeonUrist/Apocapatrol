@@ -60,6 +60,7 @@ namespace Apocapatrol
             var root = go.GetComponent<Rigidbody>() ?? go.AddComponent<Rigidbody>();
             root.isKinematic = true;
             root.interpolation = RigidbodyInterpolation.None;
+            NoContacts(go);
             go.transform.SetParent(anchor, true);
             slot = Mathf.Clamp(slot, 0, 2);
             marker.Riders[slot] = go; marker.RiderAnchors[slot] = anchor;
@@ -73,6 +74,21 @@ namespace Apocapatrol
             }
             Plugin.Verbose("Human turret " + (slot + 1) + ": " + go.name + (gunner ? " (gunner)" : " (Warboy)") + " on " + car.name + " at local " + anchor.localPosition.ToString("F2"));
             return go;
+        }
+
+        // 2.2.2: a turret body never touches anything physically while it rides - no contact can shove the vehicle (a bike was pushed
+        // backwards by its sitter: weapon props the game toggles on drop their per-pair collision ignores). Every Rigidbody of the body is
+        // kinematic with collision detection off; colliders the game switches on later attach to the root and inherit it. Raycasts and
+        // sensors still find the colliders, so it can be shot as before. (Jumping off / landing: the flight uses its own casts and the landed
+        // mob is a fresh object, so nothing has to be undone.)
+        internal static void NoContacts(GameObject go)
+        {
+            foreach (var rb in go.GetComponentsInChildren<Rigidbody>(true))
+            {
+                if (rb == null) continue;
+                rb.isKinematic = true;
+                rb.detectCollisions = false;
+            }
         }
 
         // the automatic spot (feet). Car: turret 1 on the top of the car (the highest point of its renderers, centred), turrets 2 and 3 behind
