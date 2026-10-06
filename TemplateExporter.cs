@@ -37,7 +37,7 @@ namespace Apocapatrol
         }
         private readonly EditorSession _session = new EditorSession();
         private Transform _draftCar;
-        private string _templateName = "", _driverName = "Scraffa", _passengerName = "Sprokka", _lootId = "";
+        private string _templateName = "", _driverName = "Scraffa", _passengerName = "Sprokka", _lootId = "", _riderName = "None";
         private Action _afterDraw;
         private bool _truck;
         private bool _bike;   // the true motorcycle (no rear, no seats behind): its templates carry no loot setting at all
@@ -55,10 +55,9 @@ namespace Apocapatrol
             if (_key == null || EditorSession.Busy || !Application.isFocused || !Plugin.Pressed(_key.Value)) return;
             var patrol = GetComponent<Patrol>(); if (patrol == null || !patrol.InGame()) return;
             string how; var car = FindCar(out how); if (car == null) return;
-            if (!VehicleRules.CanTemplate(car.name)) { Toast("Bus templating is temporarily disabled while crew seating is being fixed."); return; }
             if (!_session.Acquire()) return;
             _draftCar = car; _truck = PrefabName(car.name).Equals("Rustcargo", StringComparison.OrdinalIgnoreCase) && FrameChildren(car, "PhysicsLock").Any();
-            _templateName = ""; _driverName = "Scraffa"; _passengerName = "None"; _ledgerDropdown.Close();
+            _templateName = ""; _driverName = "Scraffa"; _passengerName = "None"; _riderName = "None"; _ledgerDropdown.Close();
             _bike = MotorcycleIntegration.IsBody(PrefabName(car.name));
             var profiles = _truck ? EditorStore.Data.TruckLoot : EditorStore.Data.CarLoot; _lootId = _bike ? "" : !_truck && profiles.Any(p => p.Id == "car-empty") ? "car-empty" : profiles.Count > 0 ? profiles[0].Id : "";
         }
@@ -86,7 +85,7 @@ namespace Apocapatrol
             LedgerSkin.Window(_rect); LedgerSkin.Header(_rect.width);
             GUI.enabled = enabled && !_ledgerDropdown.IsOpen;
             if (LedgerSkin.Button(new Rect(_rect.width - 96, 24, 70, 34), "CLOSE", gameFont: true, transparent: true)) _afterDraw = Close;
-            var box = new Rect((_rect.width - 600) / 2, 122, 600, 426); LedgerSkin.Panel(box);
+            var box = new Rect((_rect.width - 600) / 2, 104, 600, 474); LedgerSkin.Panel(box);
             float x = box.x + 22, input = x + 160, w = box.width - 204;
             LedgerSkin.Label(new Rect(x, box.y + 22, box.width - 44, 26), "Save vehicle template", LedgerSkin.DialogTitle);
             LedgerSkin.Label(new Rect(x, box.y + 53, box.width - 44, 20), (_truck ? "Storage truck" : "Vehicle") + " · " + PrefabName(_draftCar.name), LedgerSkin.Small, LedgerSkin.Muted);
@@ -109,8 +108,10 @@ namespace Apocapatrol
                 var anchor = new Rect(input, box.y + 229, w, 34);
                 if (LedgerSkin.Dropdown(anchor, profile != null ? profile.Name : "None")) _ledgerDropdown.Open(anchor, new[] { new KeyValuePair<string, string>("", "None") }.Concat(profiles.Select(p => new KeyValuePair<string, string>(p.Id, p.Name))).ToList(), _lootId, value => _lootId = value, box.yMax - 84);
             }
-            LedgerSkin.Label(new Rect(x, box.y + 285, box.width - 44, 20), "Attached parts and adjusted hinges are recorded automatically.", LedgerSkin.Small, LedgerSkin.Muted);
-            LedgerSkin.Label(new Rect(x, box.y + 302, box.width - 44, 20), "Stored in PlayerTemplates. Locked cargo items are excluded.", LedgerSkin.Small, LedgerSkin.Muted);
+            if (!_truck && !_bike) DraftLedgerDropdown(new Rect(input, box.y + 276, w, 34), "Blastlance rider", _riderName, people, value => _riderName = value, box.yMax - 84);
+            else { LedgerSkin.Label(new Rect(x, box.y + 276, 144, 34), "Blastlance rider"); LedgerSkin.Label(new Rect(input, box.y + 276, w, 34), "None - cars only", null, LedgerSkin.Muted); }
+            LedgerSkin.Label(new Rect(x, box.y + 333, box.width - 44, 20), "Attached parts and adjusted hinges are recorded automatically.", LedgerSkin.Small, LedgerSkin.Muted);
+            LedgerSkin.Label(new Rect(x, box.y + 350, box.width - 44, 20), "Stored in PlayerTemplates. Locked cargo items are excluded.", LedgerSkin.Small, LedgerSkin.Muted);
             LedgerSkin.Rule(x, box.yMax - 73, box.width - 44);
             if (LedgerSkin.Button(new Rect(box.xMax - 213, box.yMax - 55, 77, 34), "Cancel")) _afterDraw = Close;
             if (LedgerSkin.Button(new Rect(box.xMax - 128, box.yMax - 55, 106, 34), "Save template", primary: true))
@@ -332,7 +333,6 @@ namespace Apocapatrol
             string how;
             var car = FindCar(out how);
             if (car == null || car != _draftCar) throw new InvalidOperationException("You are no longer seated in the captured vehicle");
-            if (!VehicleRules.CanTemplate(car.name)) throw new InvalidOperationException("Bus templating is temporarily disabled");
             _assets = null;   // a fresh asset list per dump
             string body = PrefabName(car.name);
             var bodyAsset = Asset(body);
@@ -365,6 +365,7 @@ namespace Apocapatrol
                 rams = kind == "truck" ? "Cars" : "Pedestrians",
                 driver = hasDriverSeat ? (_driverName == "None" ? "" : _driverName) : "",
                 passenger = hasPassengerSeat ? (_passengerName == "None" ? "" : _passengerName) : "",
+                rider = _truck || _bike || _riderName == "None" ? "" : _riderName,
                 parts = w.Parts.ToArray(),
                 source = "Apocatemplater (" + Plugin.NAME + ") " + Plugin.VERSION + ", " + DateTime.Now.ToString("yyyy-MM-dd HH:mm") + ", from " + car.name,
             };

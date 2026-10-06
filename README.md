@@ -1,4 +1,10 @@
-# Apocapatrol 2.0.16
+# Apocapatrol 2.1.0
+
+2.1.0 (prototype): **Blast-lance riders** - a template (cars only, no trucks or motorcycles) can carry a raider crouching on the roof who
+throws blast lances at you every few seconds (`[Combat] BlastlanceRiders`, on by default). Set it with **E** on a template or in the
+save-template window; the spot is the top of the car unless the template has a `riderPos`. With Apocaplayer installed the rider uses its
+crouch and throw animations. The separate **Apocaspotter** plugin shows the spot as glowing markers and lets you move and save it.
+Also: the **Rustliner** bus can be templated and crewed now (prototype - report seat problems).
 
 2.0.16: raider cars no longer roll over in turns. The driving AI knows how top-heavy its car is (track width and the height of its
 centre of mass) and keeps the turn within what the chassis can take: less lock at speed, braking for a turn it cannot make at its speed,

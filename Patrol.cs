@@ -263,6 +263,13 @@ namespace Apocapatrol
                 if (!string.IsNullOrEmpty(tpl.Passenger)) passenger = SeatPassenger(car, tpl.Passenger);
                 var marker = PatrolMarker.Attach(car, body.name, tpl.Driver, driver, tpl.Passenger, passenger, tpl.Rams);
                 marker.CargoKey = lootKey ?? "";
+                marker.TemplateName = tpl.Name;
+                if (!string.IsNullOrEmpty(tpl.Rider) && !tpl.IsTruck && !tpl.IsMotorcycle && !MotorcycleIntegration.IsBody(tpl.Body))
+                {
+                    yield return null;
+                    if (car == null) yield break;
+                    Rider.Seat(car, marker, tpl.Rider, tpl.RiderPos);
+                }
                 Paint.ApplyCargo(car, lootKey);   // the container's texture by load (Textures/cargo_*.png)
 
                 yield return new WaitForSeconds(1f);

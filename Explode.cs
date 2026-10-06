@@ -45,6 +45,7 @@ namespace Apocapatrol
             bool truck = IsTruck(marker.BodyPrefab);
             var crew = car.GetComponent<Crew>();
             if (crew != null) crew.OnExploded();
+            if (marker.Rider != null && Patrol.GetHealth(marker.Rider) != 0f) { Patrol.BailOut(car, marker.Rider, marker.RiderPrefab, 0f); marker.Rider = null; }
             Nwh.SetInput(car, 0f, 0f, truck ? 1f : 0f);
             if (truck) { Nwh.StopEngine(car); Patrol.Handbrake(car, true); Nwh.SetHandbrake(car, 1f); }
 
@@ -254,7 +255,7 @@ namespace Apocapatrol
                 bool skip = false;
                 for (var a = r.transform; a != null && a != car.transform; a = a.parent)
                     if (a.CompareTag("vehPart") || a.GetComponent<Crew>() != null || a.name.IndexOf("(Driver)", StringComparison.Ordinal) >= 0
-                        || a.name.IndexOf("(Passenger)", StringComparison.Ordinal) >= 0 || a.name.IndexOf("_Dead", StringComparison.Ordinal) >= 0
+                        || a.name.IndexOf("(Passenger)", StringComparison.Ordinal) >= 0 || a.name.IndexOf("(Rider)", StringComparison.Ordinal) >= 0 || a.name.IndexOf("_Dead", StringComparison.Ordinal) >= 0
                         || a.name == "PhysicsLock") { skip = true; break; }
                 if (skip) continue;
                 try

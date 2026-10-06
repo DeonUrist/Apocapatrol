@@ -19,7 +19,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.0.16";
+        public const string VERSION = "2.1.0";
 
         internal static ManualLogSource Log;
 
@@ -56,7 +56,11 @@ namespace Apocapatrol
         internal static ConfigEntry<float> ExplodedLootPercent;
         // [AI]
         internal static ConfigEntry<bool> AiInvertSteering, AiOverlay, CustomPaintjobs;
-        internal static ConfigEntry<bool> SpawnWarning, RaiderMusic;
+        internal static ConfigEntry<bool> SpawnWarning, RaiderMusic, RiderLances;
+        internal static ConfigEntry<float> RiderRange, RiderIntervalMin, RiderIntervalMax, RiderLanceSpeed;
+        internal static ConfigEntry<string> RiderLanceOffset, RiderLanceRotation;
+        internal static void SaveConfig() { try { _instance.Config.Save(); } catch (Exception e) { Log.LogWarning("Config save: " + e.Message); } }
+        private static Plugin _instance;
         internal static ConfigEntry<float> AiDriveByOffset;
         internal static ConfigEntry<float> AiThrottle, AiLeadTime, AiCommitSeconds, AiSteerRate, AiSteerAngle, AiMaxSteerAtSpeed, AiTurnSafeSpeed,
             AiRamDistance, AiPassWidth, AiRunOutMeters, AiRunOutMaxSeconds, AiReverseSeconds, AiReverseThrottle, AiStuckSeconds,
@@ -149,7 +153,7 @@ namespace Apocapatrol
 
         private void Awake()
         {
-            Log = Logger;
+            Log = Logger; _instance = this;
             try { MotorcycleIntegration.Install(); }
             catch (Exception e) { Log.LogError("Motorcycle save hook not installed (saved motorcycles may not load): " + e); }
             Paint.Init(Info.Location);
@@ -195,6 +199,10 @@ namespace Apocapatrol
                 "Occupants only shoot at a target closer than this, m", new AcceptableValueRange<float>(1f, 200f)));
             RamDamage = Config.Bind("Combat", "RamDamage", true,
                 "An AI car that hits you (on foot or in your car) hurts you. The game's own bumper damage only works against creatures, not the player");
+            RiderLances = Config.Bind("Combat", "BlastlanceRiders", true,
+                "A template's blast-lance rider (a raider crouching on the roof) throws blast lances at you. Off = the rider just rides along");
+            RiderLanceOffset = Config.Bind("Debug", "RiderLanceOffset", "0, 0, 0", "Rider's lance prop: position in the throwing hand, hand-local metres x, y, z (Apocaspotter saves it here)");
+            RiderLanceRotation = Config.Bind("Debug", "RiderLanceRotation", "0, 0, 0", "Rider's lance prop: rotation in the throwing hand, degrees x, y, z (Apocaspotter saves it here)");
             RamDamageInCar = Config.Bind("Combat", "RamDamageInCar", false,
                 "Ram damage also while you sit in your own car (the game's own CrashDamage still applies by your speed). Off = only on foot");
 
@@ -252,6 +260,10 @@ namespace Apocapatrol
                         RamInCarFactor = H.Bind("Combat", "RamInCarFactor", 1f, new ConfigDescription(
                 "With RamDamageInCar: damage factor while you sit in your own car (1 = same as on foot)", new AcceptableValueRange<float>(0f, 1f)));
 
+            RiderRange = H.Bind("Combat", "RiderRange", 45f, new ConfigDescription("A blast-lance rider throws at a target closer than this, m", new AcceptableValueRange<float>(5f, 150f)));
+            RiderIntervalMin = H.Bind("Combat", "RiderIntervalMin", 5f, new ConfigDescription("Shortest pause between two of a rider's throws, s", new AcceptableValueRange<float>(1f, 60f)));
+            RiderIntervalMax = H.Bind("Combat", "RiderIntervalMax", 9f, new ConfigDescription("Longest pause between two of a rider's throws, s", new AcceptableValueRange<float>(1f, 120f)));
+            RiderLanceSpeed = H.Bind("Combat", "RiderLanceSpeed", 30f, new ConfigDescription("Throw speed of a rider's lance, m/s (the player's is 30)", new AcceptableValueRange<float>(5f, 80f)));
             StuckPedalChance = H.Bind("Driving", "StuckPedalChance", 5f, new ConfigDescription(
                 "% chance that a killed driver's gas pedal stays stuck; otherwise the gas is released and the car rolls to a stop",
                 new AcceptableValueRange<float>(0f, 100f)));

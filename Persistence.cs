@@ -53,6 +53,10 @@ namespace Apocapatrol
         internal float FarSeconds;            // how long it has been beyond the cleanup distance
         internal bool Exploded;               // self-destructed: a dead chassis, removed beyond Explode.RemoveDistance
         internal string CargoKey = "";        // loot type at build (Food, Water, ...; "" = none): the container texture, kept across saves
+        internal string TemplateName = "";    // the template this car was built from (2.1.0; "" for restored cars) - the rider spot tweaker saves into it
+        internal GameObject Rider;            // the blast-lance thrower on the roof, or null (not saved: a restored car has none)
+        internal Transform RiderAnchor;       // its spot (Apocapatrol.RiderPos under the car)
+        internal string RiderPrefab = "";
 
         internal static PatrolMarker Attach(GameObject car, string bodyPrefab, string driverPrefab, GameObject driver,
             string passengerPrefab, GameObject passenger, RamTargets rams)

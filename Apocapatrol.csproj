@@ -27,6 +27,7 @@
     <Reference Include="UnityEngine.TerrainPhysicsModule"><HintPath>$(ManagedDir)\UnityEngine.TerrainPhysicsModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.TerrainModule"><HintPath>$(ManagedDir)\UnityEngine.TerrainModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.AnimationModule"><HintPath>$(ManagedDir)\UnityEngine.AnimationModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.AudioModule"><HintPath>$(ManagedDir)\UnityEngine.AudioModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.ImageConversionModule"><HintPath>$(ManagedDir)\UnityEngine.ImageConversionModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.JSONSerializeModule"><HintPath>$(ManagedDir)\UnityEngine.JSONSerializeModule.dll</HintPath><Private>false</Private></Reference>

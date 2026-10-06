@@ -142,6 +142,7 @@ namespace Apocapatrol
                 Weight = Math.Max(0f, f.weight),
                 Driver = S(f.driver),
                 Passenger = S(f.passenger),
+                Rider = S(f.rider), RiderPos = f.riderPos ?? new float[0],
                 LootPreset = S(f.lootPreset),
                 Bumpers = f.bumpers != null && f.bumpers.Length > 0 ? f.bumpers.Select(S).ToArray() : null,
                 FillFuel = f.fillFuel, ReleaseHandbrake = f.releaseHandbrake,

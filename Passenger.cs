@@ -131,6 +131,9 @@ namespace Apocapatrol
                 + redirected + " melee event output(s)" + (rangedEvent == null ? " (ranged event not found)" : " to " + rangedEvent.Name));
         }
 
+        // any occupant: melee / fire-contact damage FSMs and the FireDamage hitbox off (a body that can be shot but hurts nobody by touch)
+        internal static void NeutralizeContact(GameObject who) { NeutralizeMeleeDamage(who); }
+
         private static void NeutralizeMeleeDamage(GameObject passenger)
         {
             int disabledActions = 0;
