@@ -233,6 +233,7 @@ namespace Apocapatrol
             if (Time.time >= _nextGuard) { _nextGuard = Time.time + 0.5f; MuteNonCombatAi(_fsms, _rangedPrefab, CombatAllowed); }
             if (!_ranged)
             {
+                if (_driverMode && _shooting) { _shooting = false; if (_pose != null) _pose.SetShooting(false); ScheduleBurst(); }
                 if (_pose != null) _pose.SetAim(Vector3.zero, false);
                 return;
             }
@@ -278,6 +279,8 @@ namespace Apocapatrol
                     if (_pose != null) _pose.SetAim(Vector3.zero, false);
                     return;
                 }
+                // within the burst the gun pose is held only while it really fires (target in the arc); otherwise hands back on the wheel
+                if (_pose != null) _pose.SetShooting(target != null && inArc);
             }
 
             if (_attack != null && (_targetAcquired || target != null)) _attack.enabled = target != null && inArc;

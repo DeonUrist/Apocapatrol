@@ -700,7 +700,11 @@ namespace Apocapatrol
             root.isKinematic = true;
             root.interpolation = RigidbodyInterpolation.None;
             go.transform.SetParent(anchor, true);
-            if (Plugin.PoseEnabled.Value) Pose.Apply(go, anchor, prefab.name);
+            if (Plugin.PoseEnabled.Value)
+            {
+                var pose = Pose.Apply(go, anchor, prefab.name);
+                if (!passenger) pose.SetShooting(false);   // a driver sits with its hands on the wheel; PassengerGuard raises the gun only while it fires
+            }
             if (health >= 0f) SetHealth(go, health);
             Plugin.Verbose(role + " " + go.name + " on " + anchor.name + " at " + pos);
             return go;

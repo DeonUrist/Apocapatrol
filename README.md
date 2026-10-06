@@ -1,4 +1,7 @@
-# Apocapatrol 2.0.10
+# Apocapatrol 2.0.11
+
+2.0.11: drivers (cars, trucks, motorcycles) always sit in the driving pose, also with a gun and also a passenger who took the wheel;
+they switch to the shooting pose only while they actually fire, then back to the wheel.
 
 2.0.10: templates saved from the motorcycle (the one without a back) have no loot setting: the Car loot choice is not offered.
 

@@ -83,6 +83,7 @@ namespace Apocapatrol
             _anchor = anchor;
             _lockSeatRotation = false;
             _aimActive = false;
+            _useProfile = false;   // now the driver: hands on the wheel (a shooting driver's guard switches to the gun pose while it fires)
         }
 
         private static Transform Find(Transform[] all, string bone)
