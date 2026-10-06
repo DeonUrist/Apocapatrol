@@ -309,21 +309,25 @@ namespace Apocapatrol
         }
     }
 
-    // 2.3.3: a car standing still rocks itself - seen with the CarProbe on a widened, lifted TinyTyrant on truck wheels: the wheel loads swapped
-    // left / right twice a second, angular velocity 0.7 rad/s, lateral slip flipping sign, no collision contacts at all. The body rolls, the
-    // wheels on it slide sideways on the ground, their sideways grip pushes the body back, it overshoots; the vanilla lifted dampers (half the
-    // stock rate) cannot kill it under the heavier loads. Below 0.6 m/s the Rigidbody gets extra angular drag, fading out by 1.2 m/s; the
-    // original drag comes back when the car moves. Part Adjustment 1.2.2 has the same component; whichever mod attached one first owns a car.
+    // 2.3.3 / 2.3.5: a car standing still rocks itself - seen with the CarProbe on a widened, lifted TinyTyrant on truck wheels: wheel loads
+    // swapping left / right twice a second, angular velocity 0.6-0.7 rad/s, lateral slip flipping sign, no collision contacts. The body rolls,
+    // the wheels on it slide sideways on the ground, their sideways grip pushes the body back harder than the roll needs and it overshoots:
+    // the lateral friction drives the roll instead of damping it; the vanilla lifted dampers (half the stock rate) cannot stop it under the
+    // heavier loads. Extra angular drag alone (2.3.3) was not enough. Below 0.6 m/s (fading out by 1.2 m/s) the driving force is taken away -
+    // the wheels' lateral friction stiffness is cut to a quarter - and the body's angular velocity is bled off each physics step; all of it is
+    // restored as soon as the car moves. Part Adjustment 1.2.3 has the same component; whichever mod attached one first owns a car.
     internal sealed class StandstillDamper : MonoBehaviour
     {
-        internal const float ExtraDrag = 4f, StillSpeed = 0.6f, FreeSpeed = 1.2f;
-        private Rigidbody _rb; private float _base; private bool _boosted;
+        internal const float StillSpeed = 0.6f, FreeSpeed = 1.2f, StiffnessAtRest = 0.25f, SpinBleed = 0.35f;
+        private Rigidbody _rb; private bool _boosted;
+        private WheelController[] _wheels = new WheelController[0]; private float[] _baseStiffness = new float[0]; private float _nextWheels;
 
         internal static void Attach(GameObject car)
         {
             if (car == null) return;
             foreach (var c in car.GetComponents<Component>()) if (c != null && c.GetType().Name == "StandstillDamper") return;
             car.AddComponent<StandstillDamper>();
+            Plugin.Verbose("Standstill damper on " + car.name);
         }
 
         // the car the player drives (checked once a second from Patrol.Update)
@@ -337,14 +341,28 @@ namespace Apocapatrol
 
         private void FixedUpdate()
         {
-            if (_rb == null) { _rb = GetComponent<Rigidbody>(); if (_rb == null) { Destroy(this); return; } _base = _rb.angularDrag; }
+            if (_rb == null) { _rb = GetComponent<Rigidbody>(); if (_rb == null) { Destroy(this); return; } }
             if (!Plugin.StandstillDamping.Value || _rb.isKinematic) { Release(); return; }
             float k = 1f - Mathf.InverseLerp(StillSpeed, FreeSpeed, _rb.velocity.magnitude);
             if (k <= 0f) { Release(); return; }
-            if (!_boosted) { _base = _rb.angularDrag; _boosted = true; }
-            _rb.angularDrag = _base + ExtraDrag * k;
+            if (!_boosted || Time.time >= _nextWheels) Collect();
+            _boosted = true;
+            for (int i = 0; i < _wheels.Length; i++)
+                if (_wheels[i] != null) _wheels[i].LateralFrictionStiffness = Mathf.Lerp(_baseStiffness[i], _baseStiffness[i] * StiffnessAtRest, k);
+            _rb.angularVelocity *= 1f - SpinBleed * k;
         }
-        private void Release() { if (_boosted) { _rb.angularDrag = _base; _boosted = false; } }
+
+        private void Collect()
+        {
+            _nextWheels = Time.time + 2f;
+            if (_boosted) Restore();
+            var list = new List<WheelController>();
+            foreach (var w in GetComponentsInChildren<WheelController>(true)) if (w != null && w.transform.parent == transform) list.Add(w);
+            _wheels = list.ToArray(); _baseStiffness = new float[_wheels.Length];
+            for (int i = 0; i < _wheels.Length; i++) _baseStiffness[i] = _wheels[i].LateralFrictionStiffness;
+        }
+        private void Restore() { for (int i = 0; i < _wheels.Length; i++) if (_wheels[i] != null) _wheels[i].LateralFrictionStiffness = _baseStiffness[i]; }
+        private void Release() { if (_boosted) { Restore(); _boosted = false; } }
         private void OnDisable() { if (_rb != null) Release(); }
     }
 
