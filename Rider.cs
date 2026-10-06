@@ -860,7 +860,7 @@ namespace Apocapatrol
     internal sealed class JumpClip : MonoBehaviour
     {
         internal Vector3 Velocity;
-        private int _frames; private bool _pushed; private float _start;
+        private int _frames; private bool _pushed, _landed; private float _start, _landedAt;
         private PlayableGraph _graph; private bool _graphOk;
         private Rigidbody _rb; private Collider _col;
         private static readonly RaycastHit[] _hits = new RaycastHit[8];
@@ -901,7 +901,40 @@ namespace Apocapatrol
                 int n = Physics.RaycastNonAlloc(new Vector3(b.center.x, b.min.y + 0.2f, b.center.z), Vector3.down, _hits, 0.35f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
                 for (int i = 0; i < n; i++) if (_hits[i].collider != null && !_hits[i].collider.transform.IsChildOf(transform)) { grounded = true; break; }
             }
-            if (grounded || t > 1.5f) Destroy(this);
+            if (!_landed && (grounded || t > 1.5f))
+            {
+                _landed = true; _landedAt = Time.time;
+                if (_graphOk) { try { _graph.Destroy(); } catch (Exception) { } _graphOk = false; }   // its own animator again
+            }
+            if (!_landed) return;
+            // 2.2.4: on the ground it looks around quickly - a fast turn to the player - and is alerted: the Detection FSM leaves
+            // notDetected for inLOS (Alert, Attack on; the range sensor keeps the player as its target), as if it had been shot.
+            // Vanilla only notices a player inside its view cone, and it lands facing the way the car went.
+            var p = PlayerRef.Player;
+            if (p != null)
+            {
+                var d = p.position - transform.position; d.y = 0f;
+                if (d.sqrMagnitude > 1e-3f)
+                {
+                    var want = Quaternion.LookRotation(d.normalized, Vector3.up);
+                    var rot = Quaternion.RotateTowards(transform.rotation, want, 900f * Time.deltaTime);
+                    if (_rb != null) _rb.MoveRotation(rot); else transform.rotation = rot;
+                    if (Quaternion.Angle(rot, want) < 5f || Time.time - _landedAt > 0.6f) { Alert(gameObject); Destroy(this); }
+                    return;
+                }
+            }
+            Alert(gameObject); Destroy(this);
+        }
+
+        internal static void Alert(GameObject mob)
+        {
+            if (mob == null) return;
+            foreach (var f in mob.GetComponents<PlayMakerFSM>())
+                if (f != null && f.FsmName == "Detection" && f.enabled && f.Fsm.Initialized && f.ActiveStateName == "notDetected")
+                {
+                    f.Fsm.SetState("inLOS");
+                    Plugin.Verbose("Rider: " + mob.name + " looks around and spots you");
+                }
         }
 
         private void OnDestroy() { if (_graphOk) { try { _graph.Destroy(); } catch (Exception) { } _graphOk = false; } }
