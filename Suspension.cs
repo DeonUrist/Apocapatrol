@@ -319,7 +319,7 @@ namespace Apocapatrol
     internal sealed class StandstillDamper : MonoBehaviour
     {
         internal const float StillSpeed = 0.6f, FreeSpeed = 1.2f, StiffnessAtRest = 0.25f, SpinBleed = 0.5f, DamperAtRest = 3f, HoldSpeed = 0.3f, UnholdSpeed = 0.5f;
-        private Rigidbody _rb; private bool _boosted, _held; private RigidbodyConstraints _baseConstraints;
+        private Rigidbody _rb; private bool _boosted, _held, _bumped; private RigidbodyConstraints _baseConstraints;
         private WheelController[] _wheels = new WheelController[0]; private float[] _baseStiffness = new float[0], _baseBump = new float[0], _baseRebound = new float[0]; private float _nextWheels;
 
         internal static void Attach(GameObject car)
@@ -359,15 +359,25 @@ namespace Apocapatrol
             _rb.angularVelocity *= 1f - SpinBleed * k;
             // parked (under 0.3 m/s): the body cannot roll or pitch at all - the roll <-> sideways-grip loop has nothing to work with. The
             // suspension still carries the car, sideways grip still holds it on a slope; released above 0.5 m/s (a push, the gas)
+            // The per-step probe showed the real thing: with the roll frozen the body still jittered 5 mm left-right EVERY physics step, the
+            // wheel loads swapping sides each step (5600 N / 0 / 5600 N / 0...). NWH's lateral friction at (near) zero speed is bang-bang: the
+            // full load x grip against whatever sideways velocity exists, and with 0.52 m wheels carrying 5000 N that impulse (100 N s on a
+            // 600 kg car) reverses the sideways velocity every step instead of killing it. So a parked car is also frozen in place
+            // horizontally (X/Z position) - no sideways velocity, no lateral force, nothing to flip - while the suspension keeps working
+            // vertically. Released when the engine drives a wheel (motor torque), when something hits the car, or when it moves anyway.
             float speed = _rb.velocity.magnitude;
-            if (!_held && speed < HoldSpeed)
+            bool driving = false;
+            for (int i = 0; i < _wheels.Length; i++) if (_wheels[i] != null && Mathf.Abs(_wheels[i].MotorTorque) > 30f) { driving = true; break; }
+            if (!_held && speed < HoldSpeed && !driving)
             {
                 _baseConstraints = _rb.constraints;
-                _rb.constraints = _baseConstraints | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+                _rb.constraints = _baseConstraints | RigidbodyConstraints.FreezePositionX | RigidbodyConstraints.FreezePositionZ | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
                 _rb.angularVelocity = Vector3.zero;
+                _rb.velocity = new Vector3(0f, _rb.velocity.y, 0f);
                 _held = true;
             }
-            else if (_held && speed > UnholdSpeed) Unhold();
+            else if (_held && (speed > UnholdSpeed || driving || _bumped)) Unhold();
+            _bumped = false;
         }
 
         private void Collect()
@@ -380,6 +390,7 @@ namespace Apocapatrol
             for (int i = 0; i < _wheels.Length; i++) { _baseStiffness[i] = _wheels[i].LateralFrictionStiffness; _baseBump[i] = _wheels[i].DamperBumpRate; _baseRebound[i] = _wheels[i].DamperReboundRate; }
         }
         private void Restore() { for (int i = 0; i < _wheels.Length; i++) if (_wheels[i] != null) { _wheels[i].LateralFrictionStiffness = _baseStiffness[i]; _wheels[i].DamperBumpRate = _baseBump[i]; _wheels[i].DamperReboundRate = _baseRebound[i]; } }
+        private void OnCollisionEnter(Collision col) { if (col.impulse.magnitude > 50f) _bumped = true; }   // rammed, shot off its wheels...
         private void Unhold() { if (_held) { _rb.constraints = _baseConstraints; _held = false; } }
         private void Release() { Unhold(); if (_boosted) { Restore(); _boosted = false; } }
         private void OnDisable() { if (_rb != null) Release(); }
@@ -391,7 +402,23 @@ namespace Apocapatrol
     internal sealed class CarProbe : MonoBehaviour
     {
         private float _next; private readonly Dictionary<string, float> _seen = new Dictionary<string, float>();
-        private Rigidbody _rb;
+        private Rigidbody _rb; private int _burst = 60;   // the first 60 physics steps are logged one by one: the real frequency of a flicker
+
+        // 2.3.11: per physics step for the first ~1.2 s - each wheel's spring length, load, what its ray hit and where its mount sits
+        private void FixedUpdate()
+        {
+            if (_burst <= 0 || !Plugin.CarProbe.Value) return;
+            _burst--;
+            var sb = new System.Text.StringBuilder("Step " + Time.fixedTime.ToString("0.00") + " " + name + ": pos " + transform.position.ToString("F3") + " up.y " + transform.up.y.ToString("0.000"));
+            foreach (var wc in GetComponentsInChildren<WheelController>(true))
+            {
+                if (wc.transform.parent != transform) continue;
+                sb.Append(" | ").Append(wc.name.Replace("hinge_wheel_", "")).Append(wc.IsGrounded ? " G" : " air").Append(" len ").Append(wc.SpringLength.ToString("0.000")).Append(" load ").Append(wc.Load.ToString("0"))
+                  .Append(" mount ").Append(wc.transform.localPosition.ToString("F3"));
+                if (wc.IsGrounded) sb.Append(" hit ").Append(wc.HitCollider != null ? wc.HitCollider.name + "/" + LayerMask.LayerToName(wc.HitCollider.gameObject.layer) : "?").Append(" y ").Append(wc.HitPoint.y.ToString("0.000"));
+            }
+            Plugin.Log.LogInfo(sb.ToString());
+        }
 
         internal static void Tick()
         {
