@@ -36,6 +36,9 @@ namespace Apocapatrol
         public string[] bumpers = new string[0];   // a front bumper rolled per build ("" = none), only if no part sits on hinge_bumper_front
         public bool fillFuel = true, releaseHandbrake = true;
         public float fuelLitres = -1f;
+        // 2.3.0: the suspension lift kit's adjustment (Part Adjustment tool): wheel spacing x1..1.5 and the height of the whole assembly
+        // in metres (+ = mounts up / body down). Only with a kit on hinge_suspension; standard = 1 / 0 (not written then)
+        public float suspensionWidth = 1f, suspensionHeight = 0f;
         public TemplatePart[] parts = new TemplatePart[0];
         public string source = "";          // who wrote it (Apocatemplater version, date, the car it came from) - information only
         private bool CargoTruck { get { return string.Equals(body, "Rustcargo", StringComparison.OrdinalIgnoreCase) || Array.Exists((kind ?? "").Split(';', ','), k => k.Trim().Equals("truck", StringComparison.OrdinalIgnoreCase)); } }
@@ -65,6 +68,8 @@ namespace Apocapatrol
             for (int i = 0; i < (bumpers ?? new string[0]).Length; i++) { if (i > 0) sb.Append(", "); Json.Str(sb, bumpers[i]); }
             sb.Append("],\n");
             P(sb, "fillFuel", fillFuel); P(sb, "releaseHandbrake", releaseHandbrake);
+            if (suspensionWidth != 1f) P(sb, "suspensionWidth", suspensionWidth);
+            if (suspensionHeight != 0f) P(sb, "suspensionHeight", suspensionHeight);
             if (fuelLitres >= 0) P(sb, "fuelLitres", fuelLitres);
             sb.Append("    \"parts\": [");
             var ps = parts ?? new TemplatePart[0];
@@ -118,6 +123,7 @@ namespace Apocapatrol
             f.cargo = Json.Text(root, "cargo", f.cargo);
             f.fillFuel = Json.Bool(root, "fillFuel", f.fillFuel); f.releaseHandbrake = Json.Bool(root, "releaseHandbrake", f.releaseHandbrake);
             f.fuelLitres = Json.Num(root, "fuelLitres", -1f);
+            f.suspensionWidth = Json.Num(root, "suspensionWidth", 1f); f.suspensionHeight = Json.Num(root, "suspensionHeight", 0f);
             f.source = Json.Text(root, "source", f.source);
             object o;
             if (root.TryGetValue("bumpers", out o) && o is List<object>)

@@ -27,6 +27,7 @@ namespace Apocapatrol
             PatrolPersistence.Tick(this);
             if (!InGame()) return;
             Ram.Tick();
+            WheelContacts.Tick();
             ExitSpeed.Tick();
             MeleeWheels.Tick();
             if (Time.unscaledTime >= _nextLights) { _nextLights = Time.unscaledTime + 5f; LightsTick(); }
@@ -281,6 +282,10 @@ namespace Apocapatrol
                 if (Explode.IsWreck(car)) yield break;   // crew killed during the build: it already blew up
                 SetPartConditions(car);
                 FillParts(car);
+                // the lift kit's adjustment from the template (the kit's own FSM has set its lifted mounts by now)
+                if (tpl.SuspensionWidth != 1f || tpl.SuspensionHeight != 0f) Suspension.Apply(car, tpl.SuspensionWidth, tpl.SuspensionHeight, "template");
+                marker.SuspensionWidth = tpl.SuspensionWidth; marker.SuspensionHeight = tpl.SuspensionHeight;
+                Plugin.Verbose("Running gear of " + car.name + ": " + Suspension.Describe(car));
                 if (DayLight.Dark) Headlights(car, true);   // raiders drive with their lights on at night
                 RaiderMusic(car);                            // a cassette in the template's radio: on, full volume ([General] Raider music)
                 yield return WaitForSave(gen, saveOk);

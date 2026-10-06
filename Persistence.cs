@@ -33,6 +33,7 @@ namespace Apocapatrol
         public bool playerEntered;           // schema 4: the player has sat in it (never cleaned up)
         public float farSeconds;             // schema 4: cleanup timer
         public bool exploded;                // schema 5: self-destructed; a dead chassis (removed beyond 1000 m)
+        public float suspensionWidth = 1f, suspensionHeight = 0f;   // schema 7: lift-kit adjustment (1 / 0 = standard)
         public string cargoKey = "";         // schema 6: the loot type it was built with ("" = none / unknown) - picks the container texture
     }
 
@@ -52,6 +53,7 @@ namespace Apocapatrol
         internal bool PlayerEntered;          // the player has sat in this car: it is theirs, the cleanup never removes it
         internal float FarSeconds;            // how long it has been beyond the cleanup distance
         internal bool Exploded;               // self-destructed: a dead chassis, removed beyond Explode.RemoveDistance
+        internal float SuspensionWidth = 1f, SuspensionHeight;   // 2.3.0: the template's lift-kit adjustment (saved, re-applied after a load)
         internal string CargoKey = "";        // loot type at build (Food, Water, ...; "" = none): the container texture, kept across saves
         internal string TemplateName = "";    // the template this car was built from (2.1.0; "" for restored cars) - the rider spot tweaker saves into it
         // human turrets (2.2.0; slot 0 = the 2.1.0 rider): the body on each spot (null once it jumped, leapt or died) and the spot itself.
@@ -141,14 +143,14 @@ namespace Apocapatrol
                 playerEntered = PlayerEntered,
                 farSeconds = FarSeconds,
                 exploded = Exploded,
-                cargoKey = CargoKey ?? ""
+                cargoKey = CargoKey ?? "", suspensionWidth = SuspensionWidth, suspensionHeight = SuspensionHeight
             };
         }
     }
 
     internal static class PatrolPersistence
     {
-        private const int SchemaVersion = 6;   // 1 = no ramTargets (read as Pedestrians), 2 = no convoy cooldown, 3 = no cleanup fields, 4 = no exploded flag, 5 = no cargo key
+        private const int SchemaVersion = 7;   // 7 = suspension width / height   // 1 = no ramTargets (read as Pedestrians), 2 = no convoy cooldown, 3 = no cleanup fields, 4 = no exploded flag, 5 = no cargo key
         private const int Magic = 0x434F5041; // "APOC" in little-endian; rejects unrelated/corrupt files.
         private const int MaxCarsPerSave = 1024;
         private static PlayMakerFSM _saveLoad, _newGoSave;
@@ -358,6 +360,8 @@ namespace Apocapatrol
             mk.PlayerEntered = data.playerEntered;
             mk.FarSeconds = data.farSeconds;
             mk.CargoKey = data.cargoKey ?? "";
+            mk.SuspensionWidth = data.suspensionWidth; mk.SuspensionHeight = data.suspensionHeight;
+            if (data.suspensionWidth != 1f || data.suspensionHeight != 0f) Suspension.Apply(car, data.suspensionWidth, data.suspensionHeight, "restored");
             var crew = car.GetComponent<Crew>();
             if (crew != null && phase != CrewPhase.Released && phase != CrewPhase.DeadRolling) crew.Revive();   // handbrake off + ignition, like a fresh build
             Plugin.Verbose("Persistence: crew restored on " + car.name + " (" + phase + ")");
@@ -501,6 +505,7 @@ namespace Apocapatrol
             writer.Write(car.playerEntered); writer.Write(car.farSeconds);
             writer.Write(car.exploded);
             WriteString(writer, car.cargoKey);
+            writer.Write(car.suspensionWidth); writer.Write(car.suspensionHeight);
         }
 
         private static PatrolCarData ReadCar(BinaryReader reader, int version)
@@ -518,6 +523,7 @@ namespace Apocapatrol
             else if (car.driverPhase == "Released") car.playerEntered = true;   // older save: an empty raider car may be one the player drove - keep it
             if (version >= 5) car.exploded = reader.ReadBoolean();
             if (version >= 6) car.cargoKey = ReadString(reader);
+            if (version >= 7) { car.suspensionWidth = reader.ReadSingle(); car.suspensionHeight = reader.ReadSingle(); }
             return car;
         }
 

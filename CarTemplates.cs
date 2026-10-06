@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using UnityEngine;
 
 namespace Apocapatrol
 {
@@ -146,6 +147,7 @@ namespace Apocapatrol
                 Bumpers = f.bumpers != null && f.bumpers.Length > 0 ? f.bumpers.Select(S).ToArray() : null,
                 FillFuel = f.fillFuel, ReleaseHandbrake = f.releaseHandbrake,
                 FuelLitres = f.fuelLitres,
+                SuspensionWidth = Mathf.Clamp(f.suspensionWidth, 1f, 1.5f), SuspensionHeight = Mathf.Clamp(f.suspensionHeight, -1f, 1f),
                 Parts = parts,
                 Origin = origin,
             };

@@ -27,6 +27,7 @@ namespace Apocapatrol
         internal string[] Bumpers = null;     // front bumper rolled per build from these ("" = none); null = never a bumper
         internal bool FillFuel = true, ReleaseHandbrake = true;
         internal float FuelLitres = -1f;
+        internal float SuspensionWidth = 1f, SuspensionHeight = 0f;   // 2.3.0: lift kit adjustment (standard 1 / 0)
 
         // JSON car templates (CarTemplates.cs; written by the Apocatemplater dumper). Parts != null = this exact part list is
         // attached hinge by hinge instead of the Wheel/Engine/... fields above.

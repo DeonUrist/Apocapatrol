@@ -385,6 +385,9 @@ namespace Apocapatrol
                 rider = TurretFor(0, body), rider2 = TurretFor(1, body), rider3 = TurretFor(2, body),
                 source = "Apocatemplater (" + Plugin.NAME + ") " + Plugin.VERSION + ", " + DateTime.Now.ToString("yyyy-MM-dd HH:mm") + ", from " + car.name,
             };
+            // the lift kit's adjustment (only with a kit on the car; Part Adjustment's values when that mod is loaded)
+            float sw, sh; Suspension.Read(car.gameObject, out sw, out sh);
+            file.suspensionWidth = sw; file.suspensionHeight = sh;
             string path = Path.Combine(dir, name + ".json");
             EditorStore.AtomicWrite(path, file.ToJson());
             CarTemplates.Refresh(true);
