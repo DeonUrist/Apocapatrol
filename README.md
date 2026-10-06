@@ -1,4 +1,7 @@
-# Apocapatrol 2.5.3
+# Apocapatrol 2.6.0
+
+2.6.0: `[Scaling] PatrolSizePercent` is back for weaker PCs: below 100 every patrol and convoy loses cars at random down to that share
+(rounded down, never below one car; a convoy keeps all of its trucks and only its escort shrinks).
 
 2.5.3: the spawn clock is kept exactly as saved (loading cannot postpone a raid - by design), but the group is not repeated: the
 next automatic spawn avoids the group of the previous one whenever another group is eligible, so a save made a minute before a raid does

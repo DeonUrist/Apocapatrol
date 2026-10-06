@@ -19,13 +19,13 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.5.3";
+        public const string VERSION = "2.6.0";
 
         internal static ManualLogSource Log;
 
         internal static ConfigEntry<Key> MenuKey;
         internal static ConfigEntry<bool> AllowDebugSpawns;
-        internal static ConfigEntry<float> PatrolSpawnChancePercent;
+        internal static ConfigEntry<float> PatrolSpawnChancePercent, PatrolSizePercent;
         internal static ConfigEntry<float> MinPartHealth, MaxPartHealth, MinPartsFill, MaxPartsFill;
 
         // Condition of a spawned part: min..max, weighted toward two thirds of the way up (triangular distribution)
@@ -222,6 +222,7 @@ namespace Apocapatrol
             MenuKey = BindEditorConfigKey(Config);
             AllowDebugSpawns = Config.Bind("Debug", "AllowDebugSpawns", false, "Show Spawn Template, S group buttons and SPAWN in the editor");
             TemplateExporter.Configure(Config);
+            PatrolSizePercent = Config.Bind("Scaling", "PatrolSizePercent", 100f, new ConfigDescription("Size of every patrol / convoy that spawns, for weaker PCs: below 100 the group loses cars at random down to this share (rounded down, never below one car; a convoy keeps all of its trucks)", new AcceptableValueRange<float>(10f, 100f)));
             PatrolSpawnChancePercent = Config.Bind("Scaling", "PatrolSpawnChancePercent", 80f, new ConfigDescription("Global patrol/convoy distribution: 80 = 80 % patrols and 20 % convoys when both have eligible types", new AcceptableValueRange<float>(0f, 100f)));
             VerboseLog = Config.Bind("Debug", "VerboseLog", false, "Log what the mod does: spawns, builds, crews, the AI's state changes, ram hits. Off = only the load line and warnings, nothing that gives a spawn away");
             AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances. With no raider car driving: the time until the next spawn roll");

@@ -90,6 +90,7 @@ namespace Apocapatrol
             if (!convoy && list.Count == 0) list.Add(CarTemplate.FallbackCar.CloneForSpawn());
             if (convoy && !list.Any(t => t.IsTruck)) { var fallback = CarTemplate.FallbackTruck.CloneForSpawn(); fallback.SpawnLoot = new Dictionary<string, int>(); fallback.SpawnCargoKey = ""; list.Insert(0, fallback); }
             if (convoy) list = list.OrderByDescending(t => t.IsTruck).ToList();
+            Shrink(list, convoy, random);
             if (convoy) foreach (var truck in list.Where(t => t.IsTruck)) truck.SpawnCargoOptions = (group.AllowedCargo ?? new List<string>()).ToArray();
             if (convoy && group.UniformCargo)
             {
@@ -99,6 +100,22 @@ namespace Apocapatrol
                     foreach (var truck in trucks) { truck.SpawnLoot = new Dictionary<string, int>(roll, StringComparer.OrdinalIgnoreCase); truck.SpawnCargoKey = CargoTexture(roll, shared != null ? shared.TextureKey : ""); }
             }
             return list;
+        }
+
+        // [Scaling] PatrolSizePercent (2.6.0): below 100 the group is cut to that share of its cars - floor(n x %), never below 1 - by removing
+        // cars at random; a convoy's trucks are never removed (the escort shrinks, the trucks count toward the total)
+        internal static void Shrink(List<CarTemplate> list, bool convoy, Func<double> random)
+        {
+            float percent = Plugin.PatrolSizePercent != null ? Plugin.PatrolSizePercent.Value : 100f;
+            if (percent >= 100f || list.Count <= 1) return;
+            int keep = Math.Max(1, (int)Math.Floor(list.Count * Math.Max(0f, percent) / 100f + 1e-4));
+            while (list.Count > keep)
+            {
+                var removable = new List<int>();
+                for (int i = 0; i < list.Count; i++) if (!(convoy && list[i].IsTruck)) removable.Add(i);
+                if (removable.Count == 0) break;
+                list.RemoveAt(removable[Math.Min(removable.Count - 1, (int)(random() * removable.Count))]);
+            }
         }
 
         internal static string CargoTexture(Dictionary<string, int> items, string hint)
