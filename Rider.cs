@@ -348,6 +348,7 @@ namespace Apocapatrol
         private int _slot; private bool _gunner, _bike;   // 2.2.0: turret spot 0..2, a gunner (PassengerGuard shoots, Pose crouches / seats), on a motorcycle
         private float _standAt = -1f;                      // a Warboy on a bike stands up (crouch -> stand blend) before the leap
         private float _nextIgnore, _outOfArc;
+        internal bool IsWarboy { get { return !_gunner && (_mode == Mode.Riding || _mode == Mode.Throwing || _mode == Mode.Witness); } }
         private AnimationClipPlayable _stand;
         private bool _released, _inClose, _kamikazeArmed;
         private float _nextWitness;

@@ -20,7 +20,25 @@ namespace Apocapatrol
         private GameObject _car;
         private Transform _tf;
         private Rigidbody _rb;
-        private RamTargets _rams = RamTargets.Pedestrians;   // from the car's template (PatrolMarker)
+        private RamTargets _ramsBase = RamTargets.Pedestrians;   // from the car's template (PatrolMarker)
+        private PatrolMarker _marker; private float _nextWarboyCheck; private bool _warboy;
+        // 2.2.5: what it rams now - the template's setting, but Cars while at least one Warboy rides on it (a Warboy is only useful
+        // close to the player's car); back to the template's when the last one has leapt, jumped off or died. Re-checked twice a second.
+        private RamTargets _rams
+        {
+            get
+            {
+                if (Time.time >= _nextWarboyCheck)
+                {
+                    _nextWarboyCheck = Time.time + 0.5f;
+                    bool w = false;
+                    if (_marker == null && _car != null) _marker = _car.GetComponent<PatrolMarker>();
+                    if (_marker != null) foreach (var r in _marker.Riders) { var g = r != null ? r.GetComponent<RiderGuard>() : null; if (g != null && g.IsWarboy) { w = true; break; } }
+                    if (w != _warboy) { _warboy = w; Plugin.Verbose("Pilot: " + (_car != null ? _car.name : "?") + (w ? " rams cars while its Warboy rides" : " back to ramming " + _ramsBase)); }
+                }
+                return _warboy && _ramsBase < RamTargets.Cars ? RamTargets.Cars : _ramsBase;
+            }
+        }
         private bool _ramsTarget;                             // this step: may the current target (player / their car) be rammed?
         private float _passSide = 1f;                         // drive-by side when the target must not be rammed
 
@@ -78,7 +96,8 @@ namespace Apocapatrol
             var p = car.GetComponent<Pilot>() ?? car.AddComponent<Pilot>();
             p._car = car; p._tf = car.transform; p._rb = car.GetComponent<Rigidbody>();
             var marker = car.GetComponent<PatrolMarker>();
-            p._rams = marker != null ? marker.Rams : RamTargets.Pedestrians;
+            p._ramsBase = marker != null ? marker.Rams : RamTargets.Pedestrians;
+            p._marker = marker;
             p.Enter(PilotState.Charge, "start");
             p._nextGeometry = 0f;
             if (!All.Contains(p)) All.Add(p);
