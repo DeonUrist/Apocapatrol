@@ -1,4 +1,7 @@
-# Apocapatrol 2.0.8
+# Apocapatrol 2.0.9
+
+2.0.9: when raiders spawn (automatic or test patrols and convoys, not template spawns) a red warning top left says
+"You hear a sound of distant engines" for a few seconds. [General] SpawnWarning, on by default.
 
 2.0.8: raider cars only switch their headlights on when it is dark (the sun below the horizon) and switch them off again at dawn.
 A save never stores a half-built raider car: spawns wait while the game saves, a car joins the save only once it is complete, and

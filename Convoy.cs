@@ -255,6 +255,7 @@ namespace Apocapatrol
                 + "), "
                 + where + ": " + string.Join(", ", group.Select(t => t.Name).ToArray()));
             StartCoroutine(BuildAll(group, spots, Quaternion.LookRotation(facing)));
+            if (Plugin.SpawnWarning.Value) _warnUntil = Time.time + WarnSeconds;
             return true;
         }
 
@@ -346,6 +347,41 @@ namespace Apocapatrol
                 if (crew != null) { crew.Release(); released++; }
             }
             Plugin.Verbose("Convoy: " + released + " car(s) released");
+        }
+
+        // ------------------------------------------------------------ the spawn warning ([General] SpawnWarning)
+
+        // "You hear a sound of distant engines": red, large, top left, for WarnSeconds of game time (frozen while paused), fading out
+        // over the last FadeSeconds. Shown for automatic and test spawns of patrols / convoys (Launch), not for single template spawns.
+        private const string WarnText = "You hear a sound of distant engines";
+        private const float WarnSeconds = 6f, FadeSeconds = 1.5f;
+        private float _warnUntil = -1f;
+        private GUIStyle _warnStyle; private int _warnSize; private Font _warnFont;
+
+        private void OnGUI()
+        {
+            if (_warnUntil < 0f || Event.current.type != EventType.Repaint) return;
+            float left = _warnUntil - Time.time;
+            if (left <= 0f) { _warnUntil = -1f; return; }
+            if (Time.timeScale <= 0f || _patrol == null || !_patrol.InGame()) return;   // the menu / a save: shown again afterwards
+            int size = Mathf.Clamp(Mathf.RoundToInt(Screen.height / 26f), 18, 64);
+            var font = PatrolSkin.GameFont;
+            if (_warnStyle == null || size != _warnSize || font != _warnFont)
+            {
+                _warnSize = size; _warnFont = font;
+                _warnStyle = new GUIStyle(GUI.skin.label) { fontSize = size, fontStyle = FontStyle.Bold, alignment = TextAnchor.UpperLeft, wordWrap = false };
+                if (font != null) _warnStyle.font = font;
+            }
+            float a = Mathf.Clamp01(left / FadeSeconds);
+            float x = Mathf.Round(Screen.height / 30f), y = Mathf.Round(Screen.height / 12f);
+            var rect = new Rect(x, y, Screen.width - 2f * x, size * 2f);
+            var old = GUI.color;
+            int d = Mathf.Max(1, size / 16);
+            GUI.color = new Color(0f, 0f, 0f, 0.85f * a);                       // shadow for contrast on bright sand
+            GUI.Label(new Rect(rect.x + d, rect.y + d, rect.width, rect.height), WarnText, _warnStyle);
+            GUI.color = new Color(0.9f, 0.08f, 0.05f, a);
+            GUI.Label(rect, WarnText, _warnStyle);
+            GUI.color = old;
         }
 
         // the automatic clock, for the save sidecar (seconds; < 0 = not rolled yet)
