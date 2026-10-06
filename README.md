@@ -1,3 +1,8 @@
+# Apocapatrol 2.1.2
+
+2.1.2: the rider screams "Witness me!" to the end first and leaps a moment later (about 1.9 s in all), aimed at where you are then -
+time to get away.
+
 # Apocapatrol 2.1.1
 
 2.1.1 blast-lance riders: they only throw when a flat throw really reaches you (35 m at most) and aim where you will be; when the

@@ -116,7 +116,8 @@ namespace Apocapatrol
         // "Witness me!" - Sounds/witness-me.wav (16-bit PCM, normalised to the game's human_hurt voice: -23.8 LUFS, peak -5.6 dBTP) as a
         // 3D voice on the rider
         private static AudioClip _scream; private static bool _screamLooked;
-        internal static void Scream(Transform at)
+        // plays the scream; returns its length (1.5 s when the wav is missing: the rider still pauses before leaping)
+        internal static float Scream(Transform at)
         {
             try
             {
@@ -127,7 +128,7 @@ namespace Apocapatrol
                     _scream = Wav.Load(path, "witness-me");
                     if (_scream == null) Plugin.Log.LogWarning("Rider: " + path + " not found or not a PCM wav - the rider leaps silently");
                 }
-                if (_scream == null || at == null) return;
+                if (_scream == null || at == null) return 1.5f;
                 var go = new GameObject("Apocapatrol.WitnessMe");
                 go.transform.SetParent(at, false); go.transform.localPosition = Vector3.up * 1.6f;
                 var src = go.AddComponent<AudioSource>();
@@ -135,8 +136,9 @@ namespace Apocapatrol
                 src.volume = 1f; src.priority = 64; src.dopplerLevel = 0f;
                 src.Play();
                 UnityEngine.Object.Destroy(go, _scream.length + 0.2f);
+                return _scream.length;
             }
-            catch (Exception e) { Plugin.Verbose("Rider: scream: " + e.Message); }
+            catch (Exception e) { Plugin.Verbose("Rider: scream: " + e.Message); return 1.5f; }
         }
 
         internal static Transform Bone(Transform root, string bone)
@@ -183,7 +185,8 @@ namespace Apocapatrol
         private Collider[] _carCols = new Collider[0], _myCols = new Collider[0];
         private static readonly RaycastHit[] _hits = new RaycastHit[16];
         private const float ReleaseFraction = 0.42f;   // where in the Throw clip the lance leaves the hand
-        private const float WindUp = 0.55f;            // "Witness me!" before the leap, s
+        private const float AfterScream = 0.35f;       // pause between the end of "Witness me!" and the leap, s - the player's chance to get away
+        private float _windUp = 1.85f;
 
         internal void Init(GameObject car, PatrolMarker marker, Transform anchor, string prefab)
         {
@@ -312,7 +315,7 @@ namespace Apocapatrol
             {
                 Face(to.sqrMagnitude > 0.01f ? to : _car.transform.forward);
                 Blend(0, 0.15f);
-                if (Time.time - _modeStart >= WindUp) Leap(tpos, tvel, tcar);
+                if (Time.time - _modeStart >= _windUp) Leap(tpos, tvel, tcar);   // aimed at where the player is NOW: driving off during the scream works
                 return;
             }
 
@@ -413,7 +416,7 @@ namespace Apocapatrol
         {
             _mode = Mode.Witness; _modeStart = Time.time;
             if (Lance != null) Lance.gameObject.SetActive(true);
-            Rider.Scream(transform);
+            _windUp = Rider.Scream(transform) + AfterScream;   // the whole scream first, then the leap
             Plugin.Verbose("Rider: " + name + " - WITNESS ME! (" + (Wounded() ? "wounded" : "chance roll") + ")");
         }
 
