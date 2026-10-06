@@ -1,3 +1,13 @@
+# Apocapatrol 2.4.0
+
+2.4.0: the **shaking car** is settled. With big truck wheels on a widened, lifted chassis the game's tyre model reverses the car's sideways
+motion every physics step while it stands still (the wheel loads swap sides fifty times a second); nothing in the tyre or suspension
+settings stops it safely, so a parked car is now held still - below 0.3 m/s with no engine torque its horizontal position and roll/pitch are
+frozen, the suspension keeps working, and it is released when the engine drives a wheel, something hits it or it moves. A lifted suspension
+also lowers the centre of mass by the lift, so tall cars on big wheels do not flip in turns. Both rules are shared with Part Adjustment 1.3.0.
+Also: Rustliner crews bail out through the rear door, the bus passenger sits on the small chair facing across the aisle, raider Rustliners
+wear `Textures/rustliner.png`, human turrets leave a god-mode player alone, and dropdown clicks in the editors no longer fall through.
+
 # Apocapatrol 2.3.0
 
 2.3.0: a template remembers the **lift kit's suspension adjustment** (the Part Adjustment tool's wheel spacing and height) and spawned

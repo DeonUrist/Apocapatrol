@@ -1042,7 +1042,8 @@ namespace Apocapatrol
             return "turret " + (slot + 1) + " spot " + Apocapatrol.Rider.FormatV3(p) + " saved into " + System.IO.Path.GetFileName(t.SourcePath);
         }
 
-        // the lance prop's offset in the throwing hand (every live rider), saved into the Apocapatrol config
+        // the lance prop's offset in the throwing hand (every live Warboy). A hidden setting since 2.4.0: changes made through here last for
+        // the session only (kept so the retired Apocaspotter plugin keeps working if it is still installed)
         public static Vector3 LanceOffset
         {
             get { return Apocapatrol.Rider.ParseV3(Plugin.RiderLanceOffset.Value, Vector3.zero); }
@@ -1054,7 +1055,7 @@ namespace Apocapatrol
             set { Plugin.RiderLanceRotation.Value = Apocapatrol.Rider.FormatV3(value); ApplyLances(); }
         }
         private static void ApplyLances() { foreach (var g in UnityEngine.Object.FindObjectsOfType<RiderGuard>()) g.ApplyLanceOffset(); }
-        public static string SaveLance() { Plugin.SaveConfig(); return "lance offset " + Plugin.RiderLanceOffset.Value + " / rotation " + Plugin.RiderLanceRotation.Value + " saved into the Apocapatrol config"; }
+        public static string SaveLance() { return "lance offset " + Plugin.RiderLanceOffset.Value + " / rotation " + Plugin.RiderLanceRotation.Value + " (a fixed setting since Apocapatrol 2.4.0 - not saved)"; }
 
         private static float Round(float v) { return Mathf.Round(v * 1000f) / 1000f; }
     }

@@ -18,7 +18,7 @@ namespace Apocapatrol
     // game's checkSuspension decides stock / lifted by that child, and the tool itself needs the kit (Denis: "no kit, no adjustment").
     internal static class Suspension
     {
-        private static bool _apiLooked; private static MethodInfo _apiSet, _apiGet, _apiKit;
+        private static bool _apiLooked; private static MethodInfo _apiSet, _apiGet;
 
         private static void LookForApi()
         {
@@ -32,7 +32,6 @@ namespace Apocapatrol
                 {
                     _apiSet = t.GetMethod("Set", new[] { typeof(GameObject), typeof(float), typeof(float) });
                     _apiGet = t.GetMethod("Get", new[] { typeof(GameObject), typeof(float).MakeByRefType(), typeof(float).MakeByRefType() });
-                    _apiKit = t.GetMethod("KitFitted", new[] { typeof(GameObject) });
                 }
                 Plugin.Verbose("Suspension: Part Adjustment " + (asm == null ? "not loaded - own geometry" : _apiSet != null ? "API found" : "loaded without SuspensionApi (older than 1.2.0) - own geometry"));
             }
@@ -309,25 +308,25 @@ namespace Apocapatrol
         }
     }
 
-    // 2.3.3 / 2.3.5: a car standing still rocks itself - seen with the CarProbe on a widened, lifted TinyTyrant on truck wheels: wheel loads
-    // swapping left / right twice a second, angular velocity 0.6-0.7 rad/s, lateral slip flipping sign, no collision contacts. The body rolls,
-    // the wheels on it slide sideways on the ground, their sideways grip pushes the body back harder than the roll needs and it overshoots:
-    // the lateral friction drives the roll instead of damping it; the vanilla lifted dampers (half the stock rate) cannot stop it under the
-    // heavier loads. Extra angular drag alone (2.3.3) was not enough. Below 0.6 m/s (fading out by 1.2 m/s) the driving force is taken away -
-    // the wheels' lateral friction stiffness is cut to a quarter - and the body's angular velocity is bled off each physics step; all of it is
-    // restored as soon as the car moves. Part Adjustment 1.2.3 has the same component; whichever mod attached one first owns a car.
+    // A parked car is held still (2.3.x, final form in 2.4.0). Why: the vanilla tyre model (NWH) applies its full sideways grip against any
+    // sideways velocity, computed one physics step late. On stock cars the impulse is small and dies out; with 0.52 m truck wheels carrying
+    // 5000 N on a lifted chassis it reverses the body's sideways velocity every step - the car "shakes" in place, wheel loads swapping sides
+    // 50 times a second (measured). Nothing in the tyre or suspension parameters stops it safely, so the body is simply not allowed to move
+    // while parked: below 0.3 m/s with no engine torque on the wheels, the Rigidbody's horizontal position and its roll / pitch are frozen
+    // (the suspension still works vertically, the car still sits on slopes). Released when the engine drives a wheel, when something hits
+    // the car, or when it moves anyway (above 0.5 m/s). Part Adjustment has the same component; whichever mod attached one first owns a car.
     internal sealed class StandstillDamper : MonoBehaviour
     {
-        internal const float StillSpeed = 0.6f, FreeSpeed = 1.2f, StiffnessAtRest = 0.25f, SpinBleed = 0.5f, DamperAtRest = 3f, HoldSpeed = 0.3f, UnholdSpeed = 0.5f;
-        private Rigidbody _rb; private bool _boosted, _held, _bumped; private RigidbodyConstraints _baseConstraints;
-        private WheelController[] _wheels = new WheelController[0]; private float[] _baseStiffness = new float[0], _baseBump = new float[0], _baseRebound = new float[0]; private float _nextWheels;
+        internal const float HoldSpeed = 0.3f, UnholdSpeed = 0.5f, DriveTorque = 30f, BumpImpulse = 50f;
+        private Rigidbody _rb; private bool _held, _bumped; private RigidbodyConstraints _baseConstraints;
+        private WheelController[] _wheels = new WheelController[0]; private float _nextWheels;
 
         internal static void Attach(GameObject car)
         {
             if (car == null) return;
             foreach (var c in car.GetComponents<Component>()) if (c != null && c.GetType().Name == "StandstillDamper") return;
             car.AddComponent<StandstillDamper>();
-            Plugin.Verbose("Standstill damper on " + car.name);
+            Plugin.Verbose("Parking hold on " + car.name);
         }
 
         // the car the player drives (checked once a second from Patrol.Update)
@@ -342,32 +341,11 @@ namespace Apocapatrol
         private void FixedUpdate()
         {
             if (_rb == null) { _rb = GetComponent<Rigidbody>(); if (_rb == null) { Destroy(this); return; } }
-            if (!Plugin.StandstillDamping.Value || _rb.isKinematic) { Release(); return; }
-            float k = 1f - Mathf.InverseLerp(StillSpeed, FreeSpeed, _rb.velocity.magnitude);
-            if (k <= 0f) { Release(); return; }
-            if (!_boosted || Time.time >= _nextWheels) Collect();
-            _boosted = true;
-            for (int i = 0; i < _wheels.Length; i++)
-                if (_wheels[i] == null) continue;
-                else
-                {
-                    // the roll-driving sideways grip goes down, the dampers that eat roll energy go up (the lift kit halves the vanilla rate)
-                    _wheels[i].LateralFrictionStiffness = Mathf.Lerp(_baseStiffness[i], _baseStiffness[i] * StiffnessAtRest, k);
-                    _wheels[i].DamperBumpRate = Mathf.Lerp(_baseBump[i], _baseBump[i] * DamperAtRest, k);
-                    _wheels[i].DamperReboundRate = Mathf.Lerp(_baseRebound[i], _baseRebound[i] * DamperAtRest, k);
-                }
-            _rb.angularVelocity *= 1f - SpinBleed * k;
-            // parked (under 0.3 m/s): the body cannot roll or pitch at all - the roll <-> sideways-grip loop has nothing to work with. The
-            // suspension still carries the car, sideways grip still holds it on a slope; released above 0.5 m/s (a push, the gas)
-            // The per-step probe showed the real thing: with the roll frozen the body still jittered 5 mm left-right EVERY physics step, the
-            // wheel loads swapping sides each step (5600 N / 0 / 5600 N / 0...). NWH's lateral friction at (near) zero speed is bang-bang: the
-            // full load x grip against whatever sideways velocity exists, and with 0.52 m wheels carrying 5000 N that impulse (100 N s on a
-            // 600 kg car) reverses the sideways velocity every step instead of killing it. So a parked car is also frozen in place
-            // horizontally (X/Z position) - no sideways velocity, no lateral force, nothing to flip - while the suspension keeps working
-            // vertically. Released when the engine drives a wheel (motor torque), when something hits the car, or when it moves anyway.
+            if (!Plugin.StandstillDamping.Value || _rb.isKinematic) { Unhold(); return; }
+            if (Time.time >= _nextWheels) Collect();
             float speed = _rb.velocity.magnitude;
             bool driving = false;
-            for (int i = 0; i < _wheels.Length; i++) if (_wheels[i] != null && Mathf.Abs(_wheels[i].MotorTorque) > 30f) { driving = true; break; }
+            for (int i = 0; i < _wheels.Length; i++) if (_wheels[i] != null && Mathf.Abs(_wheels[i].MotorTorque) > DriveTorque) { driving = true; break; }
             if (!_held && speed < HoldSpeed && !driving)
             {
                 _baseConstraints = _rb.constraints;
@@ -380,89 +358,17 @@ namespace Apocapatrol
             _bumped = false;
         }
 
+        // the wheels (direct hinge_wheel_* children), re-read every 2 s: a wheel put on or taken off changes the set
         private void Collect()
         {
             _nextWheels = Time.time + 2f;
-            if (_boosted) Restore();
             var list = new List<WheelController>();
             foreach (var w in GetComponentsInChildren<WheelController>(true)) if (w != null && w.transform.parent == transform) list.Add(w);
-            _wheels = list.ToArray(); _baseStiffness = new float[_wheels.Length]; _baseBump = new float[_wheels.Length]; _baseRebound = new float[_wheels.Length];
-            for (int i = 0; i < _wheels.Length; i++) { _baseStiffness[i] = _wheels[i].LateralFrictionStiffness; _baseBump[i] = _wheels[i].DamperBumpRate; _baseRebound[i] = _wheels[i].DamperReboundRate; }
+            _wheels = list.ToArray();
         }
-        private void Restore() { for (int i = 0; i < _wheels.Length; i++) if (_wheels[i] != null) { _wheels[i].LateralFrictionStiffness = _baseStiffness[i]; _wheels[i].DamperBumpRate = _baseBump[i]; _wheels[i].DamperReboundRate = _baseRebound[i]; } }
-        private void OnCollisionEnter(Collision col) { if (col.impulse.magnitude > 50f) _bumped = true; }   // rammed, shot off its wheels...
+        private void OnCollisionEnter(Collision col) { if (col.impulse.magnitude > BumpImpulse) _bumped = true; }   // rammed, shot, blown...
         private void Unhold() { if (_held) { _rb.constraints = _baseConstraints; _held = false; } }
-        private void Release() { Unhold(); if (_boosted) { Restore(); _boosted = false; } }
-        private void OnDisable() { if (_rb != null) Release(); }
-    }
-
-    // [Debug] CarProbe (2.3.1): what the car the player sits in is doing while it should stand still - every half second each wheel's NWH
-    // state (grounded, spring compression, load, slips, angular velocity) and the car's velocity, plus every collision contact of the car's
-    // Rigidbody (the car-side collider and layer, the other collider and layer) - to find a vibration's source.
-    internal sealed class CarProbe : MonoBehaviour
-    {
-        private float _next; private readonly Dictionary<string, float> _seen = new Dictionary<string, float>();
-        private Rigidbody _rb; private int _burst = 60;   // the first 60 physics steps are logged one by one: the real frequency of a flicker
-
-        // 2.3.11: per physics step for the first ~1.2 s - each wheel's spring length, load, what its ray hit and where its mount sits
-        private void FixedUpdate()
-        {
-            if (_burst <= 0 || !Plugin.CarProbe.Value) return;
-            _burst--;
-            var sb = new System.Text.StringBuilder("Step " + Time.fixedTime.ToString("0.00") + " " + name + ": pos " + transform.position.ToString("F3") + " up.y " + transform.up.y.ToString("0.000"));
-            foreach (var wc in GetComponentsInChildren<WheelController>(true))
-            {
-                if (wc.transform.parent != transform) continue;
-                sb.Append(" | ").Append(wc.name.Replace("hinge_wheel_", "")).Append(wc.IsGrounded ? " G" : " air").Append(" len ").Append(wc.SpringLength.ToString("0.000")).Append(" load ").Append(wc.Load.ToString("0"))
-                  .Append(" mount ").Append(wc.transform.localPosition.ToString("F3"));
-                if (wc.IsGrounded) sb.Append(" hit ").Append(wc.HitCollider != null ? wc.HitCollider.name + "/" + LayerMask.LayerToName(wc.HitCollider.gameObject.layer) : "?").Append(" y ").Append(wc.HitPoint.y.ToString("0.000"));
-            }
-            Plugin.Log.LogInfo(sb.ToString());
-        }
-
-        internal static void Tick()
-        {
-            if (Plugin.CarProbe == null || !Plugin.CarProbe.Value) return;
-            var car = PlayerRef.PlayerCar;
-            if (car != null && car.GetComponent<CarProbe>() == null) car.AddComponent<CarProbe>();
-        }
-
-        private void Update()
-        {
-            if (!Plugin.CarProbe.Value || PlayerRef.PlayerCar != gameObject) { Destroy(this); return; }
-            if (Time.time < _next) return;
-            _next = Time.time + 0.5f;
-            if (_rb == null) _rb = GetComponent<Rigidbody>();
-            var sb = new System.Text.StringBuilder("Probe " + name + ": v " + (_rb != null ? _rb.velocity.magnitude.ToString("0.00") : "?") + " m/s, w " + (_rb != null ? _rb.angularVelocity.magnitude.ToString("0.00") : "?")
-                + ", COM " + (_rb != null ? _rb.centerOfMass.ToString("F2") : "?"));
-            foreach (var wc in GetComponentsInChildren<WheelController>(true))
-            {
-                if (wc.transform.parent != transform) continue;
-                sb.Append(" | ").Append(wc.name.Replace("hinge_wheel_", "")).Append(wc.IsGrounded ? " G" : " air").Append(" c ").Append(wc.SpringCompression.ToString("0.00"))
-                  .Append(" load ").Append(wc.Load.ToString("0")).Append(" slip ").Append(wc.LongitudinalSlip.ToString("0.00")).Append('/').Append(wc.LateralSlip.ToString("0.00"))
-                  .Append(" rpm ").Append(wc.RPM.ToString("0")).Append(" r ").Append(wc.Radius.ToString("0.00"));
-            }
-            Plugin.Log.LogInfo(sb.ToString());
-        }
-
-        private string PathOf(Transform t)
-        {
-            var sb = new System.Text.StringBuilder(t.name);
-            for (var a = t.parent; a != null && a != transform; a = a.parent) sb.Insert(0, a.name + "/");
-            return sb.ToString();
-        }
-
-        private void OnCollisionStay(Collision col)
-        {
-            if (!Plugin.CarProbe.Value || col.contactCount == 0) return;
-            var c = col.GetContact(0);
-            string key = (c.thisCollider != null ? c.thisCollider.name : "?") + "|" + (c.otherCollider != null ? c.otherCollider.name : "?");
-            float last;
-            if (_seen.TryGetValue(key, out last) && Time.time - last < 2f) return;
-            _seen[key] = Time.time;
-            Plugin.Log.LogInfo("Probe contact: car collider '" + (c.thisCollider != null ? PathOf(c.thisCollider.transform) : "?") + "' (layer " + (c.thisCollider != null ? LayerMask.LayerToName(c.thisCollider.gameObject.layer) : "?")
-                + ") touches '" + (c.otherCollider != null ? c.otherCollider.name : "?") + "' (layer " + (c.otherCollider != null ? LayerMask.LayerToName(c.otherCollider.gameObject.layer) : "?") + ") at " + c.point.ToString("F2") + ", impulse " + col.impulse.magnitude.ToString("0.0"));
-        }
+        private void OnDisable() { if (_rb != null) Unhold(); }
     }
 
     // The wheels of the car the player drives never touch the player (2.3.0). The game isolates the driver from the hull by layer (Drive 7

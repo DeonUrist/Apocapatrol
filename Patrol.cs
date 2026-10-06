@@ -28,7 +28,6 @@ namespace Apocapatrol
             if (!InGame()) return;
             Ram.Tick();
             WheelContacts.Tick();
-            CarProbe.Tick();
             StandstillDamper.Tick();
             ExitSpeed.Tick();
             MeleeWheels.Tick();
