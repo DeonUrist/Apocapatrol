@@ -490,9 +490,10 @@ namespace Apocapatrol
             if (_gunner) return;   // a gunner's fight is PassengerGuard's (vanilla ranged combat, all around)
 
             Vector3 tpos, tvel; GameObject tcar;
-            bool has = PlayerRef.Target(out tpos, out tvel, out tcar);
+            bool has = PlayerRef.Target(out tpos, out tvel, out tcar) && !PlayerRef.GodMode;   // a god-mode player is not a target
             var to = tpos - transform.position; to.y = 0f;
             float dist = has ? to.magnitude : 9999f;
+            if (!has && _mode == Mode.Witness) { _mode = Mode.Riding; _standAt = -1f; }
 
             if (_mode == Mode.Witness)
             {

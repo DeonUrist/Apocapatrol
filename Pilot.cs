@@ -813,6 +813,25 @@ namespace Apocapatrol
 
         // Position and velocity of what an AI car should ram: the player's car while driving, the player on foot otherwise.
         // Evaluated once per physics step however many pilots ask.
+        // the player's GODMODE / GODMODEMovement FSM is in "active" (2.3.2: human turrets leave a god-mode player alone); re-read twice a second
+        private static float _godStamp = -1f; private static bool _god;
+        internal static bool GodMode
+        {
+            get
+            {
+                if (Time.unscaledTime - _godStamp < 0.5f) return _god;
+                _godStamp = Time.unscaledTime; _god = false;
+                var p = Player; if (p == null) return false;
+                _components.Clear(); p.GetComponents(typeof(PlayMakerFSM), _components);
+                foreach (var c in _components)
+                {
+                    var f = c as PlayMakerFSM;
+                    if (f != null && (f.FsmName == "GODMODE" || f.FsmName == "GODMODEMovement") && f.enabled && f.Fsm.Initialized && f.ActiveStateName == "active") { _god = true; break; }
+                }
+                return _god;
+            }
+        }
+
         internal static bool Target(out Vector3 pos, out Vector3 vel, out GameObject car)
         {
             if (_targetStamp != Time.fixedTime)

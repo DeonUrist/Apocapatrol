@@ -253,6 +253,7 @@ namespace Apocapatrol
             }
 
             GameObject target = FindVanillaTarget();
+            if (_turret && target != null && PlayerRef.GodMode) target = null;   // a human turret leaves a god-mode player alone
             Vector3 aimPoint = Vector3.zero;
             if (target != null) { _targetAcquired = true; aimPoint = AimPoint(target); }
             if (Time.time >= _nextFireCheck || target == null)

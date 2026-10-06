@@ -263,24 +263,44 @@ namespace Apocapatrol
                 _box = new Rect(anchor.x, Mathf.Max(10, y), anchor.width, height);
             };
         }
+        // Called first thing in the window: while the list is open every mouse event belongs to it. IMGUI gives a click to the first control
+        // drawn under the mouse, and the list is drawn last (on top) - so a click on one of its rows used to land on whatever row of the
+        // dialog lay beneath it (2.3.2). The rows are hit-tested here and the event is used up; Draw() only paints.
         internal void Before()
         {
-            if (IsOpen && Event.current.type == EventType.MouseDown && !_box.Contains(Event.current.mousePosition))
-            { _pending = Close; Event.current.Use(); }
+            if (!IsOpen) return;
+            var e = Event.current;
+            bool inside = _box.Contains(e.mousePosition);
+            if (e.type == EventType.MouseDown)
+            {
+                if (inside)
+                {
+                    int i = Mathf.FloorToInt((e.mousePosition.y - (_box.y + 4) + _scroll.y) / 34f);
+                    if (e.button == 0 && i >= 0 && i < _options.Count) { string key = _options[i].Key; var setter = _setter; _pending = () => { setter(key); Close(); }; }
+                }
+                else _pending = Close;
+                e.Use();
+            }
+            else if (e.type == EventType.MouseUp || e.type == EventType.MouseDrag) { if (inside || _pending != null) e.Use(); }
+            else if (e.type == EventType.ScrollWheel && inside)
+            {
+                float view = _box.height - 8, content = _options.Count * 34;
+                _scroll.y = Mathf.Clamp(_scroll.y + e.delta.y * 20f, 0f, Mathf.Max(0f, content - view));
+                e.Use();
+            }
         }
         internal void Draw()
         {
             if (!IsOpen) return;
             LedgerSkin.Panel(_box, LedgerSkin.Surface, LedgerSkin.Accent);
-            _scroll = LedgerSkin.Scroll(new Rect(_box.x + 4, _box.y + 4, _box.width - 8, _box.height - 8), _scroll, _options.Count * 34, width =>
+            LedgerSkin.Scroll(new Rect(_box.x + 4, _box.y + 4, _box.width - 8, _box.height - 8), _scroll, _options.Count * 34, width =>
             {
+                var mouse = Event.current.mousePosition;
                 for (int i = 0; i < _options.Count; i++)
                 {
                     var option = _options[i]; var row = new Rect(0, i * 34, width, 34); bool selected = option.Key == _selected;
-                    if (selected || row.Contains(Event.current.mousePosition)) LedgerSkin.Fill(row, LedgerSkin.Selected);
-                    bool hit = GUI.Button(row, GUIContent.none, GUIStyle.none);
+                    if (selected || row.Contains(mouse)) LedgerSkin.Fill(row, LedgerSkin.Selected);
                     LedgerSkin.ButtonLabel(new Rect(9, row.y, width - 18, 34), option.Value, LedgerSkin.Body, selected ? LedgerSkin.Accent : LedgerSkin.Text, TextAnchor.MiddleLeft);
-                    if (hit) { string key = option.Key; var setter = _setter; _pending = () => { setter(key); Close(); }; }
                 }
             });
         }
