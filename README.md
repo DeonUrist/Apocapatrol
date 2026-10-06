@@ -1,3 +1,22 @@
+# Apocapatrol 2.3.0
+
+2.3.0: a template remembers the **lift kit's suspension adjustment** (the Part Adjustment tool's wheel spacing and height) and spawned
+cars get it, with or without that mod installed - only cars with a suspension lift kit fitted. With Part Adjustment 1.2.0+ the values go
+through its API so both mods agree. The car you drive no longer **vibrates** with a raised suspension or big truck wheels: the wheel
+colliders used to collide with the driver once they reached into the cabin.
+
+# Apocapatrol 2.2.x
+
+2.2.0-2.2.5: **Human turrets** replace the blast-lance rider. A template (3 spots on a car's roof, 1 on the seat of a motorcycle, none on
+trucks) takes a **Warboy** (Scraffa with blast lances and the "Witness me!" leap) or a **gunner** (Boltjaw, Flexa, Lugnut, Scrud, Sprokka)
+who crouches on the roof and shoots all around, or sits on the bike and turns the upper body up to 55 degrees. A car with a Warboy on
+board rams cars. Turrets that jump off (crew bailing, the player closing in on a bike Warboy that cannot turn) become normal raiders at
+once, look around and attack. `[Combat] HumanTurrets` (was BlastlanceRiders); `[Debug] TurretSpotEditor` replaces the Apocaspotter plugin
+(numpad, 0 = next turret, 5 = save the spot into the template). Also: `[General] Enabled` (automatic spawns), `[General] Fury Road`
+(every patrol / convoy group spawns from the start), SelfDestruct moved to [General]; the game's "Could not find FSM: ID" log spam is
+silenced; the "Witness me!" blast no longer depends on the lance's physics, the driver pulls up alongside you for the leap, and the
+leap is short and flat.
+
 # Apocapatrol 2.1.3
 
 2.1.3: the "Witness me!" leap goes a bit further (from 15 m), the scream is much louder and carries far, and every blast - the leap
@@ -179,7 +198,7 @@ Existing paint files under `Textures` still work. Car crews and their state rema
 
 ## Installation and build
 
-Install BepInEx 5, then place the **Apocapatrol** folder under `BepInEx/plugins`. It contains the DLL, BaseTemplates, Textures, and theme/game.
+Install BepInEx 5, then place the **Apocapatrol** folder under `BepInEx/plugins`. It contains the DLL, BaseTemplates, Textures, Sounds and theme.
 Do not leave a second Apocapatrol DLL in the plugins root. Apocasetter is recommended for bindings and general settings.
 
 `dotnet build Apocapatrol.csproj -c Release` builds and deploys the DLL, textures, and UI theme to the configured game directory.
