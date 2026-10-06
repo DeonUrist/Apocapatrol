@@ -106,7 +106,7 @@
       "minBosses": 1,
       "chance": 15,
       "uniformCargo": false,
-      "templates": ["Piperat_Bandit", "Piperat_Bandit", "Weak_Warboy"],
+      "templates": ["Piperat_Bandit", "Piperat_Bandit", "Vulture_Gunner", "Tiny_Tyrant"],
       "allowedCargo": []
     }, {
       "id": "ac00a5b23a63476089be4c5c254081ae",
@@ -115,7 +115,7 @@
       "minBosses": 2,
       "chance": 15,
       "uniformCargo": false,
-      "templates": ["Tiny_Tyrant", "Piperat_Bandit", "Piperat_Bandit", "Bike_with_Rider_Scrud", "Bike_with_Rider_Scrud", "Junker_Advanced"],
+      "templates": ["Piperat_Bandit", "Piperat_Bandit", "Bike_with_Rider_Scrud", "Bike_with_Rider_Scrud", "Junker_Advanced", "Vulture_Gunner"],
       "allowedCargo": []
     }, {
       "id": "6a60d08117104ffe8226b05602233a22",
@@ -124,7 +124,7 @@
       "minBosses": 3,
       "chance": 10,
       "uniformCargo": false,
-      "templates": ["Weak_Warboy", "Weak_Warboy", "Junker_Warboy", "Junker_Warboy", "Warboy_Tyrant"],
+      "templates": ["Weak_Warboy", "Weak_Warboy", "Junker_Warboy", "Warboy_Tyrant", "Warboy_Vulture"],
       "allowedCargo": []
     }, {
       "id": "243b27017e1a47459fcb6b0a1588d444",
@@ -133,7 +133,7 @@
       "minBosses": 4,
       "chance": 15,
       "uniformCargo": false,
-      "templates": ["Warboy_Armored_Tyrant", "Warboy_Tyrant", "Warboy_Tyrant", "Junker_Warboy", "Junker_Warboy", "Warboy_Bike", "Warboy_Bike"],
+      "templates": ["Warboy_Armored_Tyrant", "Warboy_Tyrant", "Warboy_Tyrant", "Junker_Warboy", "Junker_Warboy", "Warboy_Bike", "Warboy_Bike", "Warboy_Vulture"],
       "allowedCargo": []
     }, {
       "id": "612abe3afec4428cbd984104ca16d6b7",
@@ -142,7 +142,7 @@
       "minBosses": 5,
       "chance": 10,
       "uniformCargo": false,
-      "templates": ["War_rig", "Warboy_Armored_Tyrant", "Warboy_Tyrant", "Junker_Warboy", "Junker_Warboy", "Weak_Warboy", "Weak_Warboy", "Warboy_Bike", "Warboy_Bike"],
+      "templates": ["War_rig", "Warboy_Armored_Tyrant", "Warboy_Tyrant", "Junker_Warboy", "Junker_Warboy", "Warboy_Bike", "Warboy_Bike", "Warboy_Vulture", "Warboy_Vulture"],
       "allowedCargo": []
     }],
   "convoys": [{
@@ -152,7 +152,7 @@
       "minBosses": 0,
       "chance": 70,
       "uniformCargo": true,
-      "templates": ["Rustcargo_Loot", "Piperat_Bandit", "Piperat_Bandit", "Tiny_Tyrant", "Blast_Bike", "Blast_Bike"],
+      "templates": ["Rustcargo_Loot", "Piperat_Bandit", "Tiny_Tyrant", "Blast_Bike", "Blast_Bike", "Vulture_Gunner"],
       "allowedCargo": ["truck-food", "truck-water", "truck-gasoline", "truck-diesel", "truck-medicine", "truck-weapons", "truck-drugs", "truck-mechanic", "truck-corpses", "truck-rats"]
     }, {
       "id": "advanced-loot",
@@ -161,7 +161,7 @@
       "minBosses": 2,
       "chance": 30,
       "uniformCargo": true,
-      "templates": ["Rustcargo_Loot_Advanced", "Junker_Warboy", "Junker_Warboy", "Junker_Advanced", "Junker_Advanced", "Weak_Warboy", "Weak_Warboy"],
+      "templates": ["Rustcargo_Loot_Advanced", "Junker_Warboy", "Weak_Warboy", "Weak_Warboy", "Warboy_Vulture", "Vulture_Gunner", "Warboy_Vulture"],
       "allowedCargo": ["truck-food", "truck-water", "truck-gasoline", "truck-diesel", "truck-medicine", "truck-weapons", "truck-drugs", "truck-mechanic", "truck-corpses", "truck-rats"]
     }, {
       "id": "49f6d10dca3f42b0b43e3b582412e5d8",
@@ -170,7 +170,7 @@
       "minBosses": 3,
       "chance": 10,
       "uniformCargo": false,
-      "templates": ["Rustcargo_Loot_Advanced", "Rustcargo_Loot_Advanced", "Warboy_Armored_Tyrant", "Warboy_Armored_Tyrant", "Warboy_Armored_Tyrant", "Junker_Warboy", "Junker_Warboy", "Bike_with_Rider_Scrud", "Bike_with_Rider_Scrud"],
+      "templates": ["Rustcargo_Loot_Advanced", "Rustcargo_Loot_Advanced", "Warboy_Armored_Tyrant", "Junker_Warboy", "Junker_Warboy", "Bike_with_Rider_Scrud", "Bike_with_Rider_Scrud", "Warboy_Vulture", "Warboy_Vulture", "Vulture_Gunner"],
       "allowedCargo": []
     }, {
       "id": "44928a87a9fc4dddbff29723e97a886b",
@@ -179,7 +179,7 @@
       "minBosses": 4,
       "chance": 10,
       "uniformCargo": false,
-      "templates": ["War_rig", "Rustcargo_Loot_Advanced", "Rustcargo_Loot_Advanced", "Warboy_Armored_Tyrant", "Warboy_Armored_Tyrant", "Junker_Warboy", "Junker_Warboy", "Piperat_Bandit", "Piperat_Bandit", "Piperat_Bandit"],
+      "templates": ["War_rig", "Rustcargo_Loot_Advanced", "Rustcargo_Loot_Advanced", "Warboy_Armored_Tyrant", "Warboy_Armored_Tyrant", "Warboy_Vulture", "Warboy_Vulture", "Vulture_Gunner", "Vulture_Gunner"],
       "allowedCargo": []
     }],
   "carLoot": [{
@@ -397,7 +397,9 @@
     "Rustcargo_Loot",
     "Rustcargo_Loot_Advanced",
     "Bike_with_Rider_Flexa",
+    "Vulture_Gunner",
     "War_rig",
-    "Warboy_Armored_Tyrant"
+    "Warboy_Armored_Tyrant",
+    "Warboy_Vulture"
   ]
 }

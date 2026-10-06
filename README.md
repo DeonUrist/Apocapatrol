@@ -1,4 +1,7 @@
-# Apocapatrol 2.5.1
+# Apocapatrol 2.5.2
+
+2.5.2: two Vulture templates join the defaults - **Vulture_Gunner** (Flexa on the back) and **Warboy_Vulture** - and the Medium / Large
+patrols, the Warboy groups and all four convoys use them (26 BaseTemplates now).
 
 2.5.1: Warboy_Armored_Tyrant ships with its Warboy's roof spot (the saved riderPos).
 
