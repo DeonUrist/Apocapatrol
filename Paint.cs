@@ -23,7 +23,7 @@ namespace Apocapatrol
             _dir = Path.Combine(Path.GetDirectoryName(pluginDll) ?? ".", Folder);   // called early in Awake: no logging here
         }
 
-        // Textures/<body>.png (poloska.png, tinytyrant.png, rustcargo.png, junker.png) = that body's main paint texture, whatever the game
+        // Textures/<body>.png (poloska.png, tinytyrant.png, rustcargo.png, junker.png, rustliner.png) = that body's main paint texture, whatever the game
         // calls it; wins over a file named after the texture itself.
         private static readonly Dictionary<string, string> BodyTexture = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -31,6 +31,7 @@ namespace Apocapatrol
             { "TinyTyrant", "tinytyrant_yellow" },
             { "Rustcargo", "rustcargo_green_2" },
             { "Junker", "junker" },
+            { "Rustliner", "rustliner_yellow" },   // 2.3.9: the bus body, dashboard and the two side panels -> rustliner.png
         };
         // Per-mesh files, for bodies built from several shared textures: PipeRat's pipe frame (the four "roofrack" meshes, textures
         // metal_rusted_26/34/28/23 - tiling, so a recolour) -> piperat.png; its dashboard (dashboard.010, metal_rusted_24) -> piperat_dashboard.png.
