@@ -54,9 +54,10 @@ namespace Apocapatrol
         public List<string> AllowedCargo = new List<string>();
         public bool Eligible(float km, int bosses) { return Chance > 0 && km >= MinKm && bosses >= MinBosses; }
 
-        public static SpawnGroup Roll(IEnumerable<SpawnGroup> source, float km, int bosses, Func<double> random)
+        public static SpawnGroup Roll(IEnumerable<SpawnGroup> source, float km, int bosses, Func<double> random, string avoid = null)
         {
             var list = source.Where(g => g.Eligible(km, bosses)).ToList();
+            if (!string.IsNullOrEmpty(avoid) && list.Count > 1) list.RemoveAll(g => string.Equals(g.Id, avoid, StringComparison.OrdinalIgnoreCase));
             double total = list.Sum(g => (double)g.Chance);
             if (total <= 0) return null;
             double roll = random() * total;

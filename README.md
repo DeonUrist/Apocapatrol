@@ -1,4 +1,10 @@
-# Apocapatrol 2.5.2
+# Apocapatrol 2.5.3
+
+2.5.3: the spawn clock is kept exactly as saved (loading cannot postpone a raid - by design), but the group is not repeated: the
+next automatic spawn avoids the group of the previous one whenever another group is eligible, so a save made a minute before a raid does
+not bring the same patrol on every load. The clock also keeps running, and is saved, while the spawner is switched off (a raid that falls
+due then simply passes). The **Scout** patrol ships with a real car - Piperat_Scout, chance 10 - instead of an empty list (which spawned
+the hardcoded fallback PipeRat).
 
 2.5.2: two Vulture templates join the defaults - **Vulture_Gunner** (Flexa on the back) and **Warboy_Vulture** - and the Medium / Large
 patrols, the Warboy groups and all four convoys use them (26 BaseTemplates now).

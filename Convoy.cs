@@ -28,7 +28,7 @@ namespace Apocapatrol
         internal static void ResetForScene()
         {
             if (_inst == null) return;
-            _inst._cooldown = -1f;
+            _inst._cooldown = -1f; LastGroup = "";
             _inst._distanceFsm = null;
             _inst._km = _inst._heat = 0f;
             _inst._bosses = 0;
@@ -67,10 +67,13 @@ namespace Apocapatrol
             if (_patrol == null) _patrol = GetComponent<Patrol>();
             if (_patrol == null || !_patrol.InGame()) return;
             if (Time.unscaledTime >= _nextHeatScan) { _nextHeatScan = Time.unscaledTime + 5f; UpdateHeat(); }
-            if (!Plugin.ConvoyEnabled.Value || Plugin.MaxConvoyCooldown.Value <= 0f) return;
+            if (Plugin.MaxConvoyCooldown.Value <= 0f) return;
             if (_cooldown < 0f) { ResetCooldown("start"); return; }
             _cooldown -= Time.deltaTime;
             if (_cooldown > 0f) return;
+            // 2.5.3: the clock runs whether or not the spawner is enabled, and is saved either way - switching the mod off, saving and
+            // loading cannot postpone a raid. Off: the raid that was due simply passes, the next one is rolled
+            if (!Plugin.ConvoyEnabled.Value) { ResetCooldown("spawner off, raid skipped"); return; }
             Auto();
         }
 
@@ -138,10 +141,11 @@ namespace Apocapatrol
             if (AutosaveSoon(30f)) { _cooldown = 45f; Plugin.Verbose("Convoy: spawn postponed 45 s, Apocasaver autosave due"); return; }
             if (_patrol != null && _patrol.SaveBusy()) { _cooldown = 10f; return; }
             bool convoy;
-            var group = EditorStore.Roll(RollKm, RollBosses, Plugin.PatrolSpawnChancePercent.Value, () => UnityEngine.Random.value, out convoy);
+            var group = EditorStore.Roll(RollKm, RollBosses, Plugin.PatrolSpawnChancePercent.Value, () => UnityEngine.Random.value, out convoy, LastGroup);
             if (group == null) { ResetCooldown("no eligible groups"); return; }
             if (!ClearOldGroups()) return;
             if (!Launch(group, convoy, false)) { _cooldown = 60f; return; }
+            LastGroup = group.Id;
             ResetCooldown("after " + group.Name);
         }
 
@@ -390,5 +394,9 @@ namespace Apocapatrol
 
         // the automatic clock, for the save sidecar (seconds; < 0 = not rolled yet)
         internal float CooldownSeconds { get { return _cooldown; } set { _cooldown = value; } }
+
+        // 2.5.3: the group the last automatic spawn used (saved with the clock): the next roll avoids it when another group is eligible, so
+        // a save made just before a raid does not bring the same patrol on every load (the clock itself is kept as saved - on purpose)
+        internal static string LastGroup = "";
     }
 }

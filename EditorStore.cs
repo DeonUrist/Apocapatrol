@@ -70,12 +70,13 @@ namespace Apocapatrol
             return eligible.LastOrDefault();
         }
 
-        internal static SpawnGroup Roll(float km, int bosses, float patrolPercent, Func<double> random, out bool convoy)
+        // avoid = the group id of the previous spawn: left out of the roll when at least one other group of that list is eligible
+        internal static SpawnGroup Roll(float km, int bosses, float patrolPercent, Func<double> random, out bool convoy, string avoid = null)
         {
             bool p = Data.Patrols.Any(g => g.Eligible(km, bosses)), c = Data.Convoys.Any(g => g.Eligible(km, bosses));
             double percentage = Math.Max(0, Math.Min(100, patrolPercent));
             convoy = c && (!p || percentage <= 0 || (percentage < 100 && random() >= percentage / 100d));
-            return SpawnGroup.Roll(convoy ? Data.Convoys : Data.Patrols, km, bosses, random);
+            return SpawnGroup.Roll(convoy ? Data.Convoys : Data.Patrols, km, bosses, random, avoid);
         }
 
         internal static List<CarTemplate> Compose(SpawnGroup group, bool convoy, Func<double> random)

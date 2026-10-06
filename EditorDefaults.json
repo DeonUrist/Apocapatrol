@@ -86,9 +86,9 @@
       "name": "Scout",
       "minKm": 0,
       "minBosses": 0,
-      "chance": 45,
+      "chance": 10,
       "uniformCargo": false,
-      "templates": [],
+      "templates": ["Piperat_Scout"],
       "allowedCargo": []
     }, {
       "id": "0d3af2727da24a8e8ec0a9bcfff1a469",

@@ -18,6 +18,7 @@ namespace Apocapatrol
         public int worldSeed;
         public PatrolCarData[] cars = new PatrolCarData[0];
         public float convoyCooldown = -1f;    // seconds until the next automatic convoy roll (schema 3), -1 = unknown
+        public string lastGroup = "";         // the group id of the last automatic spawn (schema 8)
     }
 
     public class PatrolCarData
@@ -150,7 +151,7 @@ namespace Apocapatrol
 
     internal static class PatrolPersistence
     {
-        private const int SchemaVersion = 7;   // 7 = suspension width / height   // 1 = no ramTargets (read as Pedestrians), 2 = no convoy cooldown, 3 = no cleanup fields, 4 = no exploded flag, 5 = no cargo key
+        private const int SchemaVersion = 8;   // 8 = last spawn group   // 7 = suspension width / height   // 1 = no ramTargets (read as Pedestrians), 2 = no convoy cooldown, 3 = no cleanup fields, 4 = no exploded flag, 5 = no cargo key
         private const int Magic = 0x434F5041; // "APOC" in little-endian; rejects unrelated/corrupt files.
         private const int MaxCarsPerSave = 1024;
         private static PlayMakerFSM _saveLoad, _newGoSave;
@@ -237,7 +238,7 @@ namespace Apocapatrol
             if (!TryPath(slot, out path)) { Plugin.Log.LogWarning("Persistence: invalid save slot " + slot); return; }
             try
             {
-                var data = new PatrolSaveData { version = SchemaVersion, saveFile = Path.GetFileName(slot), worldSeed = seed, convoyCooldown = Convoy.CurrentCooldown() };
+                var data = new PatrolSaveData { version = SchemaVersion, saveFile = Path.GetFileName(slot), worldSeed = seed, convoyCooldown = Convoy.CurrentCooldown(), lastGroup = Convoy.LastGroup ?? "" };
                 var cars = new List<PatrolCarData>();
                 foreach (var marker in PatrolMarker.All)
                     if (marker != null && !Register.Pending(marker.gameObject)) cars.Add(marker.Snapshot());   // still being built: not in the game's save either
@@ -265,6 +266,7 @@ namespace Apocapatrol
             }
 
             if (data.convoyCooldown >= 0f) Convoy.SetCooldown(data.convoyCooldown);
+            Convoy.LastGroup = data.lastGroup ?? "";
             var savedCars = data.cars ?? new PatrolCarData[0];
             var pending = new List<PatrolCarData>(savedCars);
             float until = Time.realtimeSinceStartup + 15f;
@@ -468,6 +470,7 @@ namespace Apocapatrol
                 writer.Write(cars.Length);
                 foreach (var car in cars) WriteCar(writer, car);
                 writer.Write(data.convoyCooldown);
+                WriteString(writer, data.lastGroup ?? "");
                 writer.Flush();
                 return stream.ToArray();
             }
@@ -489,8 +492,9 @@ namespace Apocapatrol
                 var cars = new PatrolCarData[count];
                 for (int i = 0; i < count; i++) cars[i] = ReadCar(reader, version);
                 float cooldown = version >= 3 ? reader.ReadSingle() : -1f;
+                string lastGroup = version >= 8 ? reader.ReadString() : "";
                 if (stream.Position != stream.Length) Plugin.Verbose("Persistence: raider data has trailing bytes");
-                return new PatrolSaveData { version = version, saveFile = slot, worldSeed = seed, cars = cars, convoyCooldown = cooldown };
+                return new PatrolSaveData { version = version, saveFile = slot, worldSeed = seed, cars = cars, convoyCooldown = cooldown, lastGroup = lastGroup };
             }
         }
 
