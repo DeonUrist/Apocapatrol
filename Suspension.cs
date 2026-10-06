@@ -230,7 +230,7 @@ namespace Apocapatrol
             }
         }
 
-        internal void Set(float width, float height) { Width = Mathf.Clamp(width, 1f, 1.5f); Height = Mathf.Clamp(height, -1f, 1f); Apply(); }
+        internal void Set(float width, float height) { Width = Mathf.Clamp(width, 1f, 1.5f); Height = Mathf.Clamp(height, -1f, 1f); Apply(); StandstillDamper.Attach(gameObject); }
 
         private void Apply()
         {
@@ -253,7 +253,7 @@ namespace Apocapatrol
             foreach (var c in GetComponentsInChildren<Collider>(false)) if (c != null && c.enabled && !c.isTrigger) sig = sig * 31 + c.GetInstanceID();
             if (!force && sig == _comSig) return;
             _comSig = sig;
-            float lift = Mathf.Max(0f, -Height) * Mathf.Clamp(Plugin.SuspensionLiftCenterOfMass.Value, 0f, 2f);
+            float lift = Plugin.SuspensionLiftCenterOfMass.Value ? Mathf.Max(0f, -Height) : 0f;
             if (lift <= 0f) { if (_comShifted) { _body.ResetCenterOfMass(); _comShifted = false; } return; }
             _body.ResetCenterOfMass();
             _body.centerOfMass = _body.centerOfMass - Vector3.up * lift;
@@ -307,6 +307,45 @@ namespace Apocapatrol
             if (!Suspension.KitFitted(gameObject) && (Width != 1f || Height != 0f)) { Apply(); return; }
             foreach (var x in _mounts) ApplyMount(x);
         }
+    }
+
+    // 2.3.3: a car standing still rocks itself - seen with the CarProbe on a widened, lifted TinyTyrant on truck wheels: the wheel loads swapped
+    // left / right twice a second, angular velocity 0.7 rad/s, lateral slip flipping sign, no collision contacts at all. The body rolls, the
+    // wheels on it slide sideways on the ground, their sideways grip pushes the body back, it overshoots; the vanilla lifted dampers (half the
+    // stock rate) cannot kill it under the heavier loads. Below 0.6 m/s the Rigidbody gets extra angular drag, fading out by 1.2 m/s; the
+    // original drag comes back when the car moves. Part Adjustment 1.2.2 has the same component; whichever mod attached one first owns a car.
+    internal sealed class StandstillDamper : MonoBehaviour
+    {
+        internal const float ExtraDrag = 4f, StillSpeed = 0.6f, FreeSpeed = 1.2f;
+        private Rigidbody _rb; private float _base; private bool _boosted;
+
+        internal static void Attach(GameObject car)
+        {
+            if (car == null) return;
+            foreach (var c in car.GetComponents<Component>()) if (c != null && c.GetType().Name == "StandstillDamper") return;
+            car.AddComponent<StandstillDamper>();
+        }
+
+        // the car the player drives (checked once a second from Patrol.Update)
+        private static float _next;
+        internal static void Tick()
+        {
+            if (Time.unscaledTime < _next) return;
+            _next = Time.unscaledTime + 1f;
+            if (Plugin.StandstillDamping.Value) Attach(PlayerRef.PlayerCar);
+        }
+
+        private void FixedUpdate()
+        {
+            if (_rb == null) { _rb = GetComponent<Rigidbody>(); if (_rb == null) { Destroy(this); return; } _base = _rb.angularDrag; }
+            if (!Plugin.StandstillDamping.Value || _rb.isKinematic) { Release(); return; }
+            float k = 1f - Mathf.InverseLerp(StillSpeed, FreeSpeed, _rb.velocity.magnitude);
+            if (k <= 0f) { Release(); return; }
+            if (!_boosted) { _base = _rb.angularDrag; _boosted = true; }
+            _rb.angularDrag = _base + ExtraDrag * k;
+        }
+        private void Release() { if (_boosted) { _rb.angularDrag = _base; _boosted = false; } }
+        private void OnDisable() { if (_rb != null) Release(); }
     }
 
     // [Debug] CarProbe (2.3.1): what the car the player sits in is doing while it should stand still - every half second each wheel's NWH

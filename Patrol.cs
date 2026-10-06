@@ -29,6 +29,7 @@ namespace Apocapatrol
             Ram.Tick();
             WheelContacts.Tick();
             CarProbe.Tick();
+            StandstillDamper.Tick();
             ExitSpeed.Tick();
             MeleeWheels.Tick();
             if (Time.unscaledTime >= _nextLights) { _nextLights = Time.unscaledTime + 5f; LightsTick(); }
