@@ -20,7 +20,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.6.1";
+        public const string VERSION = "2.6.2";
 
         internal static ManualLogSource Log;
 
@@ -57,6 +57,7 @@ namespace Apocapatrol
         internal static ConfigEntry<float> ExplodedLootPercent;
         // [AI]
         internal static ConfigEntry<bool> AiInvertSteering, AiOverlay, CustomPaintjobs;
+        internal static ConfigEntry<bool> RaidersOverheat;   // 2.6.2 [Balance]
         internal static ConfigEntry<bool> SpawnWarning, RaiderMusic, RiderLances, HideFsmWarnings, TurretSpotEditor, FuryRoad, SuspensionLiftCenterOfMass;
         internal static ConfigEntry<float> RiderRange, RiderIntervalMin, RiderIntervalMax, RiderLanceSpeed, RiderMaxThrowAngle, RiderJumpRange, WitnessMeChance, RiderLeapSpeed, RiderBlastDamage, RiderBlastRadius, TurretThigh, TurretKnee, TurretHipHeight, RiderLeapReachPercent, RiderBailRange;
         internal static ConfigEntry<string> RiderLanceOffset, RiderLanceRotation;
@@ -116,6 +117,7 @@ namespace Apocapatrol
                     new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Self-destruct", "SelfDestructingCars"), SelfDestruct),
                     new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Scaling", "SelfDestruct"), SelfDestruct),   // 2.2.3: -> [General]
                     new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Convoy spawner", "Enabled"), ConvoyEnabled),
+                    new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Debug", "WitnessMeChance"), WitnessMeChance),   // 2.6.2: -> [Combat]
                 };
                 int n = 0;
                 foreach (var mv in moves)
@@ -211,14 +213,27 @@ namespace Apocapatrol
             RiderLances = Config.Bind("Combat", "HumanTurrets", true,
                 "A template's human turrets fight: a Warboy crouching on the roof throws blast lances (and may leap at you: \"Witness me!\"), a gunner " +
                 "shoots all around with its own gun. Off = they just ride along");
-            WitnessMeChance = Config.Bind("Debug", "WitnessMeChance", 10f, new ConfigDescription(
-                "TEST SETTING (will be removed): % chance that an unhurt blast-lance rider screams \"Witness me!\" and leaps at your car when you drive close " +
+            RamDamageInCar = Config.Bind("Combat", "RamDamageInCar", false,
+                "Ram damage also while you sit in your own car (the game's own CrashDamage still applies by your speed). Off = only on foot");
+            // 2.6.2: from [Debug] to the bottom of [Combat] (an old [Debug] value is carried over by MigrateMovedSettings)
+            WitnessMeChance = Config.Bind("Combat", "WitnessMeChance", 10f, new ConfigDescription(
+                "% chance that an unhurt blast-lance rider screams \"Witness me!\" and leaps at your car when you drive close " +
                 "(a wounded rider always does). 100 = every time", new AcceptableValueRange<float>(0f, 100f)));
+
+            // 2.6.2 [Balance] (right under [Combat]): the raider cars' part condition (was hidden [Loot] 2..35) and engine overheating
+            MinPartHealth = Config.Bind("Balance", "MinPartHealth", 80f, new ConfigDescription(
+                "Lowest condition (%) of a spawned raider car's parts that have one (engine, radiator, wheels ...)", new AcceptableValueRange<float>(0f, 100f)));
+            MaxPartHealth = Config.Bind("Balance", "MaxPartHealth", 100f, new ConfigDescription(
+                "Highest condition (%) of a spawned raider car's parts; the roll is weighted toward two thirds of the way from Min to Max",
+                new AcceptableValueRange<float>(0f, 100f)));
+            RaidersOverheat = Config.Bind("Balance", "RaidersOverheat", false,
+                "Raider engines overheat like yours (smoke, steam, the engine wears down). Off = they never overheat while their crew drives; " +
+                "a car you take or an engine you loot heats normally again");
+            RaidersOverheat.SettingChanged += (s, e) => Crew.ApplyOverheatAll();
+
             TurretSpotEditor = Config.Bind("Debug", "TurretSpotEditor", false,
                 "Glowing markers on the human turret spots of the nearest raider car and numpad keys to move them: 8/2 forward/back, 4/6 left/right, " +
                 "7/9 down/up (Shift = x5), 0 = next turret, 5 = save the spot into the car's template file, . = markers on/off");
-            RamDamageInCar = Config.Bind("Combat", "RamDamageInCar", false,
-                "Ram damage also while you sit in your own car (the game's own CrashDamage still applies by your speed). Off = only on foot");
 
             MenuKey = BindEditorConfigKey(Config);
             AllowDebugSpawns = Config.Bind("Debug", "AllowDebugSpawns", false, "Show Spawn Template, S group buttons and SPAWN in the editor");
@@ -378,11 +393,6 @@ namespace Apocapatrol
             AiInvertSteering = H.Bind("AI", "InvertSteering", false,
                 "Flip the steering sign if the car turns away from the target instead of toward it");
 
-            MinPartHealth = H.Bind("Loot", "MinPartHealth", 2f, new ConfigDescription(
-                "Lowest condition (%) of a spawned car's parts that have one (engine, radiator, wheels)", new AcceptableValueRange<float>(0f, 100f)));
-            MaxPartHealth = H.Bind("Loot", "MaxPartHealth", 35f, new ConfigDescription(
-                "Highest condition (%) of a spawned car's parts; the roll is weighted toward two thirds of the way from Min to Max",
-                new AcceptableValueRange<float>(0f, 100f)));
             MinPartsFill = H.Bind("Loot", "MinPartsFill", 15f, new ConfigDescription(
                 "Lowest fill (% of capacity) of a spawned car's tank (gas/diesel), engine oil and radiator water", new AcceptableValueRange<float>(0f, 100f)));
             MaxPartsFill = H.Bind("Loot", "MaxPartsFill", 60f, new ConfigDescription(

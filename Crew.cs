@@ -43,6 +43,9 @@ namespace Apocapatrol
         private FsmFloat _healthVar;          // the driver's Health variable (looked up by name every frame before)
         private PatrolMarker _marker;         // the car's marker (attached after the crew on a fresh build: resolved lazily)
         private PlayMakerFSM[] _partDetach;   // the parts' de_Attach FSMs: off while the crew drives, so the wrench cannot take the wheels off
+        private bool _locked;                 // the seat lock is on (a live driver holds the car)
+        private readonly System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<FsmFloat, float>> _heat =
+            new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<FsmFloat, float>>();   // engine heat values + originals
         private bool _vacated;                // the crew is gone (dead or bailed): the self-destruct has been scheduled
 
         private PatrolMarker Marker { get { if (_marker == null && _car != null) _marker = _car.GetComponent<PatrolMarker>(); return _marker; } }
@@ -76,6 +79,7 @@ namespace Apocapatrol
             // nobody else drives while the driver lives: no enter trigger (no F prompt), no Drive FSM (Activate events are ignored).
             // The car's DistanceKinematic FSM is left alone: re-enabling it restarts it in KinematicOn, which freezes a moving car.
             SeatLocked(driver != null);
+            StartCoroutine(OverheatLater());   // once more when the parts' FSMs have started (a build attaches the engine first; a load re-inits them)
             Plugin.Verbose("Crew: driver " + (driver != null ? driver.name : "absent") + " seated, " + "drives off in " + (_delayOverride >= 0f ? _delayOverride : 0f) + " s"
                 + (_enterTrigger != null ? "" : " (no enter trigger found!)") + (_drive != null ? "" : " (no Drive FSM found!)"));
         }
@@ -162,12 +166,44 @@ namespace Apocapatrol
         // (the wrench sends de_Attach to the part; a disabled FSM ignores it) are off together.
         private void SeatLocked(bool locked)
         {
+            _locked = locked;
+            ApplyOverheat();
             if (_enterTrigger != null) _enterTrigger.enabled = !locked;
             if (_drive != null) _drive.enabled = !locked;   // restart on re-enable lands in outCar, which has no actions
             if (_partDetach != null)
                 foreach (var f in _partDetach)
                     if (f != null && f.enabled == locked) f.enabled = !locked;   // de_Attach's start state is idle: a restart is harmless
         }
+
+        // 2.6.2 [Balance] RaidersOverheat off: while the crew holds the car its engine's own heat value (the engine item's [heatValue] FSM,
+        // copied every frame by the engine's getHeatValue into engineOil_Temperature and by the radiator's into water_Temperature) is 0, so the
+        // oil only cools (-0.4/s) and never reaches the game's 120 (overheating: smoke, steam, engine Condition -0.5/s). The original value is
+        // put back when the seat lock lifts (driver dead, crew bailed, explosion) - a taken car or a looted engine heats like any other.
+        // No polling: applied on lock changes, once 2 s after Init and when the setting changes (Plugin).
+        internal void ApplyOverheat()
+        {
+            if (_car == null) return;
+            try
+            {
+                bool cool = _locked && !Plugin.RaidersOverheat.Value;
+                foreach (var f in _car.GetComponentsInChildren<PlayMakerFSM>(true))
+                {
+                    if (f == null || f.FsmName != "heatValue") continue;
+                    var v = f.FsmVariables.GetFsmFloat("heatValue");
+                    if (v == null || _heat.Any(kv => kv.Key == v)) continue;
+                    _heat.Add(new System.Collections.Generic.KeyValuePair<FsmFloat, float>(v, v.Value));
+                }
+                foreach (var kv in _heat) if (kv.Key != null) kv.Key.Value = cool ? 0f : kv.Value;
+                if (_heat.Count > 0) Plugin.Verbose("Crew: " + _car.name + " engine heat " + (cool ? "off (RaidersOverheat off)" : "normal") + " on " + _heat.Count + " engine(s)");
+            }
+            catch (Exception e) { Plugin.Verbose("Crew: overheat setting: " + e.Message); }
+        }
+        private IEnumerator OverheatLater()
+        {
+            yield return new WaitForSeconds(2f);
+            ApplyOverheat();
+        }
+        internal static void ApplyOverheatAll() { foreach (var c in FindObjectsOfType<Crew>()) c.ApplyOverheat(); }
 
         // The car is fully vacated: the crew is dead or got out. With SelfDestructingCars the car explodes shortly after.
         private void Vacated(string why)

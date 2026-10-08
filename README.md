@@ -1,6 +1,14 @@
-# Apocapatrol 2.6.0
+# Apocapatrol 2.6.2
 
 **Requires Apocaplayer and Part Adjuster Tools** - see Requirements below.
+
+2.6.2: raider cars spawn in good shape - their parts (engine, radiator, wheels ...) roll 80-100 % condition, set in the new
+`[Balance]` section (`MinPartHealth` / `MaxPartHealth`). `[Balance] RaidersOverheat` (off by default): off = raider engines never
+overheat while their crew drives; a car you take or an engine you loot heats normally again. `WitnessMeChance` moved from `[Debug]` to
+the bottom of `[Combat]` (your old value is kept).
+
+2.6.1: human turrets are animated by Apocaplayer's ModAPI - Warboys and roof gunners crouch on the roof again, the Warboy throws over
+his crouched legs, a gunner holds its gun in the right hand and aims with the player's crouched poses.
 
 2.6.0: `[Scaling] PatrolSizePercent` is back for weaker PCs: below 100 every patrol and convoy loses cars at random down to that share
 (rounded down, never below one car; a convoy keeps all of its trucks and only its escort shrinks).
