@@ -15,11 +15,12 @@ namespace Apocapatrol
     // passengers, ram damage, loot trucks, a convoy spawner driven by the game's Distance Travelled, and a save sidecar.
     [BepInPlugin(GUID, NAME, VERSION)]
     [BepInDependency("com.denis.apocalypter.motorcyclemod", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency(PlayerAnims.ApocaplayerGuid, BepInDependency.DependencyFlags.SoftDependency)]   // 2.6.1: its ModAPI animates the human turrets
     public class Plugin : BaseUnityPlugin
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.6.0";
+        public const string VERSION = "2.6.1";
 
         internal static ManualLogSource Log;
 

@@ -35,6 +35,8 @@
     <Reference Include="PlayMaker"><HintPath>$(ManagedDir)\PlayMaker.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Assembly-CSharp"><HintPath>$(ManagedDir)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Assembly-CSharp-firstpass"><HintPath>$(ManagedDir)\Assembly-CSharp-firstpass.dll</HintPath><Private>false</Private></Reference>
+    <!-- (2.6.1) Apocaplayer's ModAPI animates the human turrets; optional at runtime (soft dependency, every call is in PlayerAnims behind PlayerAnims.Available) -->
+    <Reference Include="Apocaplayer"><HintPath>$(GameDir)\BepInEx\plugins\Apocaplayer\Apocaplayer.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 
   <ItemGroup>

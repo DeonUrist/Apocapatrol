@@ -24,6 +24,10 @@ namespace Apocapatrol
         // motorcycle (2.2.1: sits straight, seated legs, arms down until it aims, the upper body turns at most Rider.BikeArc)
         private bool _turret, _turretSeated;
         private float _turretYaw;
+        // 2.6.1: a roof gunner animated by Apocaplayer's ModAPI (PlayerAnims): the player's crouch with the gun in the right hand, aiming; this
+        // class then only turns the whole body to the target and keeps its feet on the spot. null = the bone squat below (bike seats always)
+        private object _body;
+        private Transform _bodyGun; private float _nextGunCheck;
 
         internal static Pose Apply(GameObject occupant, Transform anchor, string humanType)
         {
@@ -97,6 +101,41 @@ namespace Apocapatrol
             _turret = true; _turretSeated = seated;
             _lockSeatRotation = false;
             _turretYaw = 0f;
+            if (!seated && _body == null && PlayerAnims.Available)
+            {
+                var anim = _root != null ? _root.GetComponentInChildren<Animator>() : null;
+                if (anim != null && anim.isHuman) _body = PlayerAnims.Attach(anim);
+                if (_body != null) { PlayerAnims.Set(_body, true, false, false, 0f); Plugin.Verbose("Pose: human turret " + _root.name + " animated by Apocaplayer's ModAPI (crouched)"); }
+            }
+        }
+
+        // the ModAPI body ends (death, jump-off): its gun back in its own hand, the Animator's own controller back
+        internal void ReleaseBody()
+        {
+            if (_body == null) return;
+            try { PlayerAnims.Dispose(_body); } catch (System.Exception) { }
+            _body = null; _bodyGun = null;
+        }
+        private void OnDestroy() { ReleaseBody(); }
+
+        // the gun the game shows (WeaponType picks one of the LeftHand models a frame after the spawn and may swap it) -> the body's right hand
+        private void BodyWeapon()
+        {
+            if (Time.time < _nextGunCheck) return;
+            _nextGunCheck = Time.time + 0.5f;
+            if (_bodyGun != null && _bodyGun.gameObject.activeSelf) return;
+            Transform gun = null; string key = null;
+            if (_lHand != null)
+                foreach (Transform child in _lHand)
+                {
+                    if (!child.gameObject.activeSelf || child.GetComponentInChildren<Renderer>(true) == null) continue;
+                    var k = PlayerAnims.WeaponKey(child.name);
+                    if (PlayerAnims.HasWeaponPoses(k)) { gun = child; key = k; break; }
+                }
+            if (gun == _bodyGun) return;
+            _bodyGun = gun;
+            PlayerAnims.SetWeapon(_body, gun, key);
+            Plugin.Verbose("Pose: human turret " + _root.name + " holds " + (gun != null ? key : "nothing the player's poses know"));
         }
 
         // the occupant changed seats (passenger promoted to driver): follow the new anchor, no passenger aiming any more
@@ -227,6 +266,16 @@ namespace Apocapatrol
             _aimPitch = Mathf.MoveTowardsAngle(_aimPitch, wantedPitch, step);
             // roof: the whole body turns; motorcycle seat: the body sits straight, the upper body turns (spine, at most BikeArc)
             _root.rotation = _turretSeated ? _anchor.rotation : _anchor.rotation * Quaternion.Euler(0f, _turretYaw, 0f);
+            if (_body != null && !PlayerAnims.Alive(_body)) _body = null;   // taken down by something else: the bone squat again
+            if (_body != null)
+            {
+                // the player's crouch: aiming at the target (+ pitch = looking down for the ModAPI), feet on the spot
+                BodyWeapon();
+                PlayerAnims.Set(_body, true, _aimActive, false, -_aimPitch);
+                _root.position = _anchor.position;
+                if (!_logged) { _logged = true; Plugin.Verbose("Pose: human turret crouched (Apocaplayer), feet at " + _anchor.position); }
+                return;
+            }
             var right = _root.right; var up = _root.up;
 
             float thigh, knee, hip;

@@ -343,6 +343,7 @@ namespace Apocapatrol
         private PlayableGraph _graph; private bool _graphOk;
         private AnimationMixerPlayable _mixer; private AnimationClipPlayable _idle, _throw, _jump;
         private float _throwLen = 1.2f, _jumpLen = 1f;
+        private object _body;   // 2.6.1: Apocaplayer's ModAPI character (PlayerAnims) - the player's crouch / throw / jump; null = the clips graph below
         private readonly float[] _w = new float[4];
         private Mode _mode = Mode.Riding;
         private int _slot; private bool _gunner, _bike;   // 2.2.0: turret spot 0..2, a gunner (PassengerGuard shoots, Pose crouches / seats), on a motorcycle
@@ -385,6 +386,19 @@ namespace Apocapatrol
 
         private void BuildGraph()
         {
+            // 2.6.1: with Apocaplayer's ModAPI the player's own logic animates him: crouched (CrouchIdle), the lance thrown with ThrowRight on the
+            // upper body over the crouched legs, standing up before a motorcycle leap, the player's Jump in the air
+            if (_anim != null && _anim.isHuman && PlayerAnims.Available)
+            {
+                _body = PlayerAnims.Attach(_anim);
+                if (_body != null)
+                {
+                    _throwLen = PlayerAnims.ThrowSeconds();
+                    PlayerAnims.Set(_body, true, false, false, 0f);
+                    Plugin.Verbose("Rider: " + name + " animated by Apocaplayer's ModAPI (crouched, throw " + _throwLen.ToString("0.00") + " s)");
+                    return;
+                }
+            }
             try
             {
                 var idle = Rider.Clip("CrouchIdle") ?? Rider.Clip("RifleCrouchIdle") ?? Rider.Clip("Idle");
@@ -418,6 +432,7 @@ namespace Apocapatrol
         // 0 = crouch idle, 1 = throw, 2 = jump (one-shots restart from 0), 3 = standing idle
         private void Play(int clip)
         {
+            if (_body != null) { if (clip == 1) PlayerAnims.Throw(_body); else if (clip == 2) PlayerAnims.Jump(_body); return; }
             if (!_graphOk) return;
             if (clip == 1) { _throw.SetTime(0.0); _throw.Play(); }
             if (clip == 2) { _jump.SetTime(0.0); _jump.Play(); }
@@ -425,6 +440,8 @@ namespace Apocapatrol
 
         private void Blend(int target, float seconds)
         {
+            // ModAPI: crouched while riding / throwing (the throw is on the upper body), standing (3), in the air (2) - its own blends
+            if (_body != null) { PlayerAnims.Set(_body, target == 0 || target == 1, false, target == 2, 0f); return; }
             if (!_graphOk) return;
             float step = Time.deltaTime / Mathf.Max(0.01f, seconds);
             for (int i = 0; i < 4; i++) { _w[i] = Mathf.MoveTowards(_w[i], i == target ? 1f : 0f, step); _mixer.SetInputWeight(i, _w[i]); }
@@ -571,7 +588,7 @@ namespace Apocapatrol
             if (_mode == Mode.Throwing)
             {
                 float t = Time.time - _modeStart;
-                float len = _graphOk ? _throwLen : 0.9f;
+                float len = _graphOk || _body != null ? _throwLen : 0.9f;
                 if (!_released && t >= len * ReleaseFraction) { _released = true; Release(tpos, tvel); }
                 if (t >= len)
                 {
@@ -844,6 +861,8 @@ namespace Apocapatrol
         {
             _mode = Mode.Done;
             if (_graphOk) { _graph.Destroy(); _graphOk = false; }   // the ragdoll / death takes over
+            ReleaseBody();
+            var pose = GetComponent<Pose>(); if (pose != null) pose.ReleaseBody();   // a gunner: its gun back in its own hand
             if (Lance != null) Destroy(Lance.gameObject);
             if (_marker != null) _marker.DropRider(gameObject);
         }
@@ -852,7 +871,15 @@ namespace Apocapatrol
         {
             if (_mode == Mode.Flying && gameObject.scene.isLoaded && Time.timeScale > 0f) { _mode = Mode.Done; Rider.Kaboom(transform.position + Vector3.up * 0.9f, name); }   // removed mid-air by something else: still goes off
             if (_graphOk) { try { _graph.Destroy(); } catch (Exception) { } _graphOk = false; }
+            ReleaseBody();
             if (Lance != null) Destroy(Lance.gameObject);
+        }
+
+        private void ReleaseBody()
+        {
+            if (_body == null) return;
+            try { PlayerAnims.Dispose(_body); } catch (Exception) { }
+            _body = null;
         }
     }
 
