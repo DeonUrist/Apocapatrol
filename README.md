@@ -1,6 +1,9 @@
-# Apocapatrol 2.6.2
+# Apocapatrol 2.6.3
 
 **Requires Apocaplayer and Part Adjuster Tools** - see Requirements below.
+
+2.6.3: the **Porcupine** ships with its new design - reworked armour plating, armored wheels (wheel_5_armored) and a slightly
+lifted suspension.
 
 2.6.2: raider cars spawn in good shape - their parts (engine, radiator, wheels ...) roll 80-100 % condition, set in the new
 `[Balance]` section (`MinPartHealth` / `MaxPartHealth`). `[Balance] RaidersOverheat` (off by default): off = raider engines never
