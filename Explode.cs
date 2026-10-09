@@ -8,7 +8,7 @@ namespace Apocapatrol
 {
     // Self-destructing cars ([Self-destruct] SelfDestructingCars): once a raider car is fully vacated - the crew is dead, bailed out,
     // or the last passenger got out beside a dead driver - it "explodes": the frame goes almost black, the exploder zombie's harmless blast (fireball + bang)
-    // goes off at the car, and every part pops off its hinge with condition 0 (CarPartsLootFromExplodedCars % of them keep theirs).
+    // goes off at the car, and every part pops off its hinge with condition 0 ([Scaling] ExplodedCarPartsPercent % of them keep theirs).
     // What is left is a dead chassis: nothing to enter, attach, adjust or fuel, and the Cleanup removes it beyond 1000 m.
     // Trucks (Rust* bodies) are a lootable wreck instead: no charring, the wheels stay on (same condition roll) and it sits on them
     // with the handbrake on, the rear doors still open and close, and the cargo stays locked in the bed where it spawned.
@@ -170,16 +170,13 @@ namespace Apocapatrol
             return list;
         }
 
-        // CarPartsLootFromExplodedCars %: a roll 0..100 weighted toward the low numbers ((u + u^2) / 2), kept when it lands at or below
-        // the setting - at 12 about a fifth of the parts keep their condition, at 50 about 70 %, at 100 all of them
+        // [Scaling] ExplodedCarPartsPercent (2.6.4): a plain chance per part to keep its condition (was a weighted roll against 12 = 20 %)
         private static bool KeepsCondition()
         {
             float pct = Mathf.Clamp(Plugin.ExplodedLootPercent.Value, 0f, 100f);
             if (pct <= 0f) return false;
             if (pct >= 100f) return true;
-            float u = UnityEngine.Random.value;
-            float roll = 100f * (u + u * u) * 0.5f;
-            return roll <= pct;
+            return UnityEngine.Random.value * 100f < pct;
         }
 
         internal static void SetCondition(Transform part, float value)

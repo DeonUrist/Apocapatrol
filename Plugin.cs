@@ -20,7 +20,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.6.3";
+        public const string VERSION = "2.6.4";
 
         internal static ManualLogSource Log;
 
@@ -239,6 +239,10 @@ namespace Apocapatrol
             AllowDebugSpawns = Config.Bind("Debug", "AllowDebugSpawns", false, "Show Spawn Template, S group buttons and SPAWN in the editor");
             TemplateExporter.Configure(Config);
             PatrolSizePercent = Config.Bind("Scaling", "PatrolSizePercent", 100f, new ConfigDescription("Size of every patrol / convoy that spawns, for weaker PCs: below 100 the group loses cars at random down to this share (rounded down, never below one car; a convoy keeps all of its trucks)", new AcceptableValueRange<float>(10f, 100f)));
+            // 2.6.4: visible in [Scaling] as a plain chance (was hidden [Self-destruct] CarPartsLootFromExplodedCars 12 on a weighted roll = 20 %)
+            ExplodedLootPercent = Config.Bind("Scaling", "ExplodedCarPartsPercent", 20f, new ConfigDescription(
+                "% chance for each part of an exploded raider car to keep its condition (MinPartHealth..MaxPartHealth) instead of dropping " +
+                "at 0 %. 20 = about one part in five, 0 = all junk, 100 = all usable", new AcceptableValueRange<float>(0f, 100f)));
             PatrolSpawnChancePercent = Config.Bind("Scaling", "PatrolSpawnChancePercent", 80f, new ConfigDescription("Global patrol/convoy distribution: 80 = 80 % patrols and 20 % convoys when both have eligible types", new AcceptableValueRange<float>(0f, 100f)));
             VerboseLog = Config.Bind("Debug", "VerboseLog", false, "Log what the mod does: spawns, builds, crews, the AI's state changes, ram hits. Off = only the load line and warnings, nothing that gives a spawn away");
             AiOverlay = Config.Bind("Debug", "AiOverlay", false, "On-screen line per AI car: state, speed, target angle, steering, feeler distances. With no raider car driving: the time until the next spawn roll");
@@ -253,7 +257,6 @@ namespace Apocapatrol
             //            RamDamageMultiplier 1, RamDamageByBody "Junker=50, Rust*=70, Scrapwagon=70, PigPen=50", RamFullSpeedKmh 30,
             //            RamPushStrength 1, RamInCarFactor 1
             //   [Driving] StuckPedalChance 5, StuckPedalTakeoverSeconds 4, BailChance 25, StuckBailChance 100 (was 50 before 1.8.4)
-            //   [Self-destruct] CarPartsLootFromExplodedCars 12
             //   [AI] Throttle 1, DriveByOffset 5, LeadTime 1, CommitSeconds 0.5, SteerRate 1.5, SteerAngle 30, MaxSteerAtSpeed 0.35,
             //        TurnSafeSpeed 18, RamDistance 15, PassWidth 12, RunOutMeters 30, RunOutMaxSeconds 4, ReverseSeconds 2,
             //        ReverseThrottle 0.6, StuckSeconds 2, RecoverWindow 30 (was 12), MaxRecovers 2 (was 4), WaitSeconds 4, FeelerRange 10,
@@ -319,11 +322,6 @@ namespace Apocapatrol
             StuckBailChance = H.Bind("Driving", "StuckBailChance", 100f, new ConfigDescription(
                 "% chance that, when the driving AI gives up on a stuck car (after [AI] MaxRecovers), the whole crew gets out and fights on foot " +
                 "instead of the car waiting WaitSeconds and trying again", new AcceptableValueRange<float>(0f, 100f)));
-
-                        ExplodedLootPercent = H.Bind("Self-destruct", "CarPartsLootFromExplodedCars", 12f, new ConfigDescription(
-                "% of the popped-off parts that keep their condition instead of dropping to 0. Each part rolls 0-100 weighted toward the low " +
-                "numbers and keeps its condition when the roll is at or below this value (12 = about one part in five, 50 = about 70 %, 100 = all)",
-                new AcceptableValueRange<float>(0f, 100f)));
 
             AiThrottle = H.Bind("AI", "Throttle", 1f, new ConfigDescription(
                 "Maximum throttle the driving AI uses (0..1); also the throttle of a stuck pedal", new AcceptableValueRange<float>(0.05f, 1f)));

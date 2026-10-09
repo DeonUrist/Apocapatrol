@@ -1,6 +1,9 @@
-# Apocapatrol 2.6.3
+# Apocapatrol 2.6.4
 
 **Requires Apocaplayer and Part Adjuster Tools** - see Requirements below.
+
+2.6.4: `[Scaling] ExplodedCarPartsPercent` (20 by default) - the chance for each part of an exploded raider car to keep its
+condition instead of dropping at 0 % (the same 1 in 5 as before, now a setting).
 
 2.6.3: the **Porcupine** ships with its new design - reworked armour plating, armored wheels (wheel_5_armored) and a slightly
 lifted suspension.
