@@ -1,4 +1,7 @@
-# Apocapatrol 2.7.4
+# Apocapatrol 2.7.5
+
+2.7.5: exploded cars retain their original collider friction and Rigidbody drag after losing their wheels.
+Removed the temporary grip material, extra drag and settling timer; wrecks use the chassis's existing contact physics.
 
 2.7.4: **Preserve following templates** is a comma-separated text field directly below the exploding-cars option.
 It defaults to `War_rig, Truck_War_Rig`, preserving both the bus and the truck/tanker when their crews are gone.
