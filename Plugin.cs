@@ -15,12 +15,13 @@ namespace Apocapatrol
     // passengers, ram damage, loot trucks, a convoy spawner driven by the game's Distance Travelled, and a save sidecar.
     [BepInPlugin(GUID, NAME, VERSION)]
     [BepInDependency("com.denis.apocalypter.motorcyclemod", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency("com.denis.apocalypter.warrig", BepInDependency.DependencyFlags.SoftDependency)] // load first when enabled; optional at runtime
     [BepInDependency(PlayerAnims.ApocaplayerGuid, BepInDependency.DependencyFlags.SoftDependency)]   // 2.6.1: its ModAPI animates the human turrets
     public class Plugin : BaseUnityPlugin
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.6.4";
+        public const string VERSION = "2.7.4";
 
         internal static ManualLogSource Log;
 
@@ -54,6 +55,7 @@ namespace Apocapatrol
         internal static ConfigEntry<float> StuckPedalChance, StuckPedalTakeoverSeconds, BailChance, StuckBailChance;
         // [Self-destruct]
         internal static ConfigEntry<bool> SelfDestruct;
+        internal static ConfigEntry<string> PreservedTemplates;
         internal static ConfigEntry<float> ExplodedLootPercent;
         // [AI]
         internal static ConfigEntry<bool> AiInvertSteering, AiOverlay, CustomPaintjobs;
@@ -179,6 +181,10 @@ namespace Apocapatrol
                 "goes black (trucks stay a lootable wreck), every part pops off with 0 condition and the dead chassis cannot be entered, " +
                 "fuelled or fitted with parts any more; it is removed once you are 1000 m away. Off = vacated cars stay as they are now. " +
                 "A car you have sat in never explodes");
+            PreservedTemplates = Config.Bind("General", "Preserve following templates", "War_rig, Truck_War_Rig",
+                "Comma-separated vehicle template names exempt from exploding-cars self-destruct when the crew is gone. " +
+                "Names match without regard to case; spaces around each name are ignored. Empty = no exemptions. " +
+                "Default: War_rig (bus), Truck_War_Rig (truck with tanker trailer)");
             Config.Bind("General", "Apocasetter", true,
                 "Show this mod in the Apocasetter Mods menu.\n" +
                 "To expose seat offsets, shared pose settings and all per-human controls, uncomment the next line and restart:\n" +

@@ -1,6 +1,35 @@
-# Apocapatrol 2.6.4
+# Apocapatrol 2.7.4
 
-**Requires Apocaplayer and Part Adjuster Tools** - see Requirements below.
+2.7.4: **Preserve following templates** is a comma-separated text field directly below the exploding-cars option.
+It defaults to `War_rig, Truck_War_Rig`, preserving both the bus and the truck/tanker when their crews are gone.
+Add or remove exact template names as needed; matching ignores case and surrounding spaces. Empty means no exemptions.
+Pending explosions recheck the list before running. New saves retain template names, and older saves remain readable.
+Apocasetter downloads WarRig with ApocaPatrol when missing. WarRig is a soft dependency at runtime:
+ApocaPatrol still runs when WarRig is disabled or absent; templates needing it stay gray and cannot spawn.
+
+2.7.3: the saved `Truck_War_Rig` vehicle, all four designated trailer turret positions and crew, and the `Truck War Rig`
+patrol are now shipped defaults. The patrol has three Weak Warboys plus the truck/rig, at 60 km, five bosses and 10% chance.
+The vehicle is stored in `BaseTemplates/Truck_War_Rig.json` and embedded for RESET/recovery. It stays gray when WarRig is absent.
+
+2.7.2: mounted human turrets retain their anchor parent after reactivation. Warboys' feet follow the current spot each frame,
+gunners retain their pose height, and the kinematic physics pose stays synchronized with the moved platform. Turret animators
+continue evaluating offscreen; the existing distance throttling still applies to procedural pose work. The guard stops when a
+turret leaves the platform or dies. Template coordinates and crew settings are not changed. Restart and spawn a fresh vehicle
+to test the new guard.
+
+2.7.1: custom vehicle and trailer templates resolve runtime prefabs supplied by loaded mods, including WarRig.
+Templates with an unloaded frame, trailer or fitted-part prefab stay visible in gray as unavailable. They cannot be added
+or spawned and are skipped in patrol/convoy rosters; their JSON and roster entries are preserved for when the mod returns.
+Loaded asset prefabs and runtime prefabs registered with Easy Save are supported. Mods can also expose a public static
+`Factory.Template()` returning a `GameObject` and a public static string `Factory.Name` for lazy runtime creation.
+
+**Apocasetter installs Apocaplayer, Part Adjuster Tools and WarRig** - see Requirements below.
+
+2.7.0: vehicle templates include their attached trailer, its fitted parts and adjusted attachments. Each trailer has **four human-turret
+slots**, independent of the towing vehicle's existing slots. Use **Trailer turrets** in the save-template window or a template's **E**
+editor to choose Warboys or gunners. Trailer turret positions are relative to the trailer, and the numpad spot editor cycles through the
+vehicle's spots followed by the four trailer spots. Native hitch joints and save registration are used; attached trailers leave with
+their towing patrol vehicle during cleanup, and trailer turrets dismount when detached. Existing templates require no migration.
 
 2.6.4: `[Scaling] ExplodedCarPartsPercent` (20 by default) - the chance for each part of an exploded raider car to keep its
 condition instead of dropping at 0 % (the same 1 in 5 as before, now a setting).
@@ -180,6 +209,9 @@ Bind **TemplateDumpKey** under Debug (None by default). It works **only while se
 The key opens a separate save window containing a name and crew, plus a **Car Loot** dropdown for cars. Trucks have no loot dropdown. Storage trucks are recognized from
 the Rustcargo chassis and its frame's storage. Parts, part-on-part attachments, fitted poses, and adjusted hinges are recorded automatically.
 Wheel motion, engine wobble, and items locked in the bed are not recorded.
+An attached trailer is included automatically, with its own fitted parts. **Trailer turrets** opens its four crew choices;
+**Vehicle turrets** returns to the towing vehicle's choices. This also works in the template's **E** editor.
+The trailer is rebuilt on the towing vehicle's native hitch: Trailer_Small, Trailer_Big, and Rustchief's large **Scrapwagon** are supported.
 Bus/Rustliner templating is temporarily disabled until crew seating is fixed.
 
 **Cancel** or Escape discards the draft. Leaving the vehicle also cancels it. Only **Save template** writes JSON, into **PlayerTemplates**.
@@ -244,18 +276,20 @@ Existing paint files under `Textures` still work. Car crews and their state rema
 
 ## Requirements
 
-Apocapatrol needs two other mods installed, both from the same author:
+Apocasetter installs these three supporting mods, all from the same author:
 
 - **Apocaplayer** (`DeonUrist/Apocaplayer`) - the player body and animation set the crews are built on.
 - **Part Adjuster Tools** (`DeonUrist/PartAdjusterTools`, plugin `PartAdjustment`) - the suspension lift kit adjustment and the centre-of-mass rule
   the templates rely on.
+- **WarRig** ([DeonUrist/WarRig](https://github.com/DeonUrist/WarRig)) - the tanker trailer used by the shipped Truck War Rig template.
+  This is a soft runtime dependency: ApocaPatrol runs with WarRig disabled or absent, and its unavailable templates stay gray.
 
-Installing through **Apocasetter** pulls both in automatically (the index lists them as required). Optional: Apocatremors (AI cars rouse its
+Installing through **Apocasetter** pulls all three in automatically (the index lists them as required). Optional: Apocatremors (AI cars rouse its
 ambushes), MotorcycleMod (shares its bike chassis if present).
 
 ## Installation and build
 
-Install BepInEx 5 and the two required mods above, then place the **Apocapatrol** folder under `BepInEx/plugins`. It contains the DLL, BaseTemplates, Textures, Sounds and theme.
+Install BepInEx 5 and the supporting mods above, then place the **Apocapatrol** folder under `BepInEx/plugins`. It contains the DLL, BaseTemplates, Textures, Sounds and theme.
 Do not leave a second Apocapatrol DLL in the plugins root. Apocasetter is recommended for bindings and general settings.
 
 `dotnet build Apocapatrol.csproj -c Release` builds and deploys the DLL, textures, and UI theme to the configured game directory.
@@ -265,3 +299,19 @@ Add `-p:DeployToGame=false` for a build without deployment. Missing shipped temp
 The 2.0.6 verification suite covers JSON round trips, exact rosters, loot probabilities, global distribution, fallback groups, protected defaults,
 favourite transfers, native Windows recycling, RESET, backup collisions, corruption preservation, and path guards.
 It also checks key migration/order, single-group selection, large-cab clearance, and the bus template blacklist.
+
+The 2.7.0 trailer verifier (`verification/Run.ps1`, add `-UI` for editor screenshots) runs in an isolated game runtime.
+**96 checks passed**: existing template round trips, both normal trailer sizes, Rustchief with Scrapwagon, fitted trailer parts,
+four independent trailer turrets, spot and crew edits, complete build/save registration, native Easy Save reconstruction and hitch
+reconnection, cleanup, and unchanged towing-vehicle slot limits. The save and edit dialogs were also visually checked.
+
+The 2.7.1 verifier adds custom prefab availability, unloaded mod fallbacks and file preservation, Easy Save registered runtime
+prefabs, exact-name mesh/frame distinctions, and availability of every shipped template. `verification/Run.ps1 -WarRig -UI`
+also loads the installed WarRig mod and checks the production builder/exporter with all six wheels plus the gray unavailable
+template row. **137 checks passed with WarRig; 133 without it.** Construction/save fixtures disable free-fall physics so UI
+capture delays cannot move them out of the native hitch raycast's range; driving physics are outside this suite's scope.
+
+The 2.7.2 run passed **229 native checks with WarRig loaded**. Added checks move each towing vehicle/trailer, cycle activation,
+sleep/wake its Rigidbody, deliberately displace/reparent turret bodies, and verify Warboy feet, gunner crouch height, physics
+synchronization and unchanged custom anchor coordinates. These tests exercise recovery from displaced state; they do not
+reproduce the user's intermittent distance-culling event in the live game.

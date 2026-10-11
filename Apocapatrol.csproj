@@ -40,6 +40,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="verification\**\*.cs" />
     <!-- the "hardcoded" JSON car templates (Apocatemplater dumps), read by CarTemplates.LoadEmbedded -->
     <EmbeddedResource Include="BaseTemplates\*.json" LogicalName="Apocapatrol.DefaultTemplates.%(Filename)%(Extension)" />
     <EmbeddedResource Include="EditorDefaults.json" LogicalName="Apocapatrol.EditorDefaults.json" />

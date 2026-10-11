@@ -36,6 +36,7 @@ namespace Apocapatrol
         public bool exploded;                // schema 5: self-destructed; a dead chassis (removed beyond 1000 m)
         public float suspensionWidth = 1f, suspensionHeight = 0f;   // schema 7: lift-kit adjustment (1 / 0 = standard)
         public string cargoKey = "";         // schema 6: the loot type it was built with ("" = none / unknown) - picks the container texture
+        public string templateName = "";     // schema 9: editable self-destruct exemptions keep their identity after loading
     }
 
     internal sealed class PatrolMarker : MonoBehaviour
@@ -59,8 +60,10 @@ namespace Apocapatrol
         internal string TemplateName = "";    // the template this car was built from (2.1.0; "" for restored cars) - the rider spot tweaker saves into it
         // human turrets (2.2.0; slot 0 = the 2.1.0 rider): the body on each spot (null once it jumped, leapt or died) and the spot itself.
         // Not saved: a restored car has none.
-        internal readonly GameObject[] Riders = new GameObject[3];
-        internal readonly Transform[] RiderAnchors = new Transform[3];
+        internal const int VehicleTurretSlots = 3, TrailerTurretSlots = 4, TotalTurretSlots = 7;
+        internal GameObject Trailer;
+        internal readonly GameObject[] Riders = new GameObject[TotalTurretSlots];
+        internal readonly Transform[] RiderAnchors = new Transform[TotalTurretSlots];
         internal GameObject Rider { get { foreach (var r in Riders) if (r != null) return r; return null; } }
         internal Transform RiderAnchor { get { foreach (var a in RiderAnchors) if (a != null) return a; return null; } }
         internal void DropRider(GameObject go) { for (int i = 0; i < Riders.Length; i++) if (Riders[i] == go) Riders[i] = null; }
@@ -131,6 +134,7 @@ namespace Apocapatrol
             {
                 carName = gameObject.name,
                 bodyPrefab = _bodyPrefab,
+                templateName = TemplateName ?? "",
                 ramTargets = _rams.ToString(),
                 positionX = p.x, positionY = p.y, positionZ = p.z,
                 driverPrefab = _driverPrefab,
@@ -151,7 +155,7 @@ namespace Apocapatrol
 
     internal static class PatrolPersistence
     {
-        private const int SchemaVersion = 8;   // 8 = last spawn group   // 7 = suspension width / height   // 1 = no ramTargets (read as Pedestrians), 2 = no convoy cooldown, 3 = no cleanup fields, 4 = no exploded flag, 5 = no cargo key
+        private const int SchemaVersion = 9;   // 9 = template name   // 8 = last spawn group   // 7 = suspension width / height   // 1 = no ramTargets (read as Pedestrians), 2 = no convoy cooldown, 3 = no cleanup fields, 4 = no exploded flag, 5 = no cargo key
         private const int Magic = 0x434F5041; // "APOC" in little-endian; rejects unrelated/corrupt files.
         private const int MaxCarsPerSave = 1024;
         private static PlayMakerFSM _saveLoad, _newGoSave;
@@ -339,6 +343,7 @@ namespace Apocapatrol
             {
                 // a dead chassis: nobody inside, nothing works; its FSMs restarted with the scene, so it is deadened again
                 var dead = PatrolMarker.Attach(car, data.bodyPrefab, data.driverPrefab, null, data.passengerPrefab, null, CarTemplate.ParseRams(data.ramTargets));
+                dead.TemplateName = data.templateName ?? "";
                 dead.PlayerEntered = data.playerEntered; dead.FarSeconds = data.farSeconds; dead.Exploded = true; dead.CargoKey = data.cargoKey ?? "";
                 Explode.RestoreDead(car, data.bodyPrefab);
                 Plugin.Verbose("Persistence: dead chassis restored: " + car.name);
@@ -359,6 +364,7 @@ namespace Apocapatrol
                 passenger = Patrol.SeatPassenger(car, data.passengerPrefab, data.passengerHealth);
 
             var mk = PatrolMarker.Attach(car, data.bodyPrefab, data.driverPrefab, driver, data.passengerPrefab, passenger, CarTemplate.ParseRams(data.ramTargets));
+            mk.TemplateName = data.templateName ?? "";
             mk.PlayerEntered = data.playerEntered;
             mk.FarSeconds = data.farSeconds;
             mk.CargoKey = data.cargoKey ?? "";
@@ -468,7 +474,7 @@ namespace Apocapatrol
                 writer.Write(data.worldSeed);
                 var cars = data.cars ?? new PatrolCarData[0];
                 writer.Write(cars.Length);
-                foreach (var car in cars) WriteCar(writer, car);
+                foreach (var car in cars) WriteCar(writer, car, data.version);
                 writer.Write(data.convoyCooldown);
                 WriteString(writer, data.lastGroup ?? "");
                 writer.Flush();
@@ -498,7 +504,7 @@ namespace Apocapatrol
             }
         }
 
-        private static void WriteCar(BinaryWriter writer, PatrolCarData car)
+        private static void WriteCar(BinaryWriter writer, PatrolCarData car, int version)
         {
             WriteString(writer, car.carName); WriteString(writer, car.bodyPrefab);
             writer.Write(car.positionX); writer.Write(car.positionY); writer.Write(car.positionZ);
@@ -510,6 +516,7 @@ namespace Apocapatrol
             writer.Write(car.exploded);
             WriteString(writer, car.cargoKey);
             writer.Write(car.suspensionWidth); writer.Write(car.suspensionHeight);
+            if (version >= 9) WriteString(writer, car.templateName);
         }
 
         private static PatrolCarData ReadCar(BinaryReader reader, int version)
@@ -528,6 +535,7 @@ namespace Apocapatrol
             if (version >= 5) car.exploded = reader.ReadBoolean();
             if (version >= 6) car.cargoKey = ReadString(reader);
             if (version >= 7) { car.suspensionWidth = reader.ReadSingle(); car.suspensionHeight = reader.ReadSingle(); }
+            if (version >= 9) car.templateName = ReadString(reader);
             return car;
         }
 

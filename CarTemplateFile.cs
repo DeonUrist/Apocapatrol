@@ -5,8 +5,7 @@ using System.Text;
 
 namespace Apocapatrol
 {
-    // The car template file (JSON). The same file lives in Apocatemplater as TemplateFile.cs (only the namespace differs) - keep
-    // them identical. Every field has a default, so a hand-written file may leave any out.
+    // The car template file (JSON), extended from Apocatemplater's format. Optional trailer data keeps older files compatible.
     // Read/written by the small JSON code below, NOT Unity's JsonUtility: in a BepInEx plugin JsonUtility silently drops the
     // nested TemplatePart[] array (Apocatemplater 1.0.1 wrote files without "parts").
     public class TemplateFile
@@ -27,10 +26,14 @@ namespace Apocapatrol
         // turrets 2 and 3 (cars only; a motorcycle takes turret 1 only, trucks none), each with its own spot
         public string rider2 = "", rider3 = "";
         public float[] riderPos2 = new float[0], riderPos3 = new float[0];
-        public string Turret(int i) { return i == 0 ? rider : i == 1 ? rider2 : rider3; }
-        public float[] TurretPos(int i) { return i == 0 ? riderPos : i == 1 ? riderPos2 : riderPos3; }
-        public void SetTurret(int i, string v) { v = v ?? ""; if (i == 0) rider = v; else if (i == 1) rider2 = v; else rider3 = v; }
-        public void SetTurretPos(int i, float[] p) { p = p ?? new float[0]; if (i == 0) riderPos = p; else if (i == 1) riderPos2 = p; else riderPos3 = p; }
+        public string rider4 = ""; // trailers have four spots; towing vehicles retain their existing limits
+        public float[] riderPos4 = new float[0];
+        public TemplateFile trailer; // its own frame, fitted parts and frame-local turret positions
+        public string Turret(int i) { CheckSlot(i); return i == 0 ? rider : i == 1 ? rider2 : i == 2 ? rider3 : rider4; }
+        public float[] TurretPos(int i) { CheckSlot(i); return i == 0 ? riderPos : i == 1 ? riderPos2 : i == 2 ? riderPos3 : riderPos4; }
+        public void SetTurret(int i, string v) { CheckSlot(i); v = v ?? ""; if (i == 0) rider = v; else if (i == 1) rider2 = v; else if (i == 2) rider3 = v; else rider4 = v; }
+        public void SetTurretPos(int i, float[] p) { CheckSlot(i); p = p ?? new float[0]; if (i == 0) riderPos = p; else if (i == 1) riderPos2 = p; else if (i == 2) riderPos3 = p; else riderPos4 = p; }
+        private static void CheckSlot(int i) { if (i < 0 || i >= 4) throw new ArgumentOutOfRangeException(nameof(i)); }
         public string lootPreset = "";
         public string cargo = "";           // "" none | "Random" (rolled by the [Loot] chances) | a loot key (Food ...) | an item spec "a:2;b:1-3"
         public string[] bumpers = new string[0];   // a front bumper rolled per build ("" = none), only if no part sits on hinge_bumper_front
@@ -63,6 +66,9 @@ namespace Apocapatrol
             V3(sb, "riderPos2", riderPos2);
             if (!string.IsNullOrEmpty(rider3)) P(sb, "rider3", rider3);
             V3(sb, "riderPos3", riderPos3);
+            if (!string.IsNullOrEmpty(rider4)) P(sb, "rider4", rider4);
+            V3(sb, "riderPos4", riderPos4);
+            if (trailer != null) sb.Append("    \"trailer\": ").Append(trailer.ToJson().TrimEnd()).Append(",\n");
 
             sb.Append("    \"bumpers\": [");
             for (int i = 0; i < (bumpers ?? new string[0]).Length; i++) { if (i > 0) sb.Append(", "); Json.Str(sb, bumpers[i]); }
@@ -110,6 +116,11 @@ namespace Apocapatrol
         {
             var root = Json.Parse(text) as Dictionary<string, object>;
             if (root == null) throw new FormatException("the file is not a JSON object");
+            return FromObject(root, false);
+        }
+
+        private static TemplateFile FromObject(Dictionary<string, object> root, bool isTrailer)
+        {
             var f = new TemplateFile();
             f.schema = (int)Json.Num(root, "schema", f.schema);
             f.name = Json.Text(root, "name", f.name); f.body = Json.Text(root, "body", f.body);
@@ -119,6 +130,14 @@ namespace Apocapatrol
             f.rider = Json.Text(root, "rider", f.rider); f.riderPos = Json.Floats(root, "riderPos");
             f.rider2 = Json.Text(root, "rider2", f.rider2); f.riderPos2 = Json.Floats(root, "riderPos2");
             f.rider3 = Json.Text(root, "rider3", f.rider3); f.riderPos3 = Json.Floats(root, "riderPos3");
+            f.rider4 = Json.Text(root, "rider4", f.rider4); f.riderPos4 = Json.Floats(root, "riderPos4");
+            object trailerObject;
+            if (root.TryGetValue("trailer", out trailerObject) && trailerObject != null)
+            {
+                if (isTrailer || !(trailerObject is Dictionary<string, object>)) throw new FormatException("trailer must be a single trailer object");
+                f.trailer = FromObject((Dictionary<string, object>)trailerObject, true);
+                if (string.IsNullOrWhiteSpace(f.trailer.body)) throw new FormatException("trailer has no body");
+            }
             f.lootPreset = f.CargoTruck ? "" : Json.Text(root, "lootPreset", f.lootPreset);
             f.cargo = Json.Text(root, "cargo", f.cargo);
             f.fillFuel = Json.Bool(root, "fillFuel", f.fillFuel); f.releaseHandbrake = Json.Bool(root, "releaseHandbrake", f.releaseHandbrake);

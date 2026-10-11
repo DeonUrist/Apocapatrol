@@ -20,8 +20,9 @@ namespace Apocapatrol
         internal string Driver = "", Passenger = "";
         // human turrets (2.2.0; turret 1 = the 2.1.0 blast-lance rider): "Warboy" / a non-ranged human = blast lances, a ranged human = a gunner;
         // "" = none. Spots: frame-local feet positions, empty = automatic
-        internal readonly string[] Turrets = { "", "", "" };
-        internal readonly float[][] TurretPos = { new float[0], new float[0], new float[0] };
+        internal readonly string[] Turrets = { "", "", "", "" };
+        internal readonly float[][] TurretPos = { new float[0], new float[0], new float[0], new float[0] };
+        internal CarTemplate Trailer; // optional attached trailer; four independent human turret slots
         internal string Rider { get { return Turrets[0]; } }
         internal string RearWheel = "";       // wheel item for hinge_wheel_RL/RR; "" = the same as Wheel
         internal string[] Bumpers = null;     // front bumper rolled per build from these ("" = none); null = never a bumper
@@ -43,6 +44,33 @@ namespace Apocapatrol
         internal string[] SpawnCargoOptions;
         internal CarTemplate CloneForSpawn() { return (CarTemplate)MemberwiseClone(); }
         internal string Origin = "built-in";  // built-in | embedded | file (for the log and the spawner menu)
+
+        private string _missingPrefab = "";
+        private int _availabilityScene = -1;
+        private float _nextAvailability;
+        internal bool Available { get { return MissingPrefab.Length == 0; } }
+        internal string MissingPrefab
+        {
+            get
+            {
+                if (_availabilityScene != Patrol.SceneGen || Time.unscaledTime >= _nextAvailability)
+                {
+                    _availabilityScene = Patrol.SceneGen;
+                    _nextAvailability = Time.unscaledTime + 5f;
+                    try { _missingPrefab = FindMissingPrefab(); }
+                    catch (Exception e) { _missingPrefab = Body; Plugin.Verbose("Template " + Name + " unavailable: " + e.Message); }
+                }
+                return _missingPrefab;
+            }
+        }
+        private string FindMissingPrefab()
+        {
+            if (Prefabs.Exact(Body) == null) return Body;
+            if (Parts != null)
+                foreach (var part in Parts)
+                    if (!string.IsNullOrEmpty(part.prefab) && Prefabs.Exact(part.prefab) == null) return part.prefab;
+            return Trailer != null ? Trailer.MissingPrefab : "";
+        }
 
         // the spawn roles (Convoy picks, spawner menu column)
         // A template may have several kinds ("small;motorcycle"): it counts as each of them. Without any kind the built-in rule decides:

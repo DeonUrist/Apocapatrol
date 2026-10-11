@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using ES3Internal;
 using HutongGames.PlayMaker;
 using UnityEngine;
 
@@ -155,12 +156,15 @@ namespace Apocapatrol
         private IEnumerator Build(CarTemplate tpl, Vector3? at, Quaternion rot, bool menu, bool hold, Action<GameObject> onDone)
         {
             GameObject car = null;
+            GameObject trailer = null;
             int gen = SceneGen;
             var saveOk = new bool[1];
             try
             {
                 yield return WaitForSave(gen, saveOk);   // the game is saving: spawn after it, never half-built into the save
                 if (!saveOk[0]) { Plugin.Verbose("Build of " + tpl.Name + " dropped: the game loaded or changed scene meanwhile"); yield break; }
+                string missing = tpl.MissingPrefab;
+                if (missing.Length > 0) { Plugin.Log.LogWarning("Template " + tpl.Name + " unavailable: prefab not loaded: " + missing); yield break; }
                 Vector3 pos;
                 if (at.HasValue) pos = at.Value;
                 else
@@ -172,8 +176,15 @@ namespace Apocapatrol
                 }
                 Plugin.Verbose("Building template " + tpl.Name + ": " + tpl.Describe());
 
-                var body = Prefabs.Find(tpl.Body, "vehicle");
+                var body = Prefabs.Exact(tpl.Body);
                 if (body == null) { Plugin.Log.LogWarning("Body prefab not found: " + tpl.Body); yield break; }
+                GameObject trailerBody = null;
+                if (tpl.Trailer != null)
+                {
+                    trailerBody = Prefabs.Exact(tpl.Trailer.Body);
+                    if (trailerBody == null || !TrailerSupport.IsTrailer(trailerBody) || FindChild(body.transform, "hitch") == null || FindChild(trailerBody.transform, "attacher") == null)
+                    { Plugin.Log.LogWarning("Cannot build " + tpl.Name + ": trailer prefab or towing hitch is missing"); yield break; }
+                }
 
                 car = UnityEngine.Object.Instantiate(body, pos, rot);
                 car.SetActive(true);
@@ -226,6 +237,26 @@ namespace Apocapatrol
                 parts += AttachMissingHeadlights(car);
                 Plugin.Verbose(parts + " parts attached");
 
+                if (tpl.Trailer != null)
+                {
+                    var hitch = FindChild(car.transform, "hitch");
+                    var attacher = FindChild(trailerBody.transform, "attacher");
+                    var trailerPos = hitch.position - car.transform.rotation * trailerBody.transform.InverseTransformPoint(attacher.position);
+                    trailer = UnityEngine.Object.Instantiate(trailerBody, trailerPos, car.transform.rotation);
+                    Register.Defer(trailer);
+                    trailer.SetActive(true);
+                    Register.Name(trailer, trailerBody.name); Register.Add(trailer, true);
+                    TrailerSupport.Connect(car, trailer); // before the first frame: native TrailerLoad must not add a second joint
+                    yield return null;
+                    if (car == null || trailer == null) yield break;
+                    var placed = new GameObject[tpl.Trailer.Parts.Length];
+                    for (int i = 0; i < placed.Length; i++)
+                    {
+                        placed[i] = AttachTemplatePart(trailer, tpl.Trailer, i, placed);
+                        if (i % 4 == 3) { yield return null; if (car == null || trailer == null) yield break; }
+                    }
+                }
+
                 if (tpl.FillFuel)
                 {
                     if (tpl.FuelLitres >= 0)
@@ -264,6 +295,7 @@ namespace Apocapatrol
                 var marker = PatrolMarker.Attach(car, body.name, tpl.Driver, driver, tpl.Passenger, passenger, tpl.Rams);
                 marker.CargoKey = lootKey ?? "";
                 marker.TemplateName = tpl.Name;
+                marker.Trailer = trailer;
                 // human turrets: up to 3 on a car's roof, 1 on a motorcycle, none on a truck
                 int turretSlots = Rider.Slots(tpl.Body, tpl.IsTruck, tpl.IsMotorcycle);
                 for (int ti = 0; ti < turretSlots; ti++)
@@ -273,6 +305,14 @@ namespace Apocapatrol
                     if (car == null) yield break;
                     Rider.Seat(car, marker, ti, tpl.Turrets[ti], tpl.TurretPos[ti]);
                 }
+                if (trailer != null)
+                    for (int ti = 0; ti < PatrolMarker.TrailerTurretSlots; ti++)
+                    {
+                        if (string.IsNullOrEmpty(tpl.Trailer.Turrets[ti])) continue;
+                        yield return null;
+                        if (car == null || trailer == null) yield break;
+                        Rider.Seat(car, marker, PatrolMarker.VehicleTurretSlots + ti, tpl.Trailer.Turrets[ti], tpl.Trailer.TurretPos[ti], trailer);
+                    }
                 Paint.ApplyCargo(car, lootKey);   // the container's texture by load (Textures/cargo_*.png)
 
                 yield return new WaitForSeconds(1f);
@@ -281,6 +321,7 @@ namespace Apocapatrol
                 if (Explode.IsWreck(car)) yield break;   // crew killed during the build: it already blew up
                 SetPartConditions(car);
                 FillParts(car);
+                if (trailer != null) { SetPartConditions(trailer); FillParts(trailer); }
                 // the lift kit's adjustment from the template (the kit's own FSM has set its lifted mounts by now)
                 if (tpl.SuspensionWidth != 1f || tpl.SuspensionHeight != 0f) Suspension.Apply(car, tpl.SuspensionWidth, tpl.SuspensionHeight, "template");
                 marker.SuspensionWidth = tpl.SuspensionWidth; marker.SuspensionHeight = tpl.SuspensionHeight;
@@ -290,6 +331,7 @@ namespace Apocapatrol
                 yield return WaitForSave(gen, saveOk);
                 if (car == null) yield break;
                 Plugin.Verbose("Registered " + car.name + " for saving: " + Register.Commit(car) + " object(s)");
+                if (trailer != null) Register.Commit(trailer);
 
                 yield return StartUp(car);
             }
@@ -298,6 +340,12 @@ namespace Apocapatrol
                 // stopped early (a wreck, an error): what exists is registered as before; a destroyed car's list is dropped
                 if (car != null) { if (Register.Pending(car)) Register.Commit(car); }
                 else Register.Discard(car);
+                if (trailer != null)
+                {
+                    if (car != null && TrailerSupport.Connected(car, trailer)) { if (Register.Pending(trailer)) Register.Commit(trailer); }
+                    else { Register.Discard(trailer); Register.RemoveTree(trailer); UnityEngine.Object.Destroy(trailer); }
+                }
+                else Register.Discard(trailer);
                 if (menu) _busy = false;
                 if (onDone != null) onDone(car);
             }
@@ -473,7 +521,7 @@ namespace Apocapatrol
         // One part of a JSON template: the hinge is found by its path under the frame or under the part it sits on (by name
         // anywhere below as a fallback); a hinge that already holds a part (the frame came with one) keeps it, and that part
         // stands in as the parent for the parts listed on it.
-        private static GameObject AttachTemplatePart(GameObject car, CarTemplate tpl, int index, GameObject[] placed)
+        internal static GameObject AttachTemplatePart(GameObject car, CarTemplate tpl, int index, GameObject[] placed)
         {
             var p = tpl.Parts[index];
             if (string.IsNullOrEmpty(p.prefab)) return null;
@@ -494,7 +542,7 @@ namespace Apocapatrol
             }
             if (hinge == null) { Plugin.Log.LogWarning(tpl.Name + ": hinge " + p.hinge + " not found on " + root.name + " for " + p.prefab); return null; }
             // only a real hinge holds one part; colliders and parts carry any number of attachables (plates, spikes)
-            var prefab = Prefabs.FindAny(p.prefab) ?? Prefabs.Find(p.prefab, "item");
+            var prefab = Prefabs.Exact(p.prefab);
             if (prefab == null) { Plugin.Log.LogWarning(tpl.Name + ": part prefab not found: " + p.prefab); return null; }
             bool realHinge = hinge.name.StartsWith("hinge", StringComparison.OrdinalIgnoreCase) && !VehicleAttachments.IsFreeAttachment(prefab);
             var existing = realHinge ? PartOn(hinge) : null;
@@ -1127,13 +1175,45 @@ namespace Apocapatrol
         private static List<GameObject> _roots;                                   // every asset root with a PlayMaker FSM (crew, carcasses, loot...)
         private static Dictionary<string, GameObject> _byName;
         private static float _nextRescan;
+        private static Dictionary<string, GameObject> _exact;
+        private static float _nextExactRescan;
 
-        internal static void Invalidate() { _all = null; _roots = null; _byName = null; _nextRescan = 0f; }
+        internal static void Invalidate() { _all = null; _roots = null; _byName = null; _nextRescan = 0f; _exact = null; _nextExactRescan = 0f; }
+
+        // Exported names must resolve exactly: a missing mod must never spawn a similarly named vanilla frame.
+        // Runtime factories are shared with the exporter, availability checks and the builder.
+        internal static GameObject Exact(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query)) return null;
+            string name = query.Trim();
+            GameObject hit;
+            if (_exact != null && _exact.TryGetValue(name, out hit) && hit != null) return hit;
+            if (MotorcycleIntegration.IsBody(name)) return MotorcycleIntegration.Template();
+            var mod = ModVehicles.Template(name);
+            if (mod != null) return mod;
+            if (_exact == null || Time.unscaledTime >= _nextExactRescan)
+            {
+                // Mesh assets can differ from a spawnable frame only by case (trailer_small / Trailer_Small).
+                _exact = new Dictionary<string, GameObject>(StringComparer.Ordinal);
+                foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
+                    if (go != null && !go.scene.IsValid() && go.transform.parent == null && !_exact.ContainsKey(go.name)) _exact[go.name] = go;
+                // Mods may register runtime prefabs with Easy Save instead of exposing a factory.
+                foreach (var manager in Resources.FindObjectsOfTypeAll<ES3ReferenceMgrBase>())
+                    if (manager != null && manager.prefabs != null)
+                        foreach (var prefab in manager.prefabs)
+                            if (prefab != null) _exact[prefab.name] = prefab.gameObject;
+                _nextExactRescan = Time.unscaledTime + 5f;
+            }
+            if (_exact.TryGetValue(name, out hit)) return hit;
+            return _exact.Where(p => p.Value != null && p.Key.Equals(name, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(p => p.Value.GetComponent<ES3Prefab>() != null).Select(p => p.Value).FirstOrDefault();
+        }
 
         internal static GameObject Find(string query, string kind)
         {
             if (string.IsNullOrEmpty(query)) return null;
             if (MotorcycleIntegration.IsBody(query)) return MotorcycleIntegration.Template();
+            { var mod = ModVehicles.Template(query); if (mod != null) return mod; }
             if (_all == null) Scan();
             string q = query.Trim();
             Entry e = _all.FirstOrDefault(x => x.Kind == kind && string.Equals(x.Name, q, StringComparison.OrdinalIgnoreCase))
@@ -1158,6 +1238,7 @@ namespace Apocapatrol
         {
             if (string.IsNullOrEmpty(query)) return null;
             if (MotorcycleIntegration.IsBody(query)) return MotorcycleIntegration.Template();
+            { var mod = ModVehicles.Template(query); if (mod != null) return mod; }
             string q = query.Trim();
             if (_all == null) Scan();
             var hit = Lookup(q);

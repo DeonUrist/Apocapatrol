@@ -30,7 +30,7 @@ namespace Apocapatrol
         // Called by the Crew when the car is vacated. Re-checks after a short delay: a car the player took or sits in is never blown up.
         internal static void Schedule(Crew crew, GameObject car, PatrolMarker marker, string why)
         {
-            if (!Plugin.SelfDestruct.Value || car == null || marker == null || marker.Exploded) return;
+            if (!Plugin.SelfDestruct.Value || car == null || marker == null || marker.Exploded || Preserved(car, marker)) return;
             crew.StartCoroutine(Routine(car, marker, why));
         }
 
@@ -38,6 +38,7 @@ namespace Apocapatrol
         {
             yield return new WaitForSeconds(Delay);
             if (car == null || marker == null || marker.Exploded || marker.PlayerEntered) yield break;
+            if (!Plugin.SelfDestruct.Value || Preserved(car, marker)) yield break;
             if (PlayerRef.PlayerCar == car) yield break;
             marker.Exploded = true;
             Plugin.Verbose("Explode: " + car.name + " (" + why + ")");
@@ -122,6 +123,26 @@ namespace Apocapatrol
         }
 
         // ------------------------------------------------------------ pieces
+
+        // New saves retain template identity. For older saves, recover only the two known rig identities.
+        internal static bool Preserved(GameObject car, PatrolMarker marker)
+        {
+            if (Plugin.PreservedTemplates == null || car == null || marker == null) return false;
+            string name = marker.TemplateName;
+            if (string.IsNullOrEmpty(name))
+            {
+                if (string.Equals(marker.BodyPrefab, "Rustliner", StringComparison.OrdinalIgnoreCase)) name = "War_rig";
+                else
+                {
+                    var trailer = marker.Trailer ?? TrailerSupport.Attached(car);
+                    if (trailer != null && string.Equals(TemplateExporter.PrefabName(trailer.name), "WarRig", StringComparison.OrdinalIgnoreCase)) name = "Truck_War_Rig";
+                }
+            }
+            if (string.IsNullOrEmpty(name)) return false;
+            foreach (var entry in (Plugin.PreservedTemplates.Value ?? "").Split(','))
+                if (string.Equals(name, entry.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
 
         // the cargo trucks (Rustcargo...): same test as the convoy / template code
         internal static bool IsTruck(string body) { return (body ?? "").StartsWith("Rust", StringComparison.OrdinalIgnoreCase); }

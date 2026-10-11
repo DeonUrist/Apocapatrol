@@ -13,6 +13,9 @@ namespace Apocapatrol
         private static readonly string[] People = { "None", "Boltjaw", "Flexa", "Lugnut", "Scraffa", "Scrud", "Spanna", "Sprokka" };
         private string _editDriver = "", _editPassenger = "", _editLoot = "";
         private readonly string[] _editTurrets = { "None", "None", "None" };
+        private readonly string[] _editTrailerTurrets = { "None", "None", "None", "None" };
+        private bool _editTrailerPage;
+        private string _hoverMissing = "";
 
         // the editor's template order: EditorData.TemplateOrder first, then the unlisted ones (defaults first, by name)
         private static CarTemplate[] Ordered(bool truck)
@@ -39,19 +42,21 @@ namespace Apocapatrol
         private static List<KeyValuePair<string, string>> Options(IEnumerable<string> values) { return values.Select(v => new KeyValuePair<string, string>(v, v)).ToList(); }
 
         // writes driver / passenger / loot option into the template's file (BaseTemplates or PlayerTemplates) and reloads the park
-        private static void SaveTemplateEdit(CarTemplate t, string driver, string passenger, string loot, string[] turrets)
+        private static void SaveTemplateEdit(CarTemplate t, string driver, string passenger, string loot, string[] turrets, string[] trailerTurrets = null)
         {
             if (string.IsNullOrEmpty(t.SourcePath) || !System.IO.File.Exists(t.SourcePath)) throw new InvalidOperationException("The template file was not found");
             var file = TemplateFile.FromJson(System.IO.File.ReadAllText(t.SourcePath));
             file.driver = driver == "None" ? "" : driver; file.passenger = passenger == "None" ? "" : passenger; file.lootPreset = loot ?? "";
             for (int i = 0; i < 3; i++) file.SetTurret(i, i < turrets.Length ? Rider.Stored(turrets[i]) : "");
+            if (file.trailer != null && trailerTurrets != null)
+                for (int i = 0; i < 4; i++) file.trailer.SetTurret(i, i < trailerTurrets.Length ? Rider.Stored(trailerTurrets[i]) : "");
             EditorStore.AtomicWrite(t.SourcePath, file.ToJson());
             CarTemplates.Refresh(true);
         }
         private static string TurretSummary(CarTemplate t)
         {
             var on = t.Turrets.Where(v => !string.IsNullOrEmpty(v)).Select(Rider.Display).ToArray();
-            return on.Length > 0 ? " ● turrets " + string.Join(", ", on) : "";
+            return (on.Length > 0 ? " ● turrets " + string.Join(", ", on) : "") + (t.Trailer != null ? " ● trailer " + t.Trailer.Body + " (" + t.Trailer.Turrets.Count(v => !string.IsNullOrEmpty(v)) + "/4 turrets)" : "");
         }
         private void ShowModal(string kind, object target = null)
         {
@@ -75,10 +80,12 @@ namespace Apocapatrol
                 if (hit) Queue(() => { _tab = tab; _selectedGroup = _selectedTemplate = ""; _expanded.Clear(); _leftScroll = Vector2.zero; _dropdown.Close(); _status = tab == 2 ? "Each item rolls its own absolute chance." : "Select a patrol or convoy, then choose a template."; }, false);
             }
             LedgerSkin.Rule(6, 122, _rect.width - 12);
+            _hoverMissing = "";
             if (_tab == 2) DrawLootLedger(); else DrawGroupsLedger();
             float footer = _rect.height - 70; LedgerSkin.Rule(6, footer, _rect.width - 12);
             var detail = CarTemplate.Find(_selectedTemplate);
-            if (detail != null) LedgerSkin.Label(new Rect(26, footer + 12, _rect.width - 308, 40), detail.Body + " ● " + (string.IsNullOrEmpty(detail.Driver) ? "None" : detail.Driver) + " ● " + (string.IsNullOrEmpty(detail.Passenger) ? "None" : detail.Passenger) + " ● " + (detail.IsTruck ? (EditorStore.Loot(true, detail.LootPreset)?.Name ?? "Convoy Cargo") : EditorStore.Loot(false, detail.LootPreset)?.Name ?? "None") + TurretSummary(detail), LedgerSkin.Small, LedgerSkin.Muted);
+            if (_hoverMissing.Length > 0) LedgerSkin.Label(new Rect(26, footer + 12, _rect.width - 308, 40), "Unavailable: prefab not loaded: " + _hoverMissing + ". Load its source mod to use this template.", LedgerSkin.Small, Color.gray);
+            else if (detail != null) LedgerSkin.Label(new Rect(26, footer + 12, _rect.width - 308, 40), detail.Body + " ● " + (string.IsNullOrEmpty(detail.Driver) ? "None" : detail.Driver) + " ● " + (string.IsNullOrEmpty(detail.Passenger) ? "None" : detail.Passenger) + " ● " + (detail.IsTruck ? (EditorStore.Loot(true, detail.LootPreset)?.Name ?? "Convoy Cargo") : EditorStore.Loot(false, detail.LootPreset)?.Name ?? "None") + TurretSummary(detail), LedgerSkin.Small, LedgerSkin.Muted);
             if (Plugin.AllowDebugSpawns.Value && LedgerSkin.Button(new Rect(_rect.width - 270, footer + 15, 118, 34), "SPAWN", gameFont: true)) Queue(() => Schedule(() => _convoy.DebugRoll()), false);
             if (LedgerSkin.Button(new Rect(_rect.width - 144, footer + 15, 118, 34), "RESET", gameFont: true, color: LedgerSkin.Danger, transparent: true)) ShowModal("reset");
             GUI.enabled = enabled;
@@ -110,19 +117,19 @@ namespace Apocapatrol
             DrawTemplateLedger(true, new Rect(rx, top + 253, rw, 158), ref _truckScroll);
             float actions = right.yMax - 99; LedgerSkin.Rule(rx, actions, rw);
             var chosen = CarTemplate.Find(_selectedTemplate); var selected = Selected;
-            bool canAdd = chosen != null && selected != null && (_tab == 1 || !chosen.IsTruck);
+            bool canAdd = chosen != null && chosen.Available && selected != null && (_tab == 1 || !chosen.IsTruck);
             if (LedgerSkin.Button(new Rect(rx, actions + 13, rw, 34), _tab == 1 ? "+  Add template to convoy" : "+  Add template to patrol", canAdd, true)) Queue(() => { selected.Templates.Add(chosen.Name); _status = "Added one copy of " + chosen.Name; });
-            if (Plugin.AllowDebugSpawns.Value && LedgerSkin.Button(new Rect(rx, actions + 54, rw, 34), "Spawn template", chosen != null)) Queue(() => { var spawn = chosen.CloneForSpawn(); if (spawn.IsTruck && _tab == 1 && selected != null) spawn.SpawnCargoOptions = selected.AllowedCargo.ToArray(); Schedule(() => _patrol.Spawn(spawn)); }, false);
+            if (Plugin.AllowDebugSpawns.Value && LedgerSkin.Button(new Rect(rx, actions + 54, rw, 34), "Spawn template", chosen != null && chosen.Available)) Queue(() => { var spawn = chosen.CloneForSpawn(); if (spawn.IsTruck && _tab == 1 && selected != null) spawn.SpawnCargoOptions = selected.AllowedCargo.ToArray(); Schedule(() => _patrol.Spawn(spawn)); }, false);
         }
         private float GroupHeight(SpawnGroup group)
         {
             if (!_expanded.Contains(group.Id)) return 73;
-            int rows = group.Templates.Count; bool fallback = !group.Templates.Any(n => { var t = CarTemplate.Find(n); return t != null && (_tab != 1 || t.IsTruck); });
+            int rows = group.Templates.Count; bool fallback = !group.Templates.Any(n => { var t = CarTemplate.Find(n); return t != null && t.Available && (_tab != 1 || t.IsTruck); });
             return 73 + 12 + 63 + 14 + 22 + (rows + (fallback ? 1 : 0)) * 36 + (_tab == 1 ? 79 : 0) + 36 + 12;
         }
         private static int VehicleCount(SpawnGroup group, bool convoy)
         {
-            var list = group.Templates.Select(CarTemplate.Find).Where(t => t != null && (convoy || !t.IsTruck)).ToList();
+            var list = group.Templates.Select(CarTemplate.Find).Where(t => t != null && t.Available && (convoy || !t.IsTruck)).ToList();
             return list.Count + ((convoy && !list.Any(t => t.IsTruck)) || (!convoy && list.Count == 0) ? 1 : 0);
         }
         private void DrawLedgerGroup(SpawnGroup group, int index, Rect r)
@@ -146,9 +153,9 @@ namespace Apocapatrol
                 int found = 0, trucks = 0;
                 for (int i = 0; i < group.Templates.Count; i++)
                 {
-                    int slot = i; var t = CarTemplate.Find(group.Templates[i]); if (t != null) { found++; if (t.IsTruck) trucks++; }
+                    int slot = i; var t = CarTemplate.Find(group.Templates[i]); bool available = t != null && t.Available; if (available && (_tab == 1 || !t.IsTruck)) { found++; if (t.IsTruck) trucks++; }
                     LedgerSkin.Label(new Rect(x, y, 19, 36), (i + 1).ToString(), LedgerSkin.Small, LedgerSkin.Muted);
-                    LedgerSkin.Label(new Rect(x + 27, y, w - 65, 36), t != null ? t.Name.Replace('_', ' ') : group.Templates[i] + " [missing]", null, t != null ? LedgerSkin.Text : LedgerSkin.Muted);
+                    LedgerSkin.Label(new Rect(x + 27, y, w - 65, 36), t != null ? t.Name.Replace('_', ' ') + (available ? "" : " [unavailable]") : group.Templates[i] + " [missing]", null, available ? LedgerSkin.Text : Color.gray);
                     if (LedgerSkin.Icon(new Rect(x + w - 30, y + 3, 30, 30), "circle-minus")) Queue(() => group.Templates.RemoveAt(slot));
                     LedgerSkin.Rule(x, y + 35, w); y += 36;
                 }
@@ -190,16 +197,19 @@ namespace Apocapatrol
             {
                 for (int i = 0; i < templates.Length; i++)
                 {
-                    var t = templates[i]; bool selected = _selectedTemplate == t.Name; float y = i * 39;
+                    var t = templates[i]; bool available = t.Available, selected = available && _selectedTemplate == t.Name; float y = i * 39;
                     if (selected) LedgerSkin.Fill(new Rect(0, y, width, 39), LedgerSkin.Selected);
-                    string caption = t.Name.Replace('_', ' ');
+                    string caption = t.Name.Replace('_', ' ') + (available ? "" : " [unavailable]");
                     float nameWidth = Mathf.Min(LedgerSkin.TextWidth(caption, LedgerSkin.Body) + 4, width - 91 - 9 - 30);
                     // the small controls first (the row's own button covers them)
-                    if (LedgerSkin.TextButton(new Rect(9 + nameWidth + 6, y + 9, 21, 21), "E", true)) Queue(() => { _target = t; _modal = "editTemplate"; _editDriver = t.Driver.Length > 0 ? t.Driver : "None"; _editPassenger = t.Passenger.Length > 0 ? t.Passenger : "None"; _editLoot = t.LootPreset; for (int k = 0; k < 3; k++) _editTurrets[k] = Rider.Display(t.Turrets[k]); _dropdown.Close(); }, false);
+                    if (LedgerSkin.TextButton(new Rect(9 + nameWidth + 6, y + 9, 21, 21), "E", available)) Queue(() => { _target = t; _modal = "editTemplate"; _editDriver = t.Driver.Length > 0 ? t.Driver : "None"; _editPassenger = t.Passenger.Length > 0 ? t.Passenger : "None"; _editLoot = t.LootPreset; for (int k = 0; k < 3; k++) _editTurrets[k] = Rider.Display(t.Turrets[k]); for (int k = 0; k < 4; k++) _editTrailerTurrets[k] = t.Trailer != null ? Rider.Display(t.Trailer.Turrets[k]) : "None"; _editTrailerPage = false; _dropdown.Close(); }, false);
                     int row = i, move = LedgerSkin.Reorder(new Rect(width - 91, y + 1, 26, 37), i > 0, i < templates.Length - 1);
                     if (move != 0) Queue(() => MoveTemplate(truck, row, move));
-                    var name = new Rect(0, y, width - 91, 39); bool hit = GUI.Button(name, GUIContent.none, GUIStyle.none);
-                    LedgerSkin.Label(new Rect(9, y, nameWidth, 39), caption, null, selected ? LedgerSkin.Accent : LedgerSkin.Text);
+                    var name = new Rect(0, y, width - 91, 39); bool enabled = GUI.enabled; GUI.enabled = enabled && available;
+                    bool hit = GUI.Button(name, GUIContent.none, GUIStyle.none);
+                    GUI.enabled = enabled;
+                    if (!available && name.Contains(Event.current.mousePosition)) _hoverMissing = t.MissingPrefab;
+                    LedgerSkin.Label(new Rect(9, y, nameWidth, 39), caption, null, available ? (selected ? LedgerSkin.Accent : LedgerSkin.Text) : Color.gray);
                     if (hit) Queue(() => _selectedTemplate = t.Name, false);
                     if (LedgerSkin.Icon(new Rect(width - 61, y + 4, 30, 30), t.Favorite ? "star-filled" : "star", !t.IsDefault, t.Favorite ? LedgerSkin.Muted : LedgerSkin.Text)) Queue(() => { CarTemplates.Favorite(t); _status = t.Name + " moved to " + (t.Favorite ? "PlayerTemplates" : "BaseTemplates"); }, false);
                     if (LedgerSkin.Icon(new Rect(width - 31, y + 4, 30, 30), "trash-2", !t.Favorite && !t.IsDefault, LedgerSkin.Danger)) ShowModal("deleteTemplate", t);
@@ -330,7 +340,8 @@ namespace Apocapatrol
         private void DrawEditTemplate(Rect box)
         {
             var t = (CarTemplate)_target; float x = box.x + 22, w = box.width - 44, input = x + 150, iw = w - 150, bottom = _rect.height - 84;
-            LedgerSkin.Label(new Rect(x, box.y + 22, w, 26), "Edit template · " + t.Name.Replace('_', ' '), LedgerSkin.DialogTitle);
+            LedgerSkin.Label(new Rect(x, box.y + 22, t.Trailer != null ? w - 162 : w, 26), "Edit template · " + t.Name.Replace('_', ' '), LedgerSkin.DialogTitle);
+            if (t.Trailer != null && LedgerSkin.Button(new Rect(box.xMax - 175, box.y + 22, 153, 26), _editTrailerPage ? "Vehicle turrets" : "Trailer turrets")) Queue(() => _editTrailerPage = !_editTrailerPage, false);
             LedgerSkin.Label(new Rect(x, box.y + 65, 140, 34), "Driver");
             var a = new Rect(input, box.y + 65, iw, 34);
             if (LedgerSkin.Dropdown(a, _editDriver)) _dropdown.Open(a, Options(People), _editDriver, v => _editDriver = v, bottom);
@@ -355,20 +366,22 @@ namespace Apocapatrol
             }
             // human turrets: 3 on a car's roof, 1 on a motorcycle, none on a truck
             int slots = Rider.Slots(t.Body, t.IsTruck, t.IsMotorcycle);
-            for (int i = 0; i < 3; i++)
+            var choices = _editTrailerPage ? _editTrailerTurrets : _editTurrets;
+            int shownSlots = _editTrailerPage ? 4 : slots;
+            for (int i = 0; i < choices.Length; i++)
             {
-                float yt = box.y + 206 + 47 * i; int k = i;
-                LedgerSkin.Label(new Rect(x, yt, 140, 34), "Human turret " + (i + 1));
+                float yt = box.y + 206 + (_editTrailerPage ? 40 : 47) * i; int k = i;
+                LedgerSkin.Label(new Rect(x, yt, 140, 34), (_editTrailerPage ? "Trailer turret " : "Human turret ") + (i + 1));
                 a = new Rect(input, yt, iw, 34);
-                if (i >= slots) LedgerSkin.Label(a, slots == 0 ? "None - not on trucks" : "None - a motorcycle takes one", null, LedgerSkin.Muted);
-                else if (LedgerSkin.Dropdown(a, _editTurrets[i])) _dropdown.Open(a, Options(Rider.TurretChoices), _editTurrets[i], v => _editTurrets[k] = v, bottom);
+                if (i >= shownSlots) LedgerSkin.Label(a, slots == 0 ? "None - not on trucks" : "None - a motorcycle takes one", null, LedgerSkin.Muted);
+                else if (LedgerSkin.Dropdown(a, choices[i])) _dropdown.Open(a, Options(Rider.TurretChoices), choices[i], v => choices[k] = v, bottom);
             }
-            LedgerSkin.Label(new Rect(x, box.y + 346, w, 50), (t.IsTruck ? "A fixed cargo option always loads this truck with it; otherwise the convoy's allowed cargo is rolled. " : "Written into the template file; cars spawned from now on use it. ") + (slots > 0 ? "Warboy = Scraffa with blast lances; a gunner crouches on the roof (sits on a motorcycle) and shoots all around. Spots: [Debug] TurretSpotEditor." : ""), LedgerSkin.Small, LedgerSkin.Muted);
+            LedgerSkin.Label(new Rect(x, box.y + (_editTrailerPage ? 370 : 346), w, _editTrailerPage ? 32 : 50), _editTrailerPage ? t.Trailer.Body + " · four trailer spots. Warboy = blast lances. Spots: [Debug] TurretSpotEditor." : (t.IsTruck ? "A fixed cargo option always loads this truck with it; otherwise the convoy's allowed cargo is rolled. " : "Written into the template file; cars spawned from now on use it. ") + (slots > 0 ? "Warboy = Scraffa with blast lances; a gunner crouches on the roof (sits on a motorcycle) and shoots all around. Spots: [Debug] TurretSpotEditor." : ""), LedgerSkin.Small, LedgerSkin.Muted);
             ModalButtons(box, "Save", () =>
             {
                 var turrets = new string[3];
                 for (int i = 0; i < 3; i++) turrets[i] = i < slots ? _editTurrets[i] : "";
-                SaveTemplateEdit(t, _editDriver, _editPassenger, bike ? "" : _editLoot, turrets); _dropdown.Close();
+                SaveTemplateEdit(t, _editDriver, _editPassenger, bike ? "" : _editLoot, turrets, _editTrailerTurrets); _dropdown.Close();
             });
         }
         private void DrawLedgerItems(Rect box)

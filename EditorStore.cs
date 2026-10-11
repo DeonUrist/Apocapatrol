@@ -85,7 +85,7 @@ namespace Apocapatrol
             foreach (string name in group.Templates)
             {
                 var template = CarTemplate.Park.FirstOrDefault(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-                if (template != null && (convoy || !template.IsTruck)) list.Add(template.CloneForSpawn());
+                if (template != null && template.Available && (convoy || !template.IsTruck)) list.Add(template.CloneForSpawn());
             }
             if (!convoy && list.Count == 0) list.Add(CarTemplate.FallbackCar.CloneForSpawn());
             if (convoy && !list.Any(t => t.IsTruck)) { var fallback = CarTemplate.FallbackTruck.CloneForSpawn(); fallback.SpawnLoot = new Dictionary<string, int>(); fallback.SpawnCargoKey = ""; list.Insert(0, fallback); }

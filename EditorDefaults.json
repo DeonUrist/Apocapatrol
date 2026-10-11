@@ -144,6 +144,21 @@
       "uniformCargo": false,
       "templates": ["War_rig", "Warboy_Armored_Tyrant", "Warboy_Tyrant", "Junker_Warboy", "Junker_Warboy", "Warboy_Bike", "Warboy_Bike", "Warboy_Vulture", "Warboy_Vulture"],
       "allowedCargo": []
+    },
+    {
+      "id": "6ef05f543f59487698a42929c8a01e5d",
+      "name": "Truck War Rig",
+      "minKm": 60,
+      "minBosses": 5,
+      "chance": 10,
+      "uniformCargo": false,
+      "templates": [
+        "Weak_Warboy",
+        "Weak_Warboy",
+        "Weak_Warboy",
+        "Truck_War_Rig"
+      ],
+      "allowedCargo": []
     }],
   "convoys": [{
       "id": "basic-loot",
@@ -400,6 +415,7 @@
     "Vulture_Gunner",
     "War_rig",
     "Warboy_Armored_Tyrant",
-    "Warboy_Vulture"
+    "Warboy_Vulture",
+    "Truck_War_Rig"
   ]
 }

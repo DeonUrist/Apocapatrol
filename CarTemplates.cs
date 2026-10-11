@@ -99,7 +99,7 @@ namespace Apocapatrol
 
         private static string S(string s) { return (s ?? "").Trim(); }
 
-        internal static CarTemplate Parse(string json, string fallbackName, string origin, string where)
+        internal static CarTemplate Parse(string json, string fallbackName, string origin, string where, bool isTrailer = false)
         {
             TemplateFile f;
             try { f = TemplateFile.FromJson(json); }
@@ -108,7 +108,7 @@ namespace Apocapatrol
             if (S(f.body).Length == 0) { Plugin.Log.LogWarning("Car template " + where + ": no \"body\""); return null; }
 
             var parts = (f.parts ?? new TemplatePart[0]).Where(p => p != null).ToArray();
-            if (parts.Length == 0) { Plugin.Log.LogWarning("Car template " + where + ": no \"parts\" - skipped (a frame without parts would not drive)"); return null; }
+            if (parts.Length == 0 && !isTrailer) { Plugin.Log.LogWarning("Car template " + where + ": no \"parts\" - skipped (a frame without parts would not drive)"); return null; }
             for (int i = 0; i < parts.Length; i++)
             {
                 if (parts[i].parent >= i) { Plugin.Log.LogWarning("Car template " + where + ": part [" + i + "] " + parts[i].prefab + " names parent [" + parts[i].parent + "], which is not an earlier part - attached to the frame instead"); parts[i].parent = -1; }
@@ -134,7 +134,12 @@ namespace Apocapatrol
                 Origin = origin,
             };
             if (t.LootPreset.Length == 0 && f.schema < 2) t.LootPreset = t.IsTruck ? (f.cargo.Length > 0 ? "truck-food" : "truck-empty") : "car-standard";
-            for (int i = 0; i < 3; i++) { t.Turrets[i] = S(f.Turret(i)); t.TurretPos[i] = f.TurretPos(i) ?? new float[0]; }
+            for (int i = 0; i < (isTrailer ? 4 : 3); i++) { t.Turrets[i] = S(f.Turret(i)); t.TurretPos[i] = f.TurretPos(i) ?? new float[0]; }
+            if (f.trailer != null)
+            {
+                t.Trailer = Parse(f.trailer.ToJson(), t.Name + " trailer", origin, where + " trailer", true);
+                if (t.Trailer == null) return null;
+            }
             t.Rams = S(f.rams).Length > 0 ? CarTemplate.ParseRams(S(f.rams)) : (t.IsTruck ? RamTargets.Cars : RamTargets.Pedestrians);
             foreach (var p in parts)   // for the menu summary / Describe
             {

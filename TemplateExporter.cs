@@ -39,6 +39,9 @@ namespace Apocapatrol
         private Transform _draftCar;
         private string _templateName = "", _driverName = "Scraffa", _passengerName = "Sprokka", _lootId = "";
         private readonly string[] _turrets = { "None", "None", "None" };   // human turrets 1-3 as the dropdowns show them
+        private readonly string[] _trailerTurrets = { "None", "None", "None", "None" };
+        private GameObject _draftTrailer;
+        private bool _trailerPage;
         private Action _afterDraw;
         private bool _truck;
         private bool _bike;   // the true motorcycle (no rear, no seats behind): its templates carry no loot setting at all
@@ -60,9 +63,11 @@ namespace Apocapatrol
             _draftCar = car; _truck = PrefabName(car.name).Equals("Rustcargo", StringComparison.OrdinalIgnoreCase) && FrameChildren(car, "PhysicsLock").Any();
             _templateName = ""; _driverName = "Scraffa"; _passengerName = "None"; _turrets[0] = _turrets[1] = _turrets[2] = "None"; _ledgerDropdown.Close();
             _bike = MotorcycleIntegration.IsBody(PrefabName(car.name));
+            _draftTrailer = TrailerSupport.Attached(car.gameObject); _trailerPage = false;
+            for (int i = 0; i < 4; i++) _trailerTurrets[i] = "None";
             var profiles = _truck ? EditorStore.Data.TruckLoot : EditorStore.Data.CarLoot; _lootId = _bike ? "" : !_truck && profiles.Any(p => p.Id == "car-empty") ? "car-empty" : profiles.Count > 0 ? profiles[0].Id : "";
         }
-        private void Close() { _session.Close(); _draftCar = null; _ledgerDropdown.Close(); }
+        private void Close() { _session.Close(); _draftCar = null; _draftTrailer = null; _ledgerDropdown.Close(); }
         private void OnDestroy() { _session.Close(true); }
         private void LateUpdate() { _session.Maintain(); }
         private void OnGUI()
@@ -89,9 +94,10 @@ namespace Apocapatrol
             if (LedgerSkin.Button(new Rect(_rect.width - 96, 24, 70, 34), "CLOSE", gameFont: true, transparent: true)) _afterDraw = Close;
             var box = new Rect((_rect.width - 600) / 2, 92, 600, 496); LedgerSkin.Panel(box);
             float x = box.x + 22, input = x + 160, w = box.width - 204;
-            const float Row = 42f;
+            const float Row = 38f;
             LedgerSkin.Label(new Rect(x, box.y + 18, box.width - 44, 26), "Save vehicle template", LedgerSkin.DialogTitle);
             LedgerSkin.Label(new Rect(x, box.y + 47, box.width - 44, 20), (_truck ? "Storage truck" : "Vehicle") + " · " + PrefabName(_draftCar.name), LedgerSkin.Small, LedgerSkin.Muted);
+            if (_draftTrailer != null && LedgerSkin.Button(new Rect(box.xMax - 175, box.y + 44, 153, 26), _trailerPage ? "Vehicle turrets" : "Trailer turrets")) _afterDraw = () => _trailerPage = !_trailerPage;
             float y0 = box.y + 78;
             LedgerSkin.Label(new Rect(x, y0, 144, 34), "Template name");
             _templateName = GUI.TextField(new Rect(input, y0, w, 34), _templateName, LedgerSkin.Input);
@@ -115,17 +121,19 @@ namespace Apocapatrol
             }
             // human turrets: 3 on a car's roof, 1 on a motorcycle, none on a truck
             int slots = Rider.Slots(PrefabName(_draftCar.name), _truck, false);
+            var choices = _trailerPage ? _trailerTurrets : _turrets;
+            if (_trailerPage) slots = 4;
             var turretChoices = Rider.TurretChoices.Select(n => new KeyValuePair<string, string>(n, n)).ToList();
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < choices.Length; i++)
             {
                 float yt = y0 + Row * (4 + i); int k = i;
-                string label = "Human turret " + (i + 1);
-                if (i < slots) DraftLedgerDropdown(new Rect(input, yt, w, 34), label, _turrets[i], turretChoices, value => _turrets[k] = value, box.yMax - 84);
+                string label = (_trailerPage ? "Trailer turret " : "Human turret ") + (i + 1);
+                if (i < slots) DraftLedgerDropdown(new Rect(input, yt, w, 34), label, choices[i], turretChoices, value => choices[k] = value, box.yMax - 84);
                 else { LedgerSkin.Label(new Rect(x, yt, 144, 34), label); LedgerSkin.Label(new Rect(input, yt, w, 34), _truck ? "None - not on trucks" : "None - a motorcycle takes one", null, LedgerSkin.Muted); }
             }
-            float yn = y0 + Row * 7 + 2;
-            LedgerSkin.Label(new Rect(x, yn, box.width - 44, 20), "Warboy = Scraffa with blast lances; a gunner crouches on the roof and shoots all around.", LedgerSkin.Small, LedgerSkin.Muted);
-            LedgerSkin.Label(new Rect(x, yn + 18, box.width - 44, 20), "Attached parts and adjusted hinges are recorded automatically. Stored in PlayerTemplates.", LedgerSkin.Small, LedgerSkin.Muted);
+            float yn = y0 + Row * (4 + choices.Length) + 2;
+            LedgerSkin.Label(new Rect(x, yn, box.width - 44, 20), _draftTrailer != null ? "Includes " + PrefabName(_draftTrailer.name) + " and its attached parts. Four trailer turret slots." : "Attached parts and adjusted hinges are recorded automatically. Stored in PlayerTemplates.", LedgerSkin.Small, LedgerSkin.Muted);
+            if (!_trailerPage) LedgerSkin.Label(new Rect(x, yn + 18, box.width - 44, 20), "Warboy = blast lances; gunners crouch and shoot all around.", LedgerSkin.Small, LedgerSkin.Muted);
             LedgerSkin.Rule(x, box.yMax - 73, box.width - 44);
             if (LedgerSkin.Button(new Rect(box.xMax - 213, box.yMax - 55, 77, 34), "Cancel")) _afterDraw = Close;
             if (LedgerSkin.Button(new Rect(box.xMax - 128, box.yMax - 55, 106, 34), "Save template", primary: true))
@@ -176,19 +184,9 @@ namespace Apocapatrol
 
         // =============================================================== dump
 
-        private Dictionary<string, GameObject> _assets;
-
         private GameObject Asset(string name)
         {
-            if (MotorcycleIntegration.IsBody(name)) return MotorcycleIntegration.Template();
-            if (_assets == null)
-            {
-                _assets = new Dictionary<string, GameObject>(StringComparer.Ordinal);
-                foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
-                    if (go != null && !go.scene.IsValid() && go.transform.parent == null && !_assets.ContainsKey(go.name)) _assets[go.name] = go;
-            }
-            GameObject r;
-            return _assets.TryGetValue(name, out r) ? r : null;
+            return Prefabs.Exact(name);
         }
 
         private static readonly Regex CloneSuffix = new Regex(@"(\(Clone\)\d*|\s\(\d+\))+$");
@@ -267,7 +265,8 @@ namespace Apocapatrol
                 {
                     var c = t.GetChild(i);
                     if (Player != null && c == Player) continue;
-                    if (c.name == "PhysicsLock") continue;            // bed items: read separately
+                    if (TrailerSupport.IsTrailer(c.gameObject) || c.name.StartsWith("Apocapatrol.RiderPos", StringComparison.Ordinal)) continue;
+                    if (c.name.StartsWith("PhysicsLock", StringComparison.Ordinal)) continue; // includes Scrapwagon's PhysicsLock (1)
                     if (!IsPart(c)) { Walk(c, container, prefabRoot, parentIdx); continue; }
 
                     var hinge = c.parent;
@@ -349,7 +348,7 @@ namespace Apocapatrol
             string how;
             var car = FindCar(out how);
             if (car == null || car != _draftCar) throw new InvalidOperationException("You are no longer seated in the captured vehicle");
-            _assets = null;   // a fresh asset list per dump
+            Prefabs.Invalidate();   // include prefabs loaded since the last dump
             string body = PrefabName(car.name);
             var bodyAsset = Asset(body);
 
@@ -390,6 +389,20 @@ namespace Apocapatrol
             // the lift kit's adjustment (only with a kit on the car; Part Adjustment's values when that mod is loaded)
             float sw, sh; Suspension.Read(car.gameObject, out sw, out sh);
             file.suspensionWidth = sw; file.suspensionHeight = sh;
+            var trailer = TrailerSupport.Attached(car.gameObject);
+            if (trailer != _draftTrailer) throw new InvalidOperationException("The attached trailer changed. Reopen template creation");
+            if (trailer != null)
+            {
+                string trailerBody = PrefabName(trailer.name);
+                var trailerAsset = Asset(trailerBody);
+                if (trailerAsset == null) throw new InvalidOperationException("Trailer prefab not found: " + trailerBody);
+                var tw = new Walker { Owner = this, Offsets = true, Player = w.Player };
+                tw.Walk(trailer.transform, trailer.transform, trailerAsset, -1);
+                file.schema = 3;
+                file.trailer = new TemplateFile { schema = 3, body = trailerBody, parts = tw.Parts.ToArray() };
+                for (int i = 0; i < 4; i++) file.trailer.SetTurret(i, Rider.Stored(_trailerTurrets[i]));
+                w.Notes.AddRange(tw.Notes);
+            }
             string path = Path.Combine(dir, name + ".json");
             EditorStore.AtomicWrite(path, file.ToJson());
             CarTemplates.Refresh(true);

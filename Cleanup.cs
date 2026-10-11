@@ -85,6 +85,8 @@ namespace Apocapatrol
         {
             var car = m.gameObject;
             Plugin.Verbose("Cleanup: removed " + car.name + " (" + why + ")");
+            var trailer = TrailerSupport.Attached(car);
+            if (trailer != null) { Register.RemoveTree(trailer); Destroy(trailer); }
             Register.RemoveTree(car);
             Destroy(car);
         }

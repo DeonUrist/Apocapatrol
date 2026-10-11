@@ -35,16 +35,19 @@ namespace Apocapatrol
             return motorcycleKind || IsBikeBody(body) ? 1 : 3;
         }
 
-        internal static GameObject Seat(GameObject car, PatrolMarker marker, int slot, string who, float[] localPos)
+        internal static GameObject Seat(GameObject car, PatrolMarker marker, int slot, string who, float[] localPos, GameObject platform = null)
         {
+            if (marker == null || slot < 0 || slot >= marker.Riders.Length) return null;
+            if (platform != null) car = platform;
+            bool trailer = slot >= PatrolMarker.VehicleTurretSlots;
             bool gunner = IsGunner(who);
             string prefabName = gunner ? who.Trim() : string.Equals(who, Warboy, StringComparison.OrdinalIgnoreCase) ? WarboyPrefab : who.Trim();
             var prefab = Prefabs.FindAny(prefabName);
             if (prefab == null) { Plugin.Log.LogWarning("Human turret prefab not found: " + prefabName); return null; }
-            bool bike = IsBikeBody(TemplateExporter.PrefabName(car.name));
+            bool bike = !trailer && IsBikeBody(TemplateExporter.PrefabName(car.name));
             var anchor = new GameObject("Apocapatrol.RiderPos" + (slot > 0 ? (slot + 1).ToString() : "")).transform;
             anchor.SetParent(car.transform, false);
-            anchor.localPosition = localPos != null && localPos.Length == 3 ? new Vector3(localPos[0], localPos[1], localPos[2]) : AutoSpot(car, slot, bike);
+            anchor.localPosition = localPos != null && localPos.Length == 3 ? new Vector3(localPos[0], localPos[1], localPos[2]) : AutoSpot(car, trailer ? slot - PatrolMarker.VehicleTurretSlots : slot, bike);
             anchor.localRotation = Quaternion.identity;
 
             var go = UnityEngine.Object.Instantiate(prefab, anchor.position, anchor.rotation);
@@ -62,9 +65,9 @@ namespace Apocapatrol
             root.interpolation = RigidbodyInterpolation.None;
             NoContacts(go);
             go.transform.SetParent(anchor, true);
-            slot = Mathf.Clamp(slot, 0, 2);
             marker.Riders[slot] = go; marker.RiderAnchors[slot] = anchor;
-            go.AddComponent<RiderGuard>().Init(car, marker, anchor, prefab.name, slot, gunner, bike);
+            var riderGuard = go.AddComponent<RiderGuard>();
+            riderGuard.Init(car, marker, anchor, prefab.name, slot, gunner, bike);
             if (gunner)
             {
                 // a gunner: the passenger's vanilla ranged combat, all around (360), crouched on the roof / seated on a bike
@@ -72,6 +75,7 @@ namespace Apocapatrol
                 PassengerGuard.AttachTurret(go, car, anchor, bike ? BikeArc : 0f);
                 pose.ConfigureTurret(bike);
             }
+            RiderAnchorGuard.Attach(go, riderGuard, anchor, gunner);
             Plugin.Verbose("Human turret " + (slot + 1) + ": " + go.name + (gunner ? " (gunner)" : " (Warboy)") + " on " + car.name + " at local " + anchor.localPosition.ToString("F2"));
             return go;
         }
@@ -118,6 +122,21 @@ namespace Apocapatrol
                 }
             }
             if (!any) return new Vector3(slot == 1 ? -0.4f : slot == 2 ? 0.4f : 0f, 1.2f, slot > 0 ? -0.6f : 0f);
+            if (TrailerSupport.IsTrailer(car))
+            {
+                // Use the bed's footprint, excluding the long tow tongue from the four positions.
+                var bed = car.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("PhysicsLock", StringComparison.Ordinal));
+                var box = bed != null ? bed.GetComponent<BoxCollider>() : null;
+                if (box != null)
+                {
+                    var center = ct.InverseTransformPoint(box.transform.TransformPoint(box.center));
+                    var size = box.size;
+                    b = new Bounds(new Vector3(center.x, b.center.y, center.z), new Vector3(size.x, b.size.y, size.z));
+                }
+                float tx = b.center.x + Mathf.Min(0.65f, b.extents.x * 0.5f) * ((slot & 1) == 0 ? -1f : 1f);
+                float tz = b.center.z + Mathf.Min(1.2f, b.extents.z * 0.45f) * (slot < 2 ? 1f : -1f);
+                return new Vector3(tx, TopAt(car, new Vector3(tx, b.max.y, tz), b.max.y) + 0.02f, tz);
+            }
             // the world-AABB corners overestimate a turned car; the top over the middle is still right
             var top = TopAt(car, new Vector3(b.center.x, b.max.y, b.center.z), b.max.y);
             if (slot == 0) return new Vector3(0f, top + 0.02f, b.center.z);
@@ -350,6 +369,7 @@ namespace Apocapatrol
         private float _standAt = -1f;                      // a Warboy on a bike stands up (crouch -> stand blend) before the leap
         private float _nextIgnore, _outOfArc;
         internal bool IsWarboy { get { return !_gunner && (_mode == Mode.Riding || _mode == Mode.Throwing || _mode == Mode.Witness); } }
+        internal bool Mounted { get { return (_mode == Mode.Riding || _mode == Mode.Throwing || _mode == Mode.Witness) && Alive(); } }
         private AnimationClipPlayable _stand;
         private bool _released, _inClose, _kamikazeArmed;
         private float _nextWitness;
@@ -503,7 +523,8 @@ namespace Apocapatrol
             if (Time.time >= _nextIgnore) { _nextIgnore = Time.time + 1f; Patrol.IgnoreCollisionsIfChanged(gameObject, _car, _carCols); }
 
             // the player took this car, or it blew up: off the roof
-            if (PlayerRef.PlayerCar == _car) { JumpOff("the player took the car"); return; }
+            if (PlayerRef.PlayerCar == _car || (_marker != null && PlayerRef.PlayerCar == _marker.gameObject)) { JumpOff("the player took the car"); return; }
+            if (_slot >= PatrolMarker.VehicleTurretSlots && (_marker == null || !TrailerSupport.Connected(_marker.gameObject, _car))) { JumpOff("the trailer detached"); return; }
             if (_gunner) return;   // a gunner's fight is PassengerGuard's (vanilla ranged combat, all around)
 
             Vector3 tpos, tvel; GameObject tcar;
@@ -679,7 +700,7 @@ namespace Apocapatrol
         // the driver helps: Pilot drives alongside the player while this is refreshed
         private void Escort()
         {
-            if (_pilot == null && _car != null) _pilot = _car.GetComponent<Pilot>();
+            if (_pilot == null && _car != null) _pilot = (_marker != null ? _marker.gameObject : _car).GetComponent<Pilot>();
             if (_pilot != null) _pilot.EscortUntil = Time.time + 0.6f;
         }
 
@@ -740,6 +761,7 @@ namespace Apocapatrol
         {
             if (c.transform.IsChildOf(transform)) return true;
             if (_car != null && c.transform.IsChildOf(_car.transform)) return true;
+            if (_marker != null && c.transform.IsChildOf(_marker.transform)) return true;
             return Lance != null && c.transform.IsChildOf(Lance);
         }
 
@@ -1043,10 +1065,10 @@ namespace Apocapatrol
         }
         private static PatrolMarker M(GameObject car) { return car != null ? car.GetComponent<PatrolMarker>() : null; }
         public static Transform Anchor(GameObject car) { var m = M(car); return m != null ? m.RiderAnchor : null; }
-        public static Transform Anchor(GameObject car, int slot) { var m = M(car); return m != null && slot >= 0 && slot < 3 ? m.RiderAnchors[slot] : null; }
+        public static Transform Anchor(GameObject car, int slot) { var m = M(car); return m != null && slot >= 0 && slot < m.RiderAnchors.Length ? m.RiderAnchors[slot] : null; }
         public static int Slot(GameObject car, Transform anchor) { var m = M(car); return m != null ? Array.IndexOf(m.RiderAnchors, anchor) : -1; }
         public static GameObject Rider(GameObject car) { var m = M(car); return m != null ? m.Rider : null; }
-        public static GameObject Rider(GameObject car, int slot) { var m = M(car); return m != null && slot >= 0 && slot < 3 ? m.Riders[slot] : null; }
+        public static GameObject Rider(GameObject car, int slot) { var m = M(car); return m != null && slot >= 0 && slot < m.Riders.Length ? m.Riders[slot] : null; }
         public static Transform Lance(GameObject car) { var r = Rider(car); var g = r != null ? r.GetComponent<RiderGuard>() : null; return g != null ? g.Lance : null; }
         public static Transform Lance(GameObject car, int slot) { var r = Rider(car, slot); var g = r != null ? r.GetComponent<RiderGuard>() : null; return g != null ? g.Lance : null; }
         public static string TemplateName(GameObject car) { var m = M(car); return m != null ? m.TemplateName : ""; }
@@ -1063,7 +1085,9 @@ namespace Apocapatrol
             if (t == null || string.IsNullOrEmpty(t.SourcePath) || !System.IO.File.Exists(t.SourcePath)) return "template file of " + name + " not found";
             var file = TemplateFile.FromJson(System.IO.File.ReadAllText(t.SourcePath));
             var p = a.localPosition;
-            file.SetTurretPos(slot, new[] { Round(p.x), Round(p.y), Round(p.z) });
+            var target = slot < PatrolMarker.VehicleTurretSlots ? file : file.trailer;
+            if (target == null) return "template has no trailer";
+            target.SetTurretPos(slot < PatrolMarker.VehicleTurretSlots ? slot : slot - PatrolMarker.VehicleTurretSlots, new[] { Round(p.x), Round(p.y), Round(p.z) });
             EditorStore.AtomicWrite(t.SourcePath, file.ToJson());
             CarTemplates.Refresh(true);
             return "turret " + (slot + 1) + " spot " + Apocapatrol.Rider.FormatV3(p) + " saved into " + System.IO.Path.GetFileName(t.SourcePath);

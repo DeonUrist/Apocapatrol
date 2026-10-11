@@ -11,7 +11,7 @@ namespace Apocapatrol
     {
         private const float Step = 0.05f, Range = 80f;
         private GameObject _car;
-        private readonly GameObject[] _spots = new GameObject[3];
+        private readonly GameObject[] _spots = new GameObject[PatrolMarker.TotalTurretSlots];
         private GameObject _nose;
         private int _slot;
         private bool _show = true;
@@ -30,12 +30,12 @@ namespace Apocapatrol
             if (Plugin.TurretSpotEditor == null || !Plugin.TurretSpotEditor.Value) { _car = null; Hide(); return; }
             if (Time.unscaledTime >= _nextFind) { _nextFind = Time.unscaledTime + 0.5f; _car = Nearest(); }
             if (_car == null) { Hide(); return; }
-            if (RiderApi.Anchor(_car, _slot) == null) for (int i = 0; i < 3; i++) if (RiderApi.Anchor(_car, i) != null) { _slot = i; break; }
+            if (RiderApi.Anchor(_car, _slot) == null) for (int i = 0; i < _spots.Length; i++) if (RiderApi.Anchor(_car, i) != null) { _slot = i; break; }
             var anchor = RiderApi.Anchor(_car, _slot);
             if (anchor == null) { Hide(); return; }
             if (_show)
             {
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < _spots.Length; i++)
                 {
                     var a = RiderApi.Anchor(_car, i);
                     if (a == null) { if (_spots[i] != null) _spots[i].SetActive(false); continue; }
@@ -50,8 +50,8 @@ namespace Apocapatrol
             float step = Step * (shift ? 5f : 1f);
             if (Plugin.Pressed(Key.Numpad0))
             {
-                for (int k = 1; k <= 3; k++) { int n = (_slot + k) % 3; if (RiderApi.Anchor(_car, n) != null) { _slot = n; break; } }
-                Say("tweaking turret " + (_slot + 1));
+                for (int k = 1; k <= _spots.Length; k++) { int n = (_slot + k) % _spots.Length; if (RiderApi.Anchor(_car, n) != null) { _slot = n; break; } }
+                Say("tweaking " + SlotLabel(_slot));
             }
             if (Plugin.Pressed(Key.NumpadPeriod)) { _show = !_show; Say(_show ? "markers on" : "markers off"); }
             var d = Vector3.zero;
@@ -103,6 +103,7 @@ namespace Apocapatrol
         }
 
         private void Say(string s) { _status = s; _statusUntil = Time.unscaledTime + 6f; Plugin.Log.LogInfo("Turret spot editor: " + s); }
+        private static string SlotLabel(int slot) { return slot < PatrolMarker.VehicleTurretSlots ? "turret " + (slot + 1) : "trailer turret " + (slot - PatrolMarker.VehicleTurretSlots + 1); }
 
         private void OnGUI()
         {
@@ -112,7 +113,7 @@ namespace Apocapatrol
             var p = anchor.localPosition;
             var who = RiderApi.Rider(_car, _slot);
             string text = "Turret spot editor  " + _car.name + "  [" + RiderApi.TemplateName(_car) + "]\n"
-                + "> turret " + (_slot + 1) + (who != null ? " (" + who.name + ")" : " (gone)") + "  x " + p.x.ToString("0.000") + "  y " + p.y.ToString("0.000") + "  z " + p.z.ToString("0.000") + "\n"
+                + "> " + SlotLabel(_slot) + (who != null ? " (" + who.name + ")" : " (gone)") + "  x " + p.x.ToString("0.000") + "  y " + p.y.ToString("0.000") + "  z " + p.z.ToString("0.000") + "\n"
                 + "numpad 8/2 fwd/back  4/6 left/right  7/9 down/up  (Shift = x5)   0 next turret   5 = save   . = markers"
                 + (Time.unscaledTime < _statusUntil ? "\n" + _status : "");
             var rect = new Rect(Screen.width - 960, 10, 940, 90);
