@@ -38,14 +38,9 @@ public partial class TrailerRunner
                 }
                 guard.GetType().GetMethod("LateUpdate",All).Invoke(guard,null);
                 Check(person.transform.parent==anchor,label+" turret "+(i+1)+" returns to its designated anchor after reactivation");
-                if(!gunner)Check(Vector3.Distance(person.transform.position,anchor.position)<.001f,label+" Warboy "+(i+1)+" feet return from a floating position to the current spot");
-                else
-                {
-                    var hips=(Transform)Get(pose,"_hips"); var body=Get(pose,"_body");
-                    var hipSetting=asm.GetType("Apocapatrol.Plugin").GetField("TurretHipHeight",All).GetValue(null);
-                    float hip=(float)hipSetting.GetType().GetProperty("Value").GetValue(hipSetting,null);
-                    Check(body!=null?Vector3.Distance(person.transform.position,anchor.position)<.001f:hips!=null && Vector3.Distance(hips.position,anchor.position+anchor.up*hip)<.001f,label+" gunner "+(i+1)+" retains its crouch height at the current spot");
-                }
+                var hips=(Transform)Get(pose,"_hips");bool sitting=(bool)Get(pose,"_turretSeated");
+                bool animated=Get(pose,"_body")!=null||(!gunner&&(bool)rider.GetType().GetProperty("AnimatedPose",All).GetValue(rider,null));bool seat=gunner&&(bool)Get(pose,"_turretBike");
+                Check(!sitting||animated?Vector3.Distance(person.transform.position,anchor.position)<.001f:hips!=null&&Vector3.Distance(hips.position,anchor.position+anchor.up*(seat?.08f:PluginDistance("TurretHipHeight")))<.001f,label+" turret "+(i+1)+" retains its "+(sitting?(seat?"seated":"crouched"):"standing")+" height at the current spot");
                 var rb=person.GetComponent<Rigidbody>();
                 Check(rb.isKinematic && Vector3.Distance(rb.position,person.transform.position)<.001f,label+" turret "+(i+1)+" physics pose follows its moved platform");
             }

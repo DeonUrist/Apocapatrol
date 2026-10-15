@@ -1,5 +1,11 @@
 {
+    "riderStanding": false,
+    "riderStanding2": false,
+    "riderStanding3": false,
+    "riderStanding4": false,
+    "faction": "Scrapyard",
     "schema": 2,
+    "explodeChance": 50,
     "name": "Weak_Warboy",
     "body": "PipeRat",
     "kind": "small",

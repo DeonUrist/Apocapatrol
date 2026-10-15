@@ -1,3 +1,141 @@
+# Apocapatrol 2.14.4 prototype
+
+Bus passengers use a separate relaxed seated pose: uncrossed legs and lowered arms.
+Press **Insert** (bindable under **Debug → Bus passenger pose editor key**) near a bus
+passenger to adjust thighs, knees, arms, elbows, wrists and seat position live. Num0 selects
+a joint, Num/ selects both/left/right, Num8/2 bends, Num4/6 swings sideways and Num7/9 twists.
+Shift makes larger adjustments; Num5 saves one shared preset to `BusPassengerPose.json`.
+Drivers and roof/trailer turrets retain their existing poses. See [BUS-PASSENGER-POSE.md](BUS-PASSENGER-POSE.md).
+
+Killing a setup template's driver now unlocks the driving seat. Setup occupants remain inactive
+and the vehicle does not begin driving automatically.
+
+Unchecked **Standing** restores the original crouch for roof and trailer turrets, including
+Warboys and gunners. Apocaplayer crouch/throw animations retain control of the animated legs;
+without those animations, the original squat pose is used. Checked **Standing** keeps the standing pose.
+
+Merchants travel north–south or east–west through the player's vicinity on yellow routes in the
+game debug map, regardless of camps. Both endpoints lie about 100 m beyond the actual map view.
+Incoming Coyote patrols without a camp origin also enter and exit offscreen, while automatic
+incoming patrols still visit a non-Scrapyard POI. **Experimental** settings cap merchants at 0–3, set **Merchant spawn
+chance** to 0–100%, and control the **Merchant check interval (minutes)** (default 5). Each check
+targets max × chance, with a roll for the fractional slot: 50% of 3 gives 1 or 2 routes; 11% of 3
+rolls a 33% chance of 1. Replacement waits for a check; loaded shops finish their visit before
+excess virtual routes are removed. Each shop type can appear only once. Alt+Q within 30 m or a car horn within 100 m
+stops a loaded merchant for five minutes; unloading ends that stop. Merchants never join simulated
+faction battles, but loaded guards can fight nearby raiders while the driver follows its route.
+
+General, Mechanic and Organic shops share one placement layout per vehicle template. Existing General
+positions take priority during migration. Merchant human turrets receive hidden ×4 maximum HP, with
+wounds preserved across unloading and saves. **Spawn template** creates a parked, inactive setup car;
+group **SPAWN** / **S** creates a simulated passing route subject to population caps.
+
+Merchant wanted-list probes are invisible and have no physics or item-spawning behavior. Shop
+objects no longer influence automatic turret positions. If duplicate vehicle files share an
+internal template name, the file matching that name takes precedence within the same folder;
+the log identifies ignored aliases.
+
+Human turrets now have an independent **Standing** checkbox beside each slot in vehicle template
+save and edit windows, including all four trailer slots. Unchecked means sitting and is the default
+for existing templates. Roof/trailer turret anchors are foot positions for crouching and standing.
+
+2.13.0 adds a **Merchants** tab before Loot, with a parked **Coyote merchant** bus and independent
+vanilla General merchant, Mechanic and Organic mechanic choices. Select exactly one shop type;
+choosing another replaces the selection. The separate **Merchant Object
+Spotter** debug DLL edits selling boxes, boards, prices, wanted-name labels and sale-item locations
+inside the vehicle. Stock purchases/sales use vanilla money and interactions; stock, prices and
+layouts survive saving. Shop-type groups can reuse the same bus and shared interior placement.
+See [MERCHANTS.md](MERCHANTS.md) for setup controls.
+
+Incoming **Coyote patrols** reserve up to two slots within Max patrols (at most half, rounded up).
+They require no loaded camps: enter from beyond the unload range, visit a remembered non-Scrapyard
+POI and leave beyond the unload range. POIs are discovered incrementally in existing scenes and
+remembered across saves. A real nearby POI must be discovered before departures; no settlement is
+invented. Their sparse road/elevation waypoints are planned once and reused for both driving and map
+lines. Scrapyard traffic and ordinary convoys still depend on loaded, uncleared raider camps.
+
+Patrol sight is **500 m by day** and **500 m at night with working headlights or an active flashlight**,
+with the existing field of view and obstruction check. Without lights at night, a running engine's
+nominal HP is its hearing range in metres, including at idle; a stopped engine reveals nothing.
+Engine parts and light references share a five-second cache on the player car. Last-known memory
+still lasts the configured PatrolMemorySeconds. Friendly Coyotes continue to respect faction hostility.
+
+Vehicle JSON now remembers `faction`. Drivers, passengers and all vehicle/trailer turret occupants
+must belong to that faction. The editor and template recorder filter crew choices; changing a
+vehicle's faction clears incompatible choices. The right-hand vehicle lists hide incompatible
+templates and sort alphabetically. Group composition and construction reject mixed crews too.
+The faction dropdown now converts scroll coordinates before opening its visible two-choice popup.
+**Gunnar** remains a gunner and retains his name; only Warboy/legacy Scraffa selects blast lances.
+
+Vehicle paint reads `Textures/scrapyard/` (or the `scapyard` spelling) and `Textures/coyotes/`.
+Cargo textures keep their shared root paths. No textures are overwritten during installation.
+
+2.12.0: guards missing LOS targets before the game's sensor dictionary lookup. **Always explode cars**
+defaults OFF and replaces the old explosion/preservation switches. Vehicle templates have an editable
+**ExplodeChance** (JSON `explodeChance`): existing defaults are 50%, except War_rig and Truck_War_Rig at 0%.
+An explosion requires a confirmed driver death and no living seated passengers/turrets. An alive driver
+bailing out prevents explosion, including when Always explode cars is enabled. Player captures remain protected.
+
+Patrol and convoy groups now select **Faction: Scrapyard / Coyotes**. Coyotes respect the game's actual
+player hostility state and fight Scrapyard traffic. Opposed groups meeting within 120 m pause for a battle;
+offscreen fights resolve after 20 seconds by weighted car strength. Surviving vehicles continue their journey.
+On approach, active battles share the configured car cap proportionally to their original roster sizes.
+Casualty sites remain on the game debug map as skulls for five minutes and load wrecks/corpses only nearby.
+NPC Overhaul **1.9.15** accepts faction-aware targets for simple combat AI. See
+[FACTION-BATTLES.md](FACTION-BATTLES.md) for prototype rules and verification limits.
+
+2.11.0: cached coarse elevation guides sparse waypoints around mountains and steep ground. The planner
+evaluates a small fixed set of alternatives on its existing worker; driving and the debug map reuse the
+result. Heights are captured during MapMagic generation and stored beside lazy road hints. Old road
+caches remain readable, with the existing snake fallback where terrain data has not been captured.
+
+**Camp traffic range = 2500 m** counts loaded, uncleared camps near the player. Each supports one patrol
+and one convoy, up to the configured maxima. No nearby camps means no base traffic or convoys; incoming
+Coyote patrols remain possible. Existing
+physical groups finish or unload normally. Confirmed deaths of a completed camp's resident population
+persist as **[Cleared]** on the game debug map and exclude that base from traffic. Empty/unloaded camps
+and live NPC despawns cannot prove a camp was cleared; kills from before tracking are not inferred.
+
+**Real patrol names = ON** uses group names; OFF uses Patrol/Convoy. **hide route type = OFF**; ON makes
+both roles gray and calls them Distant traffic. These settings are under Experimental.
+
+NPC Overhaul **1.9.14** implements the intended simple AI: seated crew skips AI; combat dismounts pursue
+the real player persistently with baked-map navigation, basic obstacle steering and line of sight for
+shooting. There are no ghost targets, forgetting, idle patrols, or sound investigations in this mode.
+The vehicle driver and mounted combat remain controlled by Apocapatrol.
+
+2.10.0: **Experimental** is first in the settings menu. **car spawn limit** defaults on, with
+**Max cars in event = 5** and a shared **Max cars in double event = 6**. Pending builds count toward
+the limit, cargo trucks have priority, and capped older roster slots remain simulated instead of being
+deleted. **Max patrols = 3** and **Max convoys = 1** replace density per kilometre and include arrived groups.
+Reduced driving decision frequency, cheaper travelling obstacle classification and non-allocating sight
+checks. Convoys keep retrying obstacle recovery without abandoning the vehicle or triggering the stuck
+self-destruct path. Schema 11 retains event grouping and convoy role across saves and reads schemas 1–10.
+The standalone minimap has been removed; routes appear only on the game's open debug map.
+
+**simple convoy bandits AI** defaults on and uses NPC Overhaul 1.9.13's optional crew API. This mod's
+drivers, passengers, riders and dismounted raiders retain basic combat and baked-map navigation while
+skipping sound investigations, idle patrols and elaborate tactical routines. Other NPCs use their normal AI.
+
+2.9.1: replaces per-patrol road graph searches with cached sparse waypoints influenced by coarse road
+hints. Road data loads lazily off the game thread; missing data gets a stable snake route. Existing physical
+patrols adopt curved routes too. Both debug maps draw the same cached route with one texture per map.
+Driving uses cached distances and nearby corners; terrain paint recovery and full road graph building are removed.
+
+2.9.0: captures the game's generated road curves, remembers them on disk by world recipe and tile,
+and routes camp traffic through connected roads. Road sections are green on the debug map;
+off-road camp approaches are amber. Driving uses curve lookahead, braking for bends and a convoy
+column measured along the route. Existing saves populate the road cache through normal terrain loading.
+
+2.8.1: fixes traffic map drift and the game's kilometre-scale floating-origin jumps. Camps, routes and
+simulated positions are stored in MapMagic's stable world frame; live driving converts back to current scene coordinates.
+The overview holds its center/zoom until **Fit camps** or **Follow player** is selected.
+
+2.8.0: opt-in persistent patrol/convoy journeys between remembered camps, separate traffic densities,
+near-player materialization and unload/catch-up, debug route maps, patrol sight/engine detection,
+destination-preserving convoy drivers with proximity escorts, and varied attack/camp approaches.
+See [WORLD-TRAFFIC-PROTOTYPE.md](WORLD-TRAFFIC-PROTOTYPE.md) for settings, behaviour and verification limits.
+
 # Apocapatrol 2.7.5
 
 2.7.5: exploded cars retain their original collider friction and Rigidbody drag after losing their wheels.

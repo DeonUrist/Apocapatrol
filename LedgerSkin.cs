@@ -275,8 +275,7 @@ namespace Apocapatrol
             {
                 if (inside)
                 {
-                    int i = Mathf.FloorToInt((e.mousePosition.y - (_box.y + 4) + _scroll.y) / 34f);
-                    if (e.button == 0 && i >= 0 && i < _options.Count) { string key = _options[i].Key; var setter = _setter; _pending = () => { setter(key); Close(); }; }
+                    if(e.button==0)SelectAt(e.mousePosition);
                 }
                 else _pending = Close;
                 e.Use();
@@ -303,6 +302,12 @@ namespace Apocapatrol
                     LedgerSkin.ButtonLabel(new Rect(9, row.y, width - 18, 34), option.Value, LedgerSkin.Body, selected ? LedgerSkin.Accent : LedgerSkin.Text, TextAnchor.MiddleLeft);
                 }
             });
+        }
+        internal bool SelectAt(Vector2 mouse)
+        {
+            if(!IsOpen||!_box.Contains(mouse))return false;
+            int i=Mathf.FloorToInt((mouse.y-(_box.y+4)+_scroll.y)/34f);if(i<0||i>=_options.Count)return false;
+            string key=_options[i].Key;var setter=_setter;_pending=()=>{setter(key);Close();};return true;
         }
         internal void Flush() { if (_pending != null) { var action = _pending; _pending = null; action(); } }
         internal void Close() { _options = null; _pending = null; }

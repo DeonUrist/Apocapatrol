@@ -9,7 +9,7 @@ using UnityEngine.Playables;
 
 namespace Apocapatrol
 {
-    // The blast-lance rider (2.1.0, prototype): a crew human standing on the roof of a raider car (template "rider" + "riderPos"), crouched,
+    // A blast-lance rider sits or stands at its template's turret anchor,
     // who throws the game's blast lance (the blastlance_1_explode projectile the player's lance creates) at the player every few seconds.
     // Animation: Apocaplayer's humanoid clips when that mod is loaded (CrouchIdle looping, Throw as a one-shot) through a PlayableGraph on the
     // mob's own Animator; without Apocaplayer the mob keeps its idle and the lance is thrown without a swing.
@@ -22,10 +22,11 @@ namespace Apocapatrol
         internal const string Warboy = "Warboy", WarboyPrefab = "Scraffa";
         internal const float BikeArc = 55f;   // 2.2.1: on a motorcycle a turret sits straight and turns only its upper body this far left / right
         // what the editors offer: a Warboy (blast lances, "Witness me!") or a ranged crew human (a gunner); "None" first, the rest A-Z
-        internal static readonly string[] TurretChoices = { "None", "Boltjaw", "Flexa", "Lugnut", "Scrud", "Sprokka", Warboy };
+        internal static readonly string[] TurretChoices = { "None", "Boltjaw", "Flexa", "Lugnut", "Scrud", "Sprokka", Warboy, "Bodyguard", "Bolter", "Gunnar", "Lugger", "Mechanic", "Merchant", "Organic_Mechanic", "Pistoleer", "Pup" };
         internal static bool IsGunner(string who) { return !string.IsNullOrEmpty(who) && Array.Exists(PassengerGuard.RangedHumans, n => string.Equals(n, who.Trim(), StringComparison.OrdinalIgnoreCase)); }
         // a stored value as the editors show it: "" = None, a ranged human as is, anything else (Warboy, the 2.1.x "Scraffa") = Warboy
-        internal static string Display(string stored) { return string.IsNullOrEmpty(stored) ? "None" : IsGunner(stored) ? stored.Trim() : Warboy; }
+        internal static bool IsWarboy(string who)=>string.Equals(who,Warboy,StringComparison.OrdinalIgnoreCase)||string.Equals(who,"Scraffa",StringComparison.OrdinalIgnoreCase);
+        internal static string Display(string stored) { return string.IsNullOrEmpty(stored) ? "None" : IsWarboy(stored)?Warboy:stored.Trim(); }
         internal static string Stored(string display) { return string.IsNullOrEmpty(display) || display == "None" ? "" : display; }
         internal static bool IsBikeBody(string body) { return MotorcycleIntegration.IsBody(body) || string.Equals(body, "Halfbreed", StringComparison.OrdinalIgnoreCase); }
         // turret spots a vehicle has: 3 on a car (roof), 1 on a motorcycle, none on a truck
@@ -35,7 +36,7 @@ namespace Apocapatrol
             return motorcycleKind || IsBikeBody(body) ? 1 : 3;
         }
 
-        internal static GameObject Seat(GameObject car, PatrolMarker marker, int slot, string who, float[] localPos, GameObject platform = null)
+        internal static GameObject Seat(GameObject car, PatrolMarker marker, int slot, string who, float[] localPos, GameObject platform = null,bool standing=false)
         {
             if (marker == null || slot < 0 || slot >= marker.Riders.Length) return null;
             if (platform != null) car = platform;
@@ -51,8 +52,10 @@ namespace Apocapatrol
             anchor.localRotation = Quaternion.identity;
 
             var go = UnityEngine.Object.Instantiate(prefab, anchor.position, anchor.rotation);
+            SimpleBanditBridge.Mark(go);
+            TrafficFactions.Actor(go,marker!=null?marker.Faction:"Scrapyard");
             go.SetActive(true);
-            if (gunner) PassengerGuard.Prepare(go, Plugin.RangedCombat.Value);   // ranged-only rewiring, everything but combat muted (before Start)
+            if (gunner) PassengerGuard.Prepare(go, !marker.SetupOnly&&Plugin.RangedCombat.Value);   // setup actors never run combat
             else Crew.MuteAi(go);                  // no mover / detection / attack FSMs: the guard does the throwing
             PassengerGuard.NeutralizeContact(go);  // melee / fire-contact damage FSMs and hitbox off (a passive body that can be shot)
             go.name = prefab.name + "(Rider)";
@@ -67,15 +70,12 @@ namespace Apocapatrol
             go.transform.SetParent(anchor, true);
             marker.Riders[slot] = go; marker.RiderAnchors[slot] = anchor;
             var riderGuard = go.AddComponent<RiderGuard>();
-            riderGuard.Init(car, marker, anchor, prefab.name, slot, gunner, bike);
-            if (gunner)
-            {
-                // a gunner: the passenger's vanilla ranged combat, all around (360), crouched on the roof / seated on a bike
-                var pose = Pose.Apply(go, anchor, prefab.name);
-                PassengerGuard.AttachTurret(go, car, anchor, bike ? BikeArc : 0f);
-                pose.ConfigureTurret(bike);
-            }
-            RiderAnchorGuard.Attach(go, riderGuard, anchor, gunner);
+            riderGuard.Init(car, marker, anchor, prefab.name, slot, gunner, bike,standing);
+            var pose = Pose.Apply(go, anchor, prefab.name);
+            if(gunner)PassengerGuard.AttachTurret(go, car, anchor, bike ? BikeArc : 0f);
+            pose.ConfigureTurret(standing,bike,IsWarboy(who));
+            RiderAnchorGuard.Attach(go, riderGuard, anchor, true);
+            MerchantGuards.Attach(car,go,slot);
             Plugin.Verbose("Human turret " + (slot + 1) + ": " + go.name + (gunner ? " (gunner)" : " (Warboy)") + " on " + car.name + " at local " + anchor.localPosition.ToString("F2"));
             return go;
         }
@@ -112,7 +112,7 @@ namespace Apocapatrol
                 if (r == null || !r.enabled || r.GetType().Name == "ParticleSystemRenderer") continue;
                 bool occupant = false;
                 for (var a = r.transform; a != null && a != ct; a = a.parent)
-                    if (a.name.IndexOf("(Driver)", StringComparison.Ordinal) >= 0 || a.name.IndexOf("(Passenger)", StringComparison.Ordinal) >= 0 || a.name.IndexOf("(Rider)", StringComparison.Ordinal) >= 0 || a.name == "PhysicsLock") { occupant = true; break; }
+                    if (a.name.IndexOf("(Driver)", StringComparison.Ordinal) >= 0 || a.name.IndexOf("(Passenger)", StringComparison.Ordinal) >= 0 || a.name.IndexOf("(Rider)", StringComparison.Ordinal) >= 0 || a.name == "PhysicsLock" || a.name=="Apocapatrol.Merchant") { occupant = true; break; }
                 if (occupant) continue;
                 var wb = r.bounds;
                 for (int i = 0; i < 8; i++)
@@ -157,7 +157,7 @@ namespace Apocapatrol
                 var c = _downHits[i].collider;
                 if (c == null || !c.transform.IsChildOf(ct)) continue;
                 bool occupant = false;
-                for (var a = c.transform; a != null && a != ct; a = a.parent) if (a.name.IndexOf("(", StringComparison.Ordinal) >= 0 && (a.name.EndsWith("(Driver)", StringComparison.Ordinal) || a.name.EndsWith("(Passenger)", StringComparison.Ordinal) || a.name.EndsWith("(Rider)", StringComparison.Ordinal))) { occupant = true; break; }
+                for (var a = c.transform; a != null && a != ct; a = a.parent) if (a.name=="Apocapatrol.Merchant" || (a.name.IndexOf("(", StringComparison.Ordinal) >= 0 && (a.name.EndsWith("(Driver)", StringComparison.Ordinal) || a.name.EndsWith("(Passenger)", StringComparison.Ordinal) || a.name.EndsWith("(Rider)", StringComparison.Ordinal)))) { occupant = true; break; }
                 if (occupant) continue;
                 float y = ct.InverseTransformPoint(_downHits[i].point).y;
                 if (y > best) best = y;
@@ -366,9 +366,13 @@ namespace Apocapatrol
         private readonly float[] _w = new float[4];
         private Mode _mode = Mode.Riding;
         private int _slot; private bool _gunner, _bike;   // 2.2.0: turret spot 0..2, a gunner (PassengerGuard shoots, Pose crouches / seats), on a motorcycle
+        private bool _standing;
+        internal bool StandingPose=>_standing||(_bike&&_standAt>=0f);
+        internal bool AnimatedPose=>(_body!=null&&PlayerAnims.Alive(_body))||_graphOk;
+        internal void MaxHealth(float health){_maxHealth=Mathf.Max(_maxHealth,health);}
         private float _standAt = -1f;                      // a Warboy on a bike stands up (crouch -> stand blend) before the leap
         private float _nextIgnore, _outOfArc;
-        internal bool IsWarboy { get { return !_gunner && (_mode == Mode.Riding || _mode == Mode.Throwing || _mode == Mode.Witness); } }
+        internal bool IsWarboy { get { return !_gunner && string.Equals(_prefab,Rider.WarboyPrefab,StringComparison.OrdinalIgnoreCase) && (_mode == Mode.Riding || _mode == Mode.Throwing || _mode == Mode.Witness); } }
         internal bool Mounted { get { return (_mode == Mode.Riding || _mode == Mode.Throwing || _mode == Mode.Witness) && Alive(); } }
         private AnimationClipPlayable _stand;
         private bool _released, _inClose, _kamikazeArmed;
@@ -386,9 +390,10 @@ namespace Apocapatrol
         private const float AfterScream = 0.35f;       // pause between the end of "Witness me!" and the leap, s - the player's chance to get away
         private float _windUp = 1.85f;
 
-        internal void Init(GameObject car, PatrolMarker marker, Transform anchor, string prefab, int slot, bool gunner, bool bike)
+        internal void Init(GameObject car, PatrolMarker marker, Transform anchor, string prefab, int slot, bool gunner, bool bike,bool standing)
         {
             _car = car; _marker = marker; _anchor = anchor; _prefab = prefab; _slot = slot; _gunner = gunner; _bike = bike;
+            _standing=standing;
             _carRb = car.GetComponent<Rigidbody>();
             _health = GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.FsmName == "Health");
             _nextThrow = Time.time + UnityEngine.Random.Range(2f, 4f);
@@ -398,7 +403,7 @@ namespace Apocapatrol
             _carCols = car.GetComponentsInChildren<Collider>(true);
             _myCols = GetComponentsInChildren<Collider>(true);
             _side = Vector3.Dot(anchor.position - car.transform.position, car.transform.right) >= 0f ? 1f : (UnityEngine.Random.value < 0.5f ? -1f : 1f);
-            if (_gunner) return;   // a gunner keeps its gun and its own animator; Pose + PassengerGuard do the rest
+            if (_gunner||!string.Equals(prefab,Rider.WarboyPrefab,StringComparison.OrdinalIgnoreCase)) return;
             HideOwnWeapons();
             BuildGraph();
             BuildLance();
@@ -414,14 +419,14 @@ namespace Apocapatrol
                 if (_body != null)
                 {
                     _throwLen = PlayerAnims.ThrowSeconds();
-                    PlayerAnims.Set(_body, true, false, false, 0f);
-                    Plugin.Verbose("Rider: " + name + " animated by Apocaplayer's ModAPI (crouched, throw " + _throwLen.ToString("0.00") + " s)");
+                    PlayerAnims.Set(_body, !StandingPose, false, false, 0f);
+                    Plugin.Verbose("Rider: " + name + " animated by Apocaplayer's ModAPI ("+(StandingPose?"standing":"crouched")+", throw " + _throwLen.ToString("0.00") + " s)");
                     return;
                 }
             }
             try
             {
-                var idle = Rider.Clip("CrouchIdle") ?? Rider.Clip("RifleCrouchIdle") ?? Rider.Clip("Idle");
+                var idle = _standing ? Rider.Clip("Idle") ?? Rider.Clip("RifleIdle") : Rider.Clip("CrouchIdle") ?? Rider.Clip("RifleCrouchIdle") ?? Rider.Clip("Idle");
                 var thr = Rider.Clip("Throw");
                 var jump = Rider.Clip("Jump");
                 var stand = Rider.Clip("Idle");
@@ -461,7 +466,7 @@ namespace Apocapatrol
         private void Blend(int target, float seconds)
         {
             // ModAPI: crouched while riding / throwing (the throw is on the upper body), standing (3), in the air (2) - its own blends
-            if (_body != null) { PlayerAnims.Set(_body, target == 0 || target == 1, false, target == 2, 0f); return; }
+            if (_body != null) { PlayerAnims.Set(_body, !StandingPose&&(target==0||target==1), false, target == 2, 0f); return; }
             if (!_graphOk) return;
             float step = Time.deltaTime / Mathf.Max(0.01f, seconds);
             for (int i = 0; i < 4; i++) { _w[i] = Mathf.MoveTowards(_w[i], i == target ? 1f : 0f, step); _mixer.SetInputWeight(i, _w[i]); }
@@ -523,12 +528,13 @@ namespace Apocapatrol
             if (Time.time >= _nextIgnore) { _nextIgnore = Time.time + 1f; Patrol.IgnoreCollisionsIfChanged(gameObject, _car, _carCols); }
 
             // the player took this car, or it blew up: off the roof
+            if(_marker?.SetupOnly==true)return;
             if (PlayerRef.PlayerCar == _car || (_marker != null && PlayerRef.PlayerCar == _marker.gameObject)) { JumpOff("the player took the car"); return; }
             if (_slot >= PatrolMarker.VehicleTurretSlots && (_marker == null || !TrailerSupport.Connected(_marker.gameObject, _car))) { JumpOff("the trailer detached"); return; }
-            if (_gunner) return;   // a gunner's fight is PassengerGuard's (vanilla ranged combat, all around)
+            if (_gunner||!string.Equals(_prefab,Rider.WarboyPrefab,StringComparison.OrdinalIgnoreCase)) return;
 
             Vector3 tpos, tvel; GameObject tcar;
-            bool has = PlayerRef.Target(out tpos, out tvel, out tcar) && !PlayerRef.GodMode;   // a god-mode player is not a target
+            bool has = TrafficFactions.DriveTarget(_car,out tpos,out tvel,out tcar) && !PlayerRef.GodMode && WorldTraffic.CombatAllowed(_marker != null ? _marker.gameObject : _car);
             var to = tpos - transform.position; to.y = 0f;
             float dist = has ? to.magnitude : 9999f;
             if (!has && _mode == Mode.Witness) { _mode = Mode.Riding; _standAt = -1f; }
@@ -809,6 +815,8 @@ namespace Apocapatrol
             if (prefab != null)
             {
                 var mob = UnityEngine.Object.Instantiate(prefab, at, Quaternion.Euler(0f, transform.eulerAngles.y, 0f));
+                SimpleBanditBridge.Fight(mob);
+                TrafficFactions.Dismount(mob,_car);
                 mob.SetActive(true);
                 Register.Name(mob, prefab.name); Register.Add(mob, false);
                 if (health > 0f) { Patrol.SetHealth(mob, health); mob.AddComponent<Patrol.LateHealth>().Value = health; }
@@ -851,6 +859,8 @@ namespace Apocapatrol
             if (prefab != null)
             {
                 var mob = UnityEngine.Object.Instantiate(prefab, at + Vector3.up * 0.5f, Quaternion.Euler(0f, transform.eulerAngles.y, 0f));
+                SimpleBanditBridge.Fight(mob);
+                TrafficFactions.Dismount(mob,_car);
                 mob.SetActive(true);
                 var col = mob.GetComponent<Collider>();
                 if (col != null) mob.transform.position += Vector3.up * (at.y + 0.15f - col.bounds.min.y);

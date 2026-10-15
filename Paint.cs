@@ -69,9 +69,11 @@ namespace Apocapatrol
             int n = 0;
             try
             {
-                foreach (var path in Directory.GetFiles(_dir, "*.png"))
+                bool factions=Directory.Exists(Path.Combine(_dir,"scrapyard"))||Directory.Exists(Path.Combine(_dir,"scapyard"))||Directory.Exists(Path.Combine(_dir,"coyotes"));
+                foreach (var path in Directory.GetFiles(_dir, "*.png",SearchOption.AllDirectories))
                 {
-                    string name = Path.GetFileNameWithoutExtension(path);
+                    string name = path.Substring(_dir.Length+1);name=name.Substring(0,name.Length-4).Replace('\\','/');
+                    if(factions&&!name.Contains("/")&&!name.StartsWith("cargo",StringComparison.OrdinalIgnoreCase))continue;
                     if (name.EndsWith("_uv_layout", StringComparison.OrdinalIgnoreCase) || name.EndsWith("_uv_over_texture", StringComparison.OrdinalIgnoreCase)) continue;
                     if (Load(name) != null) n++;
                 }
@@ -80,15 +82,16 @@ namespace Apocapatrol
             Plugin.Log.LogInfo("Paint: " + n + " texture(s) preloaded in " + sw.ElapsedMilliseconds + " ms");
         }
 
-        internal static void Apply(GameObject car, string body)
+        internal static void Apply(GameObject car, string body,string faction=null)
         {
             if (car == null || !Enabled || _dir == null || !Directory.Exists(_dir)) return;
+            faction=faction??car.GetComponent<PatrolMarker>()?.Faction??"Scrapyard";
             int n = 0;
             string bodyTexName = null, bodyFile = null; Texture2D bodyTex = null;
             if (!string.IsNullOrEmpty(body) && BodyTexture.TryGetValue(body, out bodyTexName))
             {
                 bodyFile = body.ToLowerInvariant();
-                bodyTex = Load(bodyFile);
+                bodyTex = VehicleTexture(bodyFile,faction);
             }
             Dictionary<string, string> meshFiles = null;
             if (!string.IsNullOrEmpty(body)) MeshFiles.TryGetValue(body, out meshFiles);
@@ -101,7 +104,7 @@ namespace Apocapatrol
                     if (meshFiles != null)
                     {
                         var mf = r.GetComponent<MeshFilter>();
-                        if (mf != null && mf.sharedMesh != null && meshFiles.TryGetValue(mf.sharedMesh.name, out meshFile)) meshTex = Load(meshFile);
+                        if (mf != null && mf.sharedMesh != null && meshFiles.TryGetValue(mf.sharedMesh.name, out meshFile)) meshTex = VehicleTexture(meshFile,faction);
                     }
                     var mats = r.sharedMaterials;
                     for (int i = 0; i < mats.Length; i++)
@@ -111,7 +114,7 @@ namespace Apocapatrol
                         Texture2D tex = null;
                         if (meshTex != null) tex = meshTex;
                         else if (bodyTex != null && m.mainTexture != null && m.mainTexture.name == bodyTexName) tex = bodyTex;
-                        else if (m.mainTexture != null) tex = Load(m.mainTexture.name);
+                        else if (m.mainTexture != null) tex = VehicleTexture(m.mainTexture.name,faction);
                         if (tex == null) continue;
                         r.GetPropertyBlock(Block, i);
                         Block.SetTexture(MainTexId, tex);
@@ -332,7 +335,7 @@ namespace Apocapatrol
             for (var a = t; a != null && a != car.transform; a = a.parent)
                 if (a.CompareTag("vehPart") || a.GetComponent<Crew>() != null || a.name.IndexOf("(Driver)", StringComparison.Ordinal) >= 0
                     || a.name.IndexOf("(Passenger)", StringComparison.Ordinal) >= 0 || a.name.IndexOf("_Dead", StringComparison.Ordinal) >= 0
-                    || a.name == "PhysicsLock") return false;
+                    || a.name == "PhysicsLock"||a.name=="Apocapatrol.Merchant") return false;
             return true;
         }
 
@@ -376,6 +379,15 @@ namespace Apocapatrol
             return string.Join("/", parts.ToArray());
         }
 
+        internal static string VehicleTextureKey(string name,string faction)
+        {
+            if(name.StartsWith("cargo",StringComparison.OrdinalIgnoreCase))return name;
+            string folder=TrafficFactions.Normalize(faction)=="Coyotes"?"coyotes":"scrapyard";
+            if(folder=="scrapyard"&&!Directory.Exists(Path.Combine(_dir,folder))&&Directory.Exists(Path.Combine(_dir,"scapyard")))folder="scapyard";
+            bool scoped=Directory.Exists(Path.Combine(_dir,"coyotes"))||Directory.Exists(Path.Combine(_dir,"scrapyard"))||Directory.Exists(Path.Combine(_dir,"scapyard"));
+            return scoped?folder+"/"+name:name;
+        }
+        private static Texture2D VehicleTexture(string name,string faction)=>Load(VehicleTextureKey(name,faction));
         private static Texture2D Load(string name)
         {
             Texture2D t;

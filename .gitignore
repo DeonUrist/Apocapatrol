@@ -14,3 +14,11 @@ verification/runtime/
 verification/results/
 verification/runtime-warrig/
 verification/results-warrig/
+verification/runtime-traffic/
+verification/results-traffic/
+verification/runtime-roadperf/
+verification/results-roadperf/
+verification/runtime-merchant/
+verification/results-merchant/
+verification/runtime-pose/
+verification/results-pose/

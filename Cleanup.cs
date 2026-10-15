@@ -42,6 +42,8 @@ namespace Apocapatrol
             foreach (var m in all)
             {
                 if (m == null) continue;
+                if (WorldTraffic.Owns(m)) continue; // traffic unloads its own representations while retaining world records
+                if(WorldTraffic.IsBattleCar(m.gameObject))continue;
                 // a self-destructed chassis goes as soon as the player is far enough away to not see it (regardless of the timer and the cap)
                 if (m.Exploded)
                 {

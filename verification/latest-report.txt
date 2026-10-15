@@ -1,0 +1,450 @@
+Apocapatrol 2.7.3 defaults verification
+
+PASS: Vanilla vehicle remains available
+PASS: Exact lookup distinguishes the Trailer_Small frame from its trailer_small mesh
+PASS: A registered runtime vehicle is available without a Factory convention
+PASS: Unloaded custom frame is unavailable without rejecting its JSON
+PASS: Availability never substitutes a partial vanilla name for a missing mod prefab
+PASS: Missing fitted part disables its entire template
+PASS: WarRig is a runtime template excluded from vanilla asset scans
+PASS: WarRig loaded: exact and spawn lookup share the foreign factory prefab
+PASS: WarRig loaded: saved towing template is available and included in patrols
+PASS: WarRig loaded: production builder creates towing vehicle
+PASS: WarRig loaded: production builder attaches custom trailer
+PASS: WarRig turret 4 animation remains evaluated offscreen
+PASS: WarRig turret 4 returns to its designated anchor after reactivation
+PASS: WarRig Warboy 4 feet return from a floating position to the current spot
+PASS: WarRig turret 4 physics pose follows its moved platform
+PASS: WarRig turret 5 animation remains evaluated offscreen
+PASS: WarRig turret 5 returns to its designated anchor after reactivation
+PASS: WarRig gunner 5 retains its crouch height at the current spot
+PASS: WarRig turret 5 physics pose follows its moved platform
+PASS: WarRig turret 6 animation remains evaluated offscreen
+PASS: WarRig turret 6 returns to its designated anchor after reactivation
+PASS: WarRig gunner 6 retains its crouch height at the current spot
+PASS: WarRig turret 6 physics pose follows its moved platform
+PASS: WarRig turret 7 animation remains evaluated offscreen
+PASS: WarRig turret 7 returns to its designated anchor after reactivation
+PASS: WarRig Warboy 7 feet return from a floating position to the current spot
+PASS: WarRig turret 7 physics pose follows its moved platform
+PASS: WarRig reactivation preserves every custom spot coordinate
+PASS: Exporter resolves WarRig through the foreign factory
+PASS: Production Save template writes WarRig with all six fitted wheels
+PASS: Exported WarRig template reloads as available
+PASS: An unloaded custom trailer disables its towing template
+PASS: Shipped template round trip including trailer data: Big_Tyrant
+PASS: Shipped template availability follows loaded mods: Big_Tyrant
+PASS: Shipped template round trip including trailer data: Bike
+PASS: Shipped template availability follows loaded mods: Bike
+PASS: Shipped template round trip including trailer data: Bike_with_Rider_Flexa
+PASS: Shipped template availability follows loaded mods: Bike_with_Rider_Flexa
+PASS: Shipped template round trip including trailer data: Bike_with_Rider_Scrud
+PASS: Shipped template availability follows loaded mods: Bike_with_Rider_Scrud
+PASS: Shipped template round trip including trailer data: Blast_Bike
+PASS: Shipped template availability follows loaded mods: Blast_Bike
+PASS: Shipped template round trip including trailer data: Chariot
+PASS: Shipped template availability follows loaded mods: Chariot
+PASS: Shipped template round trip including trailer data: Example_PipeRat
+PASS: Shipped template availability follows loaded mods: Example_PipeRat
+PASS: Shipped template round trip including trailer data: Fast_Blast_Bike
+PASS: Shipped template availability follows loaded mods: Fast_Blast_Bike
+PASS: Shipped template round trip including trailer data: Junker_Advanced
+PASS: Shipped template availability follows loaded mods: Junker_Advanced
+PASS: Shipped template round trip including trailer data: Junker_Basic
+PASS: Shipped template availability follows loaded mods: Junker_Basic
+PASS: Shipped template round trip including trailer data: Junker_Warboy
+PASS: Shipped template availability follows loaded mods: Junker_Warboy
+PASS: Shipped template round trip including trailer data: Piperat_Bandit
+PASS: Shipped template availability follows loaded mods: Piperat_Bandit
+PASS: Shipped template round trip including trailer data: PipeRat_Basic
+PASS: Shipped template availability follows loaded mods: PipeRat_Basic
+PASS: Shipped template round trip including trailer data: Piperat_Scout
+PASS: Shipped template availability follows loaded mods: Piperat_Scout
+PASS: Shipped template round trip including trailer data: Porcupine
+PASS: Shipped template availability follows loaded mods: Porcupine
+PASS: Shipped template round trip including trailer data: Rustcargo_Loot
+PASS: Shipped template availability follows loaded mods: Rustcargo_Loot
+PASS: Shipped template round trip including trailer data: Rustcargo_Loot_Advanced
+PASS: Shipped template availability follows loaded mods: Rustcargo_Loot_Advanced
+PASS: Shipped template round trip including trailer data: Spikeback_Motorcycle
+PASS: Shipped template availability follows loaded mods: Spikeback_Motorcycle
+PASS: Shipped template round trip including trailer data: Tiny_Tyrant
+PASS: Shipped template availability follows loaded mods: Tiny_Tyrant
+PASS: Shipped template round trip including trailer data: Truck_War_Rig
+PASS: Shipped template availability follows loaded mods: Truck_War_Rig
+PASS: Shipped template round trip including trailer data: Vulture_Gunner
+PASS: Shipped template availability follows loaded mods: Vulture_Gunner
+PASS: Shipped template round trip including trailer data: Warboy_Armored_Tyrant
+PASS: Shipped template availability follows loaded mods: Warboy_Armored_Tyrant
+PASS: Shipped template round trip including trailer data: Warboy_Bike
+PASS: Shipped template availability follows loaded mods: Warboy_Bike
+PASS: Shipped template round trip including trailer data: Warboy_Tyrant
+PASS: Shipped template availability follows loaded mods: Warboy_Tyrant
+PASS: Shipped template round trip including trailer data: Warboy_Vulture
+PASS: Shipped template availability follows loaded mods: Warboy_Vulture
+PASS: Shipped template round trip including trailer data: War_rig
+PASS: Shipped template availability follows loaded mods: War_rig
+PASS: Shipped template round trip including trailer data: Weak_Warboy
+PASS: Shipped template availability follows loaded mods: Weak_Warboy
+PASS: Captured Truck_War_Rig is an embedded protected default
+PASS: Embedded default preserves all four saved turret coordinates and crew
+PASS: Embedded Truck War Rig patrol retains the captured roster and unlock/chance settings
+PASS: Trailer_Small JSON retains all four turret names and spots
+PASS: Trailer_Small loader accepts trailer data
+PASS: Trailer_Small full production coroutine builds towing vehicle
+PASS: Trailer_Small full build connects correct trailer prefab
+PASS: Trailer_Small full build fits both trailer wheels
+PASS: Trailer_Small native joint motions and connected body
+PASS: Trailer_Small hitch and attacher anchors align
+PASS: Trailer_Small native attach variables are populated
+PASS: Trailer_Small native support leg and rear bumper are hidden
+PASS: Trailer_Small vehicle turret limits and all four trailer turrets spawn independently
+PASS: Trailer_Small turret 1 uses trailer-local saved spot
+PASS: Trailer_Small turret 2 uses trailer-local saved spot
+PASS: Trailer_Small turret 3 uses trailer-local saved spot
+PASS: Trailer_Small turret 4 uses trailer-local saved spot
+PASS: Trailer_Small both complete vehicles leave deferred save registration
+PASS: Trailer_Small both frames enter native save registry
+PASS: Trailer_Small exporter records fitted wheels and excludes human turrets
+PASS: Trailer_Small fourth spot API writes trailer and preserves car turret
+PASS: Trailer_Small editor changes trailer crew without losing parts or positions
+PASS: Trailer_Small turret 1 animation remains evaluated offscreen
+PASS: Trailer_Small turret 1 returns to its designated anchor after reactivation
+PASS: Trailer_Small Warboy 1 feet return from a floating position to the current spot
+PASS: Trailer_Small turret 1 physics pose follows its moved platform
+PASS: Trailer_Small turret 2 animation remains evaluated offscreen
+PASS: Trailer_Small turret 2 returns to its designated anchor after reactivation
+PASS: Trailer_Small gunner 2 retains its crouch height at the current spot
+PASS: Trailer_Small turret 2 physics pose follows its moved platform
+PASS: Trailer_Small turret 3 animation remains evaluated offscreen
+PASS: Trailer_Small turret 3 returns to its designated anchor after reactivation
+PASS: Trailer_Small gunner 3 retains its crouch height at the current spot
+PASS: Trailer_Small turret 3 physics pose follows its moved platform
+PASS: Trailer_Small turret 4 animation remains evaluated offscreen
+PASS: Trailer_Small turret 4 returns to its designated anchor after reactivation
+PASS: Trailer_Small Warboy 4 feet return from a floating position to the current spot
+PASS: Trailer_Small turret 4 physics pose follows its moved platform
+PASS: Trailer_Small turret 5 animation remains evaluated offscreen
+PASS: Trailer_Small turret 5 returns to its designated anchor after reactivation
+PASS: Trailer_Small gunner 5 retains its crouch height at the current spot
+PASS: Trailer_Small turret 5 physics pose follows its moved platform
+PASS: Trailer_Small turret 6 animation remains evaluated offscreen
+PASS: Trailer_Small turret 6 returns to its designated anchor after reactivation
+PASS: Trailer_Small gunner 6 retains its crouch height at the current spot
+PASS: Trailer_Small turret 6 physics pose follows its moved platform
+PASS: Trailer_Small turret 7 animation remains evaluated offscreen
+PASS: Trailer_Small turret 7 returns to its designated anchor after reactivation
+PASS: Trailer_Small gunner 7 retains its crouch height at the current spot
+PASS: Trailer_Small turret 7 physics pose follows its moved platform
+PASS: Trailer_Small reactivation preserves every custom spot coordinate
+PASS: Trailer_Small native ES3 serializes both frames with original trailer prefab identity
+PASS: Trailer_Small native ES3 recreates both independent prefab frames
+PASS: Trailer_Small native TrailerLoad reconnects reconstructed frames through its hitch raycast
+PASS: Trailer_Small cleanup removes towing vehicle and attached trailer together
+PASS: Trailer_Big JSON retains all four turret names and spots
+PASS: Trailer_Big loader accepts trailer data
+PASS: Trailer_Big full production coroutine builds towing vehicle
+PASS: Trailer_Big full build connects correct trailer prefab
+PASS: Trailer_Big full build fits both trailer wheels
+PASS: Trailer_Big native joint motions and connected body
+PASS: Trailer_Big hitch and attacher anchors align
+PASS: Trailer_Big native attach variables are populated
+PASS: Trailer_Big native support leg and rear bumper are hidden
+PASS: Trailer_Big vehicle turret limits and all four trailer turrets spawn independently
+PASS: Trailer_Big turret 1 uses trailer-local saved spot
+PASS: Trailer_Big turret 2 uses trailer-local saved spot
+PASS: Trailer_Big turret 3 uses trailer-local saved spot
+PASS: Trailer_Big turret 4 uses trailer-local saved spot
+PASS: Trailer_Big both complete vehicles leave deferred save registration
+PASS: Trailer_Big both frames enter native save registry
+PASS: Trailer_Big exporter records fitted wheels and excludes human turrets
+PASS: Trailer_Big fourth spot API writes trailer and preserves car turret
+PASS: Trailer_Big editor changes trailer crew without losing parts or positions
+PASS: Trailer_Big turret 1 animation remains evaluated offscreen
+PASS: Trailer_Big turret 1 returns to its designated anchor after reactivation
+PASS: Trailer_Big Warboy 1 feet return from a floating position to the current spot
+PASS: Trailer_Big turret 1 physics pose follows its moved platform
+PASS: Trailer_Big turret 2 animation remains evaluated offscreen
+PASS: Trailer_Big turret 2 returns to its designated anchor after reactivation
+PASS: Trailer_Big gunner 2 retains its crouch height at the current spot
+PASS: Trailer_Big turret 2 physics pose follows its moved platform
+PASS: Trailer_Big turret 3 animation remains evaluated offscreen
+PASS: Trailer_Big turret 3 returns to its designated anchor after reactivation
+PASS: Trailer_Big gunner 3 retains its crouch height at the current spot
+PASS: Trailer_Big turret 3 physics pose follows its moved platform
+PASS: Trailer_Big turret 4 animation remains evaluated offscreen
+PASS: Trailer_Big turret 4 returns to its designated anchor after reactivation
+PASS: Trailer_Big Warboy 4 feet return from a floating position to the current spot
+PASS: Trailer_Big turret 4 physics pose follows its moved platform
+PASS: Trailer_Big turret 5 animation remains evaluated offscreen
+PASS: Trailer_Big turret 5 returns to its designated anchor after reactivation
+PASS: Trailer_Big gunner 5 retains its crouch height at the current spot
+PASS: Trailer_Big turret 5 physics pose follows its moved platform
+PASS: Trailer_Big turret 6 animation remains evaluated offscreen
+PASS: Trailer_Big turret 6 returns to its designated anchor after reactivation
+PASS: Trailer_Big gunner 6 retains its crouch height at the current spot
+PASS: Trailer_Big turret 6 physics pose follows its moved platform
+PASS: Trailer_Big turret 7 animation remains evaluated offscreen
+PASS: Trailer_Big turret 7 returns to its designated anchor after reactivation
+PASS: Trailer_Big gunner 7 retains its crouch height at the current spot
+PASS: Trailer_Big turret 7 physics pose follows its moved platform
+PASS: Trailer_Big reactivation preserves every custom spot coordinate
+PASS: Trailer_Big native ES3 serializes both frames with original trailer prefab identity
+PASS: Trailer_Big native ES3 recreates both independent prefab frames
+PASS: Trailer_Big native TrailerLoad reconnects reconstructed frames through its hitch raycast
+PASS: Trailer_Big cleanup removes towing vehicle and attached trailer together
+PASS: Scrapwagon JSON retains all four turret names and spots
+PASS: Scrapwagon loader accepts trailer data
+PASS: Scrapwagon full production coroutine builds towing vehicle
+PASS: Scrapwagon full build connects correct trailer prefab
+PASS: Scrapwagon full build fits both trailer wheels
+PASS: Scrapwagon native joint motions and connected body
+PASS: Scrapwagon hitch and attacher anchors align
+PASS: Scrapwagon native attach variables are populated
+PASS: Scrapwagon native support leg and rear bumper are hidden
+PASS: Scrapwagon vehicle turret limits and all four trailer turrets spawn independently
+PASS: Scrapwagon turret 1 uses trailer-local saved spot
+PASS: Scrapwagon turret 2 uses trailer-local saved spot
+PASS: Scrapwagon turret 3 uses trailer-local saved spot
+PASS: Scrapwagon turret 4 uses trailer-local saved spot
+PASS: Scrapwagon both complete vehicles leave deferred save registration
+PASS: Scrapwagon both frames enter native save registry
+PASS: Scrapwagon exporter records fitted wheels and excludes human turrets
+PASS: Scrapwagon fourth spot API writes trailer and preserves car turret
+PASS: Scrapwagon editor changes trailer crew without losing parts or positions
+PASS: Scrapwagon turret 4 animation remains evaluated offscreen
+PASS: Scrapwagon turret 4 returns to its designated anchor after reactivation
+PASS: Scrapwagon Warboy 4 feet return from a floating position to the current spot
+PASS: Scrapwagon turret 4 physics pose follows its moved platform
+PASS: Scrapwagon turret 5 animation remains evaluated offscreen
+PASS: Scrapwagon turret 5 returns to its designated anchor after reactivation
+PASS: Scrapwagon gunner 5 retains its crouch height at the current spot
+PASS: Scrapwagon turret 5 physics pose follows its moved platform
+PASS: Scrapwagon turret 6 animation remains evaluated offscreen
+PASS: Scrapwagon turret 6 returns to its designated anchor after reactivation
+PASS: Scrapwagon gunner 6 retains its crouch height at the current spot
+PASS: Scrapwagon turret 6 physics pose follows its moved platform
+PASS: Scrapwagon turret 7 animation remains evaluated offscreen
+PASS: Scrapwagon turret 7 returns to its designated anchor after reactivation
+PASS: Scrapwagon gunner 7 retains its crouch height at the current spot
+PASS: Scrapwagon turret 7 physics pose follows its moved platform
+PASS: Scrapwagon reactivation preserves every custom spot coordinate
+PASS: Scrapwagon native ES3 serializes both frames with original trailer prefab identity
+PASS: Scrapwagon native ES3 recreates both independent prefab frames
+PASS: Scrapwagon native TrailerLoad reconnects reconstructed frames through its hitch raycast
+PASS: Scrapwagon cleanup removes towing vehicle and attached trailer together
+PASS: Existing truck, bike and car slot limits remain unchanged
+
+PASS: Vanilla vehicle remains available
+PASS: Exact lookup distinguishes the Trailer_Small frame from its trailer_small mesh
+PASS: A registered runtime vehicle is available without a Factory convention
+PASS: Unloaded custom frame is unavailable without rejecting its JSON
+PASS: Availability never substitutes a partial vanilla name for a missing mod prefab
+PASS: Missing fitted part disables its entire template
+PASS: WarRig absent: saved towing template stays loaded and unavailable
+PASS: WarRig absent: patrol skips unavailable entry and uses its fallback
+PASS: WarRig absent: convoy skips unavailable escort and keeps its truck fallback
+PASS: WarRig absent: saved template file remains unchanged
+PASS: An unloaded custom trailer disables its towing template
+PASS: Shipped template round trip including trailer data: Big_Tyrant
+PASS: Shipped template availability follows loaded mods: Big_Tyrant
+PASS: Shipped template round trip including trailer data: Bike
+PASS: Shipped template availability follows loaded mods: Bike
+PASS: Shipped template round trip including trailer data: Bike_with_Rider_Flexa
+PASS: Shipped template availability follows loaded mods: Bike_with_Rider_Flexa
+PASS: Shipped template round trip including trailer data: Bike_with_Rider_Scrud
+PASS: Shipped template availability follows loaded mods: Bike_with_Rider_Scrud
+PASS: Shipped template round trip including trailer data: Blast_Bike
+PASS: Shipped template availability follows loaded mods: Blast_Bike
+PASS: Shipped template round trip including trailer data: Chariot
+PASS: Shipped template availability follows loaded mods: Chariot
+PASS: Shipped template round trip including trailer data: Example_PipeRat
+PASS: Shipped template availability follows loaded mods: Example_PipeRat
+PASS: Shipped template round trip including trailer data: Fast_Blast_Bike
+PASS: Shipped template availability follows loaded mods: Fast_Blast_Bike
+PASS: Shipped template round trip including trailer data: Junker_Advanced
+PASS: Shipped template availability follows loaded mods: Junker_Advanced
+PASS: Shipped template round trip including trailer data: Junker_Basic
+PASS: Shipped template availability follows loaded mods: Junker_Basic
+PASS: Shipped template round trip including trailer data: Junker_Warboy
+PASS: Shipped template availability follows loaded mods: Junker_Warboy
+PASS: Shipped template round trip including trailer data: Piperat_Bandit
+PASS: Shipped template availability follows loaded mods: Piperat_Bandit
+PASS: Shipped template round trip including trailer data: PipeRat_Basic
+PASS: Shipped template availability follows loaded mods: PipeRat_Basic
+PASS: Shipped template round trip including trailer data: Piperat_Scout
+PASS: Shipped template availability follows loaded mods: Piperat_Scout
+PASS: Shipped template round trip including trailer data: Porcupine
+PASS: Shipped template availability follows loaded mods: Porcupine
+PASS: Shipped template round trip including trailer data: Rustcargo_Loot
+PASS: Shipped template availability follows loaded mods: Rustcargo_Loot
+PASS: Shipped template round trip including trailer data: Rustcargo_Loot_Advanced
+PASS: Shipped template availability follows loaded mods: Rustcargo_Loot_Advanced
+PASS: Shipped template round trip including trailer data: Spikeback_Motorcycle
+PASS: Shipped template availability follows loaded mods: Spikeback_Motorcycle
+PASS: Shipped template round trip including trailer data: Tiny_Tyrant
+PASS: Shipped template availability follows loaded mods: Tiny_Tyrant
+PASS: Shipped template round trip including trailer data: Truck_War_Rig
+PASS: Shipped template availability follows loaded mods: Truck_War_Rig
+PASS: Shipped template round trip including trailer data: Vulture_Gunner
+PASS: Shipped template availability follows loaded mods: Vulture_Gunner
+PASS: Shipped template round trip including trailer data: Warboy_Armored_Tyrant
+PASS: Shipped template availability follows loaded mods: Warboy_Armored_Tyrant
+PASS: Shipped template round trip including trailer data: Warboy_Bike
+PASS: Shipped template availability follows loaded mods: Warboy_Bike
+PASS: Shipped template round trip including trailer data: Warboy_Tyrant
+PASS: Shipped template availability follows loaded mods: Warboy_Tyrant
+PASS: Shipped template round trip including trailer data: Warboy_Vulture
+PASS: Shipped template availability follows loaded mods: Warboy_Vulture
+PASS: Shipped template round trip including trailer data: War_rig
+PASS: Shipped template availability follows loaded mods: War_rig
+PASS: Shipped template round trip including trailer data: Weak_Warboy
+PASS: Shipped template availability follows loaded mods: Weak_Warboy
+PASS: Captured Truck_War_Rig is an embedded protected default
+PASS: Embedded default preserves all four saved turret coordinates and crew
+PASS: Embedded Truck War Rig patrol retains the captured roster and unlock/chance settings
+PASS: Trailer_Small JSON retains all four turret names and spots
+PASS: Trailer_Small loader accepts trailer data
+PASS: Trailer_Small full production coroutine builds towing vehicle
+PASS: Trailer_Small full build connects correct trailer prefab
+PASS: Trailer_Small full build fits both trailer wheels
+PASS: Trailer_Small native joint motions and connected body
+PASS: Trailer_Small hitch and attacher anchors align
+PASS: Trailer_Small native attach variables are populated
+PASS: Trailer_Small native support leg and rear bumper are hidden
+PASS: Trailer_Small vehicle turret limits and all four trailer turrets spawn independently
+PASS: Trailer_Small turret 1 uses trailer-local saved spot
+PASS: Trailer_Small turret 2 uses trailer-local saved spot
+PASS: Trailer_Small turret 3 uses trailer-local saved spot
+PASS: Trailer_Small turret 4 uses trailer-local saved spot
+PASS: Trailer_Small both complete vehicles leave deferred save registration
+PASS: Trailer_Small both frames enter native save registry
+PASS: Trailer_Small exporter records fitted wheels and excludes human turrets
+PASS: Trailer_Small fourth spot API writes trailer and preserves car turret
+PASS: Trailer_Small editor changes trailer crew without losing parts or positions
+PASS: Trailer_Small turret 1 animation remains evaluated offscreen
+PASS: Trailer_Small turret 1 returns to its designated anchor after reactivation
+PASS: Trailer_Small Warboy 1 feet return from a floating position to the current spot
+PASS: Trailer_Small turret 1 physics pose follows its moved platform
+PASS: Trailer_Small turret 2 animation remains evaluated offscreen
+PASS: Trailer_Small turret 2 returns to its designated anchor after reactivation
+PASS: Trailer_Small gunner 2 retains its crouch height at the current spot
+PASS: Trailer_Small turret 2 physics pose follows its moved platform
+PASS: Trailer_Small turret 3 animation remains evaluated offscreen
+PASS: Trailer_Small turret 3 returns to its designated anchor after reactivation
+PASS: Trailer_Small gunner 3 retains its crouch height at the current spot
+PASS: Trailer_Small turret 3 physics pose follows its moved platform
+PASS: Trailer_Small turret 4 animation remains evaluated offscreen
+PASS: Trailer_Small turret 4 returns to its designated anchor after reactivation
+PASS: Trailer_Small Warboy 4 feet return from a floating position to the current spot
+PASS: Trailer_Small turret 4 physics pose follows its moved platform
+PASS: Trailer_Small turret 5 animation remains evaluated offscreen
+PASS: Trailer_Small turret 5 returns to its designated anchor after reactivation
+PASS: Trailer_Small gunner 5 retains its crouch height at the current spot
+PASS: Trailer_Small turret 5 physics pose follows its moved platform
+PASS: Trailer_Small turret 6 animation remains evaluated offscreen
+PASS: Trailer_Small turret 6 returns to its designated anchor after reactivation
+PASS: Trailer_Small gunner 6 retains its crouch height at the current spot
+PASS: Trailer_Small turret 6 physics pose follows its moved platform
+PASS: Trailer_Small turret 7 animation remains evaluated offscreen
+PASS: Trailer_Small turret 7 returns to its designated anchor after reactivation
+PASS: Trailer_Small gunner 7 retains its crouch height at the current spot
+PASS: Trailer_Small turret 7 physics pose follows its moved platform
+PASS: Trailer_Small reactivation preserves every custom spot coordinate
+PASS: Trailer_Small native ES3 serializes both frames with original trailer prefab identity
+PASS: Trailer_Small native ES3 recreates both independent prefab frames
+PASS: Trailer_Small native TrailerLoad reconnects reconstructed frames through its hitch raycast
+PASS: Trailer_Small cleanup removes towing vehicle and attached trailer together
+PASS: Trailer_Big JSON retains all four turret names and spots
+PASS: Trailer_Big loader accepts trailer data
+PASS: Trailer_Big full production coroutine builds towing vehicle
+PASS: Trailer_Big full build connects correct trailer prefab
+PASS: Trailer_Big full build fits both trailer wheels
+PASS: Trailer_Big native joint motions and connected body
+PASS: Trailer_Big hitch and attacher anchors align
+PASS: Trailer_Big native attach variables are populated
+PASS: Trailer_Big native support leg and rear bumper are hidden
+PASS: Trailer_Big vehicle turret limits and all four trailer turrets spawn independently
+PASS: Trailer_Big turret 1 uses trailer-local saved spot
+PASS: Trailer_Big turret 2 uses trailer-local saved spot
+PASS: Trailer_Big turret 3 uses trailer-local saved spot
+PASS: Trailer_Big turret 4 uses trailer-local saved spot
+PASS: Trailer_Big both complete vehicles leave deferred save registration
+PASS: Trailer_Big both frames enter native save registry
+PASS: Trailer_Big exporter records fitted wheels and excludes human turrets
+PASS: Trailer_Big fourth spot API writes trailer and preserves car turret
+PASS: Trailer_Big editor changes trailer crew without losing parts or positions
+PASS: Trailer_Big turret 1 animation remains evaluated offscreen
+PASS: Trailer_Big turret 1 returns to its designated anchor after reactivation
+PASS: Trailer_Big Warboy 1 feet return from a floating position to the current spot
+PASS: Trailer_Big turret 1 physics pose follows its moved platform
+PASS: Trailer_Big turret 2 animation remains evaluated offscreen
+PASS: Trailer_Big turret 2 returns to its designated anchor after reactivation
+PASS: Trailer_Big gunner 2 retains its crouch height at the current spot
+PASS: Trailer_Big turret 2 physics pose follows its moved platform
+PASS: Trailer_Big turret 3 animation remains evaluated offscreen
+PASS: Trailer_Big turret 3 returns to its designated anchor after reactivation
+PASS: Trailer_Big gunner 3 retains its crouch height at the current spot
+PASS: Trailer_Big turret 3 physics pose follows its moved platform
+PASS: Trailer_Big turret 4 animation remains evaluated offscreen
+PASS: Trailer_Big turret 4 returns to its designated anchor after reactivation
+PASS: Trailer_Big Warboy 4 feet return from a floating position to the current spot
+PASS: Trailer_Big turret 4 physics pose follows its moved platform
+PASS: Trailer_Big turret 5 animation remains evaluated offscreen
+PASS: Trailer_Big turret 5 returns to its designated anchor after reactivation
+PASS: Trailer_Big gunner 5 retains its crouch height at the current spot
+PASS: Trailer_Big turret 5 physics pose follows its moved platform
+PASS: Trailer_Big turret 6 animation remains evaluated offscreen
+PASS: Trailer_Big turret 6 returns to its designated anchor after reactivation
+PASS: Trailer_Big gunner 6 retains its crouch height at the current spot
+PASS: Trailer_Big turret 6 physics pose follows its moved platform
+PASS: Trailer_Big turret 7 animation remains evaluated offscreen
+PASS: Trailer_Big turret 7 returns to its designated anchor after reactivation
+PASS: Trailer_Big gunner 7 retains its crouch height at the current spot
+PASS: Trailer_Big turret 7 physics pose follows its moved platform
+PASS: Trailer_Big reactivation preserves every custom spot coordinate
+PASS: Trailer_Big native ES3 serializes both frames with original trailer prefab identity
+PASS: Trailer_Big native ES3 recreates both independent prefab frames
+PASS: Trailer_Big native TrailerLoad reconnects reconstructed frames through its hitch raycast
+PASS: Trailer_Big cleanup removes towing vehicle and attached trailer together
+PASS: Scrapwagon JSON retains all four turret names and spots
+PASS: Scrapwagon loader accepts trailer data
+PASS: Scrapwagon full production coroutine builds towing vehicle
+PASS: Scrapwagon full build connects correct trailer prefab
+PASS: Scrapwagon full build fits both trailer wheels
+PASS: Scrapwagon native joint motions and connected body
+PASS: Scrapwagon hitch and attacher anchors align
+PASS: Scrapwagon native attach variables are populated
+PASS: Scrapwagon native support leg and rear bumper are hidden
+PASS: Scrapwagon vehicle turret limits and all four trailer turrets spawn independently
+PASS: Scrapwagon turret 1 uses trailer-local saved spot
+PASS: Scrapwagon turret 2 uses trailer-local saved spot
+PASS: Scrapwagon turret 3 uses trailer-local saved spot
+PASS: Scrapwagon turret 4 uses trailer-local saved spot
+PASS: Scrapwagon both complete vehicles leave deferred save registration
+PASS: Scrapwagon both frames enter native save registry
+PASS: Scrapwagon exporter records fitted wheels and excludes human turrets
+PASS: Scrapwagon fourth spot API writes trailer and preserves car turret
+PASS: Scrapwagon editor changes trailer crew without losing parts or positions
+PASS: Scrapwagon turret 4 animation remains evaluated offscreen
+PASS: Scrapwagon turret 4 returns to its designated anchor after reactivation
+PASS: Scrapwagon Warboy 4 feet return from a floating position to the current spot
+PASS: Scrapwagon turret 4 physics pose follows its moved platform
+PASS: Scrapwagon turret 5 animation remains evaluated offscreen
+PASS: Scrapwagon turret 5 returns to its designated anchor after reactivation
+PASS: Scrapwagon gunner 5 retains its crouch height at the current spot
+PASS: Scrapwagon turret 5 physics pose follows its moved platform
+PASS: Scrapwagon turret 6 animation remains evaluated offscreen
+PASS: Scrapwagon turret 6 returns to its designated anchor after reactivation
+PASS: Scrapwagon gunner 6 retains its crouch height at the current spot
+PASS: Scrapwagon turret 6 physics pose follows its moved platform
+PASS: Scrapwagon turret 7 animation remains evaluated offscreen
+PASS: Scrapwagon turret 7 returns to its designated anchor after reactivation
+PASS: Scrapwagon gunner 7 retains its crouch height at the current spot
+PASS: Scrapwagon turret 7 physics pose follows its moved platform
+PASS: Scrapwagon reactivation preserves every custom spot coordinate
+PASS: Scrapwagon native ES3 serializes both frames with original trailer prefab identity
+PASS: Scrapwagon native ES3 recreates both independent prefab frames
+PASS: Scrapwagon native TrailerLoad reconnects reconstructed frames through its hitch raycast
+PASS: Scrapwagon cleanup removes towing vehicle and attached trailer together
+PASS: Existing truck, bike and car slot limits remain unchanged

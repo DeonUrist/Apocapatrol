@@ -47,11 +47,13 @@ namespace Apocapatrol
     public sealed class SpawnGroup
     {
         public string Id = "", Name = "";
+        public string Faction="Scrapyard";
         public float MinKm, Chance;
         public int MinBosses;
         public bool UniformCargo;
         public List<string> Templates = new List<string>();
         public List<string> AllowedCargo = new List<string>();
+        public List<string> MerchantTypes = new List<string>();
         public bool Eligible(float km, int bosses) { return Chance > 0 && km >= MinKm && bosses >= MinBosses; }
 
         public static SpawnGroup Roll(IEnumerable<SpawnGroup> source, float km, int bosses, Func<double> random, string avoid = null)
@@ -68,7 +70,7 @@ namespace Apocapatrol
 
     public sealed class EditorData
     {
-        public List<SpawnGroup> Patrols = new List<SpawnGroup>(), Convoys = new List<SpawnGroup>();
+        public List<SpawnGroup> Patrols = new List<SpawnGroup>(), Convoys = new List<SpawnGroup>(), Merchants=new List<SpawnGroup>();
         public List<LootProfile> CarLoot = new List<LootProfile>(), TruckLoot = new List<LootProfile>();
         public List<string> TemplateOrder = new List<string>();   // the template lists' order in the editor (names; unlisted ones follow, defaults first, by name)
 
@@ -78,6 +80,7 @@ namespace Apocapatrol
             if (root == null) throw new FormatException("Expected editor JSON object");
             var result = new EditorData();
             result.Patrols = Groups(root, "patrols"); result.Convoys = Groups(root, "convoys");
+            result.Merchants=root.ContainsKey("merchants")?Groups(root,"merchants"):MerchantCatalog.DefaultGroups();
             result.CarLoot = Loot(root, "carLoot"); result.TruckLoot = Loot(root, "truckLoot");
             object order;
             if (root.TryGetValue("templateOrder", out order) && order is List<object>) result.TemplateOrder = ((List<object>)order).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -104,7 +107,10 @@ namespace Apocapatrol
             foreach (var row in Rows(root, key))
             {
                 var g = new SpawnGroup { Id = Json.Text(row, "id", ""), Name = Json.Text(row, "name", ""), MinKm = Number(row, "minKm", 0, 10000), MinBosses = (int)Number(row, "minBosses", 0, 7), Chance = Number(row, "chance", 0, 100), UniformCargo = Json.Bool(row, "uniformCargo", false) };
+                g.Faction=TrafficFactions.Normalize(Json.Text(row,"faction","Scrapyard"));
                 object values;
+                if(row.TryGetValue("merchantTypes",out values)&&values is List<object>)g.MerchantTypes=((List<object>)values).OfType<string>().Where(MerchantCatalog.Known).Distinct().ToList();
+                if(key=="merchants")g.MerchantTypes=MerchantCatalog.Selection(g.MerchantTypes).ToList();
                 if (row.TryGetValue("templates", out values) && values is List<object>) g.Templates = ((List<object>)values).OfType<string>().ToList();
                 g.AllowedCargo = row.TryGetValue("allowedCargo", out values) && values is List<object> ? ((List<object>)values).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList() : key == "convoys" ? null : new List<string>();
                 if (g.Id.Length == 0 || result.Any(x => x.Id.Equals(g.Id, StringComparison.OrdinalIgnoreCase))) throw new FormatException("Missing or duplicate group id");
@@ -151,9 +157,9 @@ namespace Apocapatrol
 
         public string ToJson()
         {
-            Func<SpawnGroup, object> group = g => StoreJson.Object("id", g.Id, "name", g.Name, "minKm", g.MinKm, "minBosses", g.MinBosses, "chance", g.Chance, "uniformCargo", g.UniformCargo, "templates", g.Templates, "allowedCargo", g.AllowedCargo);
+            Func<SpawnGroup, object> group = g => StoreJson.Object("id", g.Id, "name", g.Name,"faction",g.Faction, "minKm", g.MinKm, "minBosses", g.MinBosses, "chance", g.Chance, "uniformCargo", g.UniformCargo, "templates", g.Templates, "allowedCargo", g.AllowedCargo,"merchantTypes",Merchants.Contains(g)?MerchantCatalog.Selection(g.MerchantTypes).ToList():g.MerchantTypes);
             Func<LootProfile, object> loot = p => StoreJson.Object("id", p.Id, "name", p.Name, "textureKey", p.TextureKey, "default", p.Default, "spawnChance", p.SpawnChance, "items", p.Items.Select(i => StoreJson.Object("id", i.Id, "chance", i.Chance)).ToList());
-            return StoreJson.Write(StoreJson.Object("schema", 2, "patrols", Patrols.Select(group).ToList(), "convoys", Convoys.Select(group).ToList(), "carLoot", CarLoot.Select(loot).ToList(), "truckLoot", TruckLoot.Select(loot).ToList(), "templateOrder", TemplateOrder));
+            return StoreJson.Write(StoreJson.Object("schema", 3, "patrols", Patrols.Select(group).ToList(), "convoys", Convoys.Select(group).ToList(),"merchants",Merchants.Select(group).ToList(), "carLoot", CarLoot.Select(loot).ToList(), "truckLoot", TruckLoot.Select(loot).ToList(), "templateOrder", TemplateOrder));
         }
     }
 

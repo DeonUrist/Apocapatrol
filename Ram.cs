@@ -28,6 +28,7 @@ namespace Apocapatrol
                     if (_mk == null) _mk = GetComponent<PatrolMarker>();
                     if (_rb == null) _rb = GetComponent<Rigidbody>();
                     var mk = _mk; var rb = _rb;
+                    if(mk!=null&&!TrafficFactions.PlayerHostile(mk.Faction))return;
                     var carVel = rb != null ? rb.velocity : Vector3.zero;
                     // The impact speed is how fast THIS car moves into the contact point - not the relative speed, which is just as
                     // high when the player runs or drives into a parked car. A standing car never hurts anyone.

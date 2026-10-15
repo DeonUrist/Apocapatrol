@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Apocapatrol
 {
-    internal enum PilotState { Charge, Overshoot, Turnaround, Recover, Wait, Idle }
+    internal enum PilotState { Charge, Overshoot, Turnaround, Recover, Wait, Idle, Travel }
 
     // The driving AI. Lives on the car next to Crew, which decides WHETHER the car drives (driver alive, delay, death);
     // Pilot decides HOW: every physics step it writes throttle / steering / brakes into the NWH input.
@@ -41,6 +41,10 @@ namespace Apocapatrol
         }
         private bool _ramsTarget;                             // this step: may the current target (player / their car) be rammed?
         private float _passSide = 1f;                         // drive-by side when the target must not be rammed
+        private TrafficAgent _traffic;
+        private bool _travelling, _campRouting;
+        private int _attackRun;
+        private float _attackSide = 1f;
 
         private PilotState _state = PilotState.Charge;
         private float _stateTime;
@@ -90,6 +94,8 @@ namespace Apocapatrol
         internal PilotState State { get { return _state; } }
         internal float EscortUntil;                                        // 2.1.4: a "Witness me!" rider wants a ride alongside the player until then
         private float _nextEscortLog;
+        private float _nextDecision,_lastDecision;
+        private Crew _crew;
 
         internal static Pilot Attach(GameObject car)
         {
@@ -98,6 +104,8 @@ namespace Apocapatrol
             var marker = car.GetComponent<PatrolMarker>();
             p._ramsBase = marker != null ? marker.Rams : RamTargets.Pedestrians;
             p._marker = marker;
+            p._traffic = car.GetComponent<TrafficAgent>();
+            p._crew=car.GetComponent<Crew>();p._nextDecision=0f;p._lastDecision=Time.fixedTime-Time.fixedDeltaTime;
             p.Enter(PilotState.Charge, "start");
             p._nextGeometry = 0f;
             if (!All.Contains(p)) All.Add(p);
@@ -112,6 +120,12 @@ namespace Apocapatrol
         }
 
         private void OnDestroy() { All.Remove(this); }
+
+        internal void OriginShift(Vector3 shift)
+        {
+            _aim += shift;
+            _runStart += shift;
+        }
 
         // the transmission's gear index, refreshed 5x a second (a reflection read + boxing per step per car otherwise)
         private int Gear()
@@ -128,12 +142,28 @@ namespace Apocapatrol
         {
             if (_abandoned) return;
             if (_rb != null && _rb.isKinematic) return;     // the game's DistanceKinematic froze the car (far from the player after a load): hold, don't count as stuck
-            float dt = Time.fixedDeltaTime;
+            if(Time.fixedTime<_nextDecision)return;
+            var player=PlayerRef.Player;float distance2=player!=null?(_tf.position-player.position).sqrMagnitude:float.MaxValue;
+            _nextDecision=Time.fixedTime+(distance2>80f*80f?0.1f:0.05f);
+            float dt=Mathf.Clamp(Time.fixedTime-_lastDecision,Time.fixedDeltaTime,0.15f);_lastDecision=Time.fixedTime;
             _stateTime += dt;
 
             Vector3 tpos, tvel; GameObject tcar;
-            _hasTarget = PlayerRef.Target(out tpos, out tvel, out tcar);
+            _hasTarget = TrafficFactions.DriveTarget(_car,out tpos,out tvel,out tcar);
+            if (_traffic == null) _traffic = _car.GetComponent<TrafficAgent>();
+            Vector3 routeGoal = Vector3.zero; float cruise = 0f; bool stop = false, hunt = false;
+            bool traffic = _traffic != null && _traffic.Goal(out routeGoal, out cruise, out stop, out hunt);
+            bool wasTravelling = _travelling;
+            _travelling = traffic && !hunt;
+            if (wasTravelling != _travelling) _obstacleCache.Clear();
+            if (traffic)
+            {
+                _hasTarget = true;
+                tpos = routeGoal;
+                if (_travelling || _traffic.Detection == "last known") { tvel = Vector3.zero; tcar = null; }
+            }
             _ramsTarget = tcar != null ? _rams >= RamTargets.Cars : _rams >= RamTargets.Pedestrians;
+            if (_travelling || (traffic && _traffic.Detection == "last known")) _ramsTarget = false;
             Vector3 fwd = Flat(_tf.forward);
             Vector3 vel = _rb != null ? _rb.velocity : Vector3.zero;
             float speed = vel.magnitude;
@@ -164,7 +194,7 @@ namespace Apocapatrol
 
             // pushing slowly against something for a while counts as stuck (a car being shoved, a fence...)
             if (_pushStamp >= 0f && Time.fixedTime - _pushStamp > 0.25f) { _pushTime = 0f; _pushStamp = -1f; }
-            if (_pushTime > 1f && (_state == PilotState.Charge || _state == PilotState.Overshoot || _state == PilotState.Turnaround))
+            if (_pushTime > 1f && (_state == PilotState.Charge || _state == PilotState.Overshoot || _state == PilotState.Turnaround || _state == PilotState.Travel))
             { _pushTime = 0f; _pushStamp = -1f; StartRecover("pushing against " + _pushName, _hitSide); }
 
             // collision that came in since the last step
@@ -179,13 +209,20 @@ namespace Apocapatrol
                     StartRecover("hit an obstacle" + (_hitSide != 0f ? (_hitSide > 0f ? " on the right" : " on the left") : " head-on"), _hitSide);
             }
 
-            if (!_hasTarget || _dist > Plugin.AiGiveUpDistance.Value)
+            if (_travelling)
+            {
+                if (_state != PilotState.Recover && _state != PilotState.Wait && _state != PilotState.Travel) Enter(PilotState.Travel, "destination route");
+                if (_state == PilotState.Travel) { StepTravel(routeGoal, cruise, stop, speed, forwardSpeed, dt); return; }
+            }
+            else if (_state == PilotState.Travel) Enter(PilotState.Charge, "traffic engagement");
+
+            if (!_travelling && (!_hasTarget || _dist > Plugin.AiGiveUpDistance.Value))
             {
                 if (_state != PilotState.Idle) Enter(PilotState.Idle, _hasTarget ? "target too far" : "no target");
             }
             else if (_state == PilotState.Idle) Enter(PilotState.Charge, "target in range");
 
-            bool escort = Time.time < EscortUntil && tcar != null && _hasTarget
+            bool escort = !_travelling && Time.time < EscortUntil && tcar != null && _hasTarget
                 && (_state == PilotState.Charge || _state == PilotState.Turnaround || _state == PilotState.Overshoot);
             if (escort) StepEscort(tpos, tvel, speed, forwardSpeed, dt);
             else switch (_state)
@@ -214,6 +251,30 @@ namespace Apocapatrol
         }
 
         // ------------------------------------------------------------ states
+
+        private void StepTravel(Vector3 goal, float cruise, bool stop, float speed, float forwardSpeed, float dt)
+        {
+            if (stop) { Apply(0f, MoveSteer(0f, dt), 0.7f); return; }
+            if (Gear() <= 0) Shift(1);
+            var delta = Flat(goal - _tf.position);
+            float angle = Vector3.SignedAngle(Flat(_tf.forward), delta.normalized, Vector3.up);
+            float desired = Mathf.Clamp(angle / Plugin.AiSteerAngle.Value, -1f, 1f);
+            float avoid, throttleFactor, obstacleBrake;
+            Sense(speed, out avoid, out throttleFactor, out obstacleBrake);
+            float cap = Mathf.Min(MaxSteerFor(speed), RollSafeSteer(speed));
+            float steer = MoveSteer(Mathf.Clamp(desired + avoid, -cap, cap), dt);
+            float want = Mathf.Min(cruise, Mathf.Lerp(cruise, 4f, Mathf.InverseLerp(20f, 100f, Mathf.Abs(angle))));
+            var journey = _traffic != null ? WorldTraffic.Find(_traffic.Journey) : null;
+            if (journey != null && journey.leg == journey.route.Length - 1) want = Mathf.Min(want, Mathf.Sqrt(Mathf.Max(0f, delta.magnitude - 8f) * 3f));
+            float error = want - forwardSpeed;
+            float throttle = error > 0f ? Plugin.AiThrottle.Value * Mathf.Clamp01(error * 0.3f) * throttleFactor : 0f;
+            float brakes = Mathf.Max(obstacleBrake, error < -1f ? Mathf.Clamp01(-error * 0.12f) : 0f);
+            if (Mathf.Abs(desired) > 0.15f && LateralFor(speed, Mathf.Abs(desired)) > _rollLimit)
+            { throttle = 0f; brakes = Mathf.Max(brakes, 0.35f); }
+            LeanGuard(ref steer, ref throttle, ref brakes);
+            Apply(throttle, steer, brakes);
+            Stuck(throttle, speed, dt);
+        }
 
         // 2.1.4 escort: the rider on the roof is about to leap ("Witness me!"), so the driver runs alongside the player's car - same heading,
         // same speed, a lane 5 m to the side it is already on - instead of ramming or passing. Player (nearly) stopped, or we face the other
@@ -275,6 +336,19 @@ namespace Apocapatrol
                 var leadVec = Flat(tvel) * lead;
                 if (leadVec.magnitude > 25f) leadVec = leadVec.normalized * 25f;
                 _aim = tpos + leadVec;
+                _campRouting = false;
+                if (Plugin.WorldTrafficEnabled.Value && Plugin.TacticalDriving.Value && _dist > 35f)
+                {
+                    // Alternate intercept, wide left and wide right runs. Slot offsets distribute a group around the target.
+                    int slot = _traffic != null ? _traffic.Slot : GetInstanceID();
+                    int tactic = Mathf.Abs(slot + _attackRun) % 3;
+                    if (tactic != 0)
+                    {
+                        var travel = Flat(tvel).sqrMagnitude > 4f ? Flat(tvel).normalized : Flat(tpos - _tf.position).normalized;
+                        _attackSide = tactic == 1 ? -1f : 1f;
+                        _aim += Vector3.Cross(Vector3.up, travel) * _attackSide * Mathf.Min(40f, _dist * 0.25f);
+                    }
+                }
                 if (!_ramsTarget)
                 {
                     // drive-by: aim beside the target, on the side it already is relative to our nose (the smaller turn)
@@ -282,7 +356,15 @@ namespace Apocapatrol
                     var lateral = toT.sqrMagnitude > 1e-3f ? Vector3.Cross(Vector3.up, toT.normalized) : _tf.right;   // right of the line to it
                     _aim -= lateral * _passSide * Plugin.AiDriveByOffset.Value;
                 }
+                if (Plugin.WorldTrafficEnabled.Value && Plugin.TacticalDriving.Value)
+                {
+                    bool hold;
+                    _campRouting = TrafficLocations.CampApproach(_car, tpos, out var approach, out hold);
+                    if (_campRouting) _aim = approach;
+                }
             }
+            if (_campRouting && Flat(_aim - _tf.position).magnitude < 10f)
+            { Apply(0f, MoveSteer(0f, dt), 0.6f); return; }
             var toAim = Flat(_aim - _tf.position);
             float aimAngle = toAim.sqrMagnitude > 1e-3f ? Vector3.SignedAngle(Flat(_tf.forward), toAim.normalized, Vector3.up) : 0f;
             float absAngle = Mathf.Abs(aimAngle);
@@ -294,7 +376,7 @@ namespace Apocapatrol
             float avoidSteer, avoidThrottle, avoidBrake;
             Sense(speed, out avoidSteer, out avoidThrottle, out avoidBrake);
             // ...unless something (a parked car, a rock) sits between us and the target: the centre feeler never sees the target itself
-            bool ramming = _ramsTarget && _dist < Plugin.AiRamDistance.Value && Mathf.Abs(_angle) < 35f && (_feelerHit[0] < 0f || _feelerHit[0] > _dist);
+            bool ramming = !_campRouting && _ramsTarget && _dist < Plugin.AiRamDistance.Value && Mathf.Abs(_angle) < 35f && (_feelerHit[0] < 0f || _feelerHit[0] > _dist);
             if (!ramming) desired = Mathf.Clamp(desired + avoidSteer, -1f, 1f);
 
             float maxSteer = Mathf.Min(MaxSteerFor(speed), RollSafeSteer(speed));
@@ -377,6 +459,7 @@ namespace Apocapatrol
 
         private void StartOvershoot(string why)
         {
+            _attackRun++;
             _runStart = _tf.position;
             Enter(PilotState.Overshoot, why);
         }
@@ -386,14 +469,16 @@ namespace Apocapatrol
             bool repeat = Time.time - _lastRecover < Plugin.AiRecoverWindow.Value;
             _recoverCount = repeat ? _recoverCount + 1 : 1;
             _lastRecover = Time.time;
-            if (_recoverCount > Plugin.AiMaxRecovers.Value)
+            bool convoy=EventBudget.IsConvoy(_car);
+            if (_recoverCount > Plugin.AiMaxRecovers.Value && !convoy)
             {
                 Apply(0f, _steer, 0.5f);
-                var crew = _car.GetComponent<Crew>();
+                var crew = _crew;
                 if (crew != null && crew.OnStuck()) { _abandoned = true; return; }   // the crew got out; this component is being destroyed
                 Enter(PilotState.Wait, why + " (" + _recoverCount + " recoveries)");
                 return;
             }
+            if(convoy)_recoverCount=Mathf.Min(_recoverCount,4);
             _recoverDur = Plugin.AiReverseSeconds.Value * (1f + 0.5f * (_recoverCount - 1));
             // reversing with the wheels turned to +s swings the nose to -s: away from an obstacle on side s, or toward the target
             float s = obstacleSide != 0f ? Mathf.Sign(obstacleSide) : -Mathf.Sign(_angle == 0f ? 1f : _angle);
@@ -499,7 +584,7 @@ namespace Apocapatrol
         {
             // every other physics step (25 Hz is plenty for a car; halves the raycasts of a convoy), every 4th beyond 150 m from the
             // target (a far car has room; a convoy approaching from 350 m casts a quarter as much); the skipped steps reuse the last result
-            int every = _dist > 150f ? 4 : 2;
+            int every = _travelling?1:2;
             if ((++_senseStep % every) != 0) { steer = _senseSteer; throttleFactor = _senseThrottle; brake = _senseBrake; return; }
             SenseNow(speed, out steer, out throttleFactor, out brake);
             _senseSteer = steer; _senseThrottle = throttleFactor; _senseBrake = brake;
@@ -628,13 +713,19 @@ namespace Apocapatrol
         {
             var t = c.transform;
             if (t.IsChildOf(_tf)) return false;
+            if(_travelling)
+            {
+                var body=c.attachedRigidbody;
+                return !(body!=null&&!body.isKinematic&&body.mass<Plugin.AiIgnoreMassBelow.Value);
+            }
             int kind = PlayerRef.Kind(t);
+            if (_travelling && kind != 0) return true; // convoy trucks and unalerted patrols avoid the player
             if (kind == 1) return _rams < RamTargets.Pedestrians;          // the player on foot
             if (kind == 2) return _rams < RamTargets.Cars;                 // the player's car
             bool creature = false;
             for (var a = t; a != null; a = a.parent)
             {
-                if (PlayerRef.HasVehicleController(a)) return _rams < RamTargets.Cars;   // another car (parked, wreck, patrol)
+                if (PlayerRef.HasVehicleController(a)) return _travelling || a.GetComponent<PatrolMarker>() != null || _rams < RamTargets.Cars;
                 _fsmBuffer.Clear();
                 a.GetComponents(_fsmBuffer);
                 for (int i = 0; i < _fsmBuffer.Count; i++)
@@ -681,7 +772,7 @@ namespace Apocapatrol
                 return;
             }
             _hitPending = true;
-            _hitIsTarget = target;
+            _hitIsTarget = target && !_travelling;
             _hitSide = Mathf.Abs(local.x) > 0.6f ? Mathf.Sign(local.x) : 0f;
             Plugin.Verbose("Pilot: " + (target ? "rammed " : "hit ") + col.collider.name + " at " + rel.ToString("0.0") + " m/s, local " + local.ToString("0.0"));
         }
@@ -691,7 +782,7 @@ namespace Apocapatrol
         private void OnCollisionStay(Collision col)
         {
             if (col.collider == null || col.contactCount == 0) return;
-            if (_state != PilotState.Charge && _state != PilotState.Overshoot && _state != PilotState.Turnaround) return;
+            if (_state != PilotState.Charge && _state != PilotState.Overshoot && _state != PilotState.Turnaround && _state != PilotState.Travel) return;
             if (_throttle < 0.3f) return;
             var contact = col.GetContact(0);
             var local = _tf.InverseTransformPoint(contact.point);
@@ -742,6 +833,13 @@ namespace Apocapatrol
         private static float _lastStamp = -1f;
 
         internal static void Reset() { _player = null; _playerCar = null; _playerCarRb = null; _playerCarDrive = null; _inCar = null; _inCarVar = null; _inCarOwner = null; _nextFind = 0f; _lastStamp = -1f; _targetStamp = -1f; }
+
+        internal static void OriginShift(Vector3 shift)
+        {
+            _lastPos += shift;
+            _targetPos += shift;
+            _targetStamp = -1f; // never treat a coordinate jump as on-foot velocity
+        }
 
         internal static Transform Player
         {

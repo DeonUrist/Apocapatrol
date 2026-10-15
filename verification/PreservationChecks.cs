@@ -1,68 +1,37 @@
 using System;
 using System.Collections;
-using System.IO;
 using System.Linq;
-using System.Text;
-using UnityEngine;
 using Apocapatrol;
-
+using UnityEngine;
 public partial class TrailerRunner
 {
-    bool Preserved(GameObject car, object marker){return (bool)Call("Explode","Preserved",car,marker);}
     IEnumerator PreservationChecks()
     {
-        var plugin=asm.GetType("Apocapatrol.Plugin");
-        var setting=plugin.GetField("PreservedTemplates",All).GetValue(null);
-        var value=setting.GetType().GetProperty("Value"); var original=value.GetValue(setting,null);
-        var self=plugin.GetField("SelfDestruct",All).GetValue(null);var selfValue=self.GetType().GetProperty("Value");var originalSelf=selfValue.GetValue(self,null);
-        Check((string)original=="War_rig, Truck_War_Rig","Preservation defaults contain the two exact War Rig template names");
-        var car=new GameObject("Preservation rule fixture");car.AddComponent<Rigidbody>().isKinematic=true;
-        var marker=Call("PatrolMarker","Attach",car,"Rustliner","",null,"",null,Call("CarTemplate","ParseRams","Pedestrians"));
-        var trailer=new GameObject("WarRig(Clone)123");
-        try
-        {
-            selfValue.SetValue(self,true,null);
-            Set(marker,"TemplateName","War_rig");Check(Preserved(car,marker),"War Rig bus is exempt");
-            Set(marker,"_bodyPrefab","Rustchief");Set(marker,"TemplateName","Truck_War_Rig");Set(marker,"Trailer",trailer);
-            Check(Preserved(car,marker),"War Rig truck/tanker template is exempt");
-            Set(marker,"TemplateName","Ordinary_Truck");Check(!Preserved(car,marker),"Known ordinary template is not exempt merely because it has the same chassis/trailer");
-            Set(marker,"TemplateName","");Check(Preserved(car,marker),"Legacy truck identity is recovered from its WarRig trailer");
-            Set(marker,"Trailer",null);Set(marker,"_bodyPrefab","Rustliner");Check(Preserved(car,marker),"Legacy bus identity remains supported");
-            value.SetValue(setting," , MY_Custom, war_RIG , ,",null);Set(marker,"TemplateName","My_Custom");Check(Preserved(car,marker),"Player list ignores case, whitespace and empty entries");
-            Set(marker,"TemplateName","My_Custom_Extended");Check(!Preserved(car,marker),"Player entries match complete template names");
-            Set(marker,"TemplateName","Truck_War_Rig");Check(!Preserved(car,marker),"Removing a rig name removes its exemption");
-            value.SetValue(setting,"",null);Set(marker,"TemplateName","War_rig");Check(!Preserved(car,marker),"Empty list disables all preservation");
-            var routineType=asm.GetType("Apocapatrol.Explode");
-            var pending=(IEnumerator)routineType.GetMethod("Routine",All).Invoke(null,new object[]{car,marker,"pending preservation test"});
-            Check(pending.MoveNext(),"Self-destruct enters its normal delay");
-            value.SetValue(setting,"War_rig",null);
-            Check(!pending.MoveNext() && !(bool)Get(marker,"Exploded"),"A newly added exemption cancels an already pending explosion");
-            value.SetValue(setting,"",null);
-            var normal=(IEnumerator)routineType.GetMethod("Routine",All).Invoke(null,new object[]{car,marker,"ordinary self-destruct test"});normal.MoveNext();normal.MoveNext();
-            Check((bool)Get(marker,"Exploded"),"Unlisted vehicle still enters normal self-destruct");
-            (normal as IDisposable)?.Dispose();
-            Set(marker,"Exploded",false);value.SetValue(setting,"War_rig",null);
-            var snap=(PatrolCarData)marker.GetType().GetMethod("Snapshot",All).Invoke(marker,null);
-            Check(snap.templateName=="War_rig","Vehicle snapshot records template identity");
-            var data=new PatrolSaveData{version=9,saveFile="verification.es3",worldSeed=123,convoyCooldown=12,lastGroup="g",cars=new[]{snap,new PatrolCarData{carName="c2",bodyPrefab="Junker",templateName="My_Custom"}}};
-            var bytes=(byte[])Call("PatrolPersistence","Serialize",data);
-            var restored=(PatrolSaveData)Call("PatrolPersistence","Deserialize",bytes);
-            Check(restored.cars.Length==2 && restored.cars[0].templateName=="War_rig" && restored.cars[1].templateName=="My_Custom" && restored.lastGroup=="g","Schema 9 preserves distinct template names and following fields");
-            data.version=8;bytes=(byte[])Call("PatrolPersistence","Serialize",data);restored=(PatrolSaveData)Call("PatrolPersistence","Deserialize",bytes);
-            Check(restored.cars.Length==2 && restored.cars.All(c=>c.templateName=="") && restored.convoyCooldown==12 && restored.lastGroup=="g","Schema 8 saves remain readable without template-name bytes");
-            var loadedCar=new GameObject("Restored preservation fixture");loadedCar.AddComponent<Rigidbody>().isKinematic=true;
-            try
-            {
-                Call("PatrolPersistence","RestoreCar",loadedCar,new PatrolCarData{bodyPrefab="Rustliner",templateName="War_rig",driverPhase="Released"});
-                var loadedMarker=loadedCar.GetComponent(asm.GetType("Apocapatrol.PatrolMarker"));
-                Check((string)Get(loadedMarker,"TemplateName")=="War_rig" && Preserved(loadedCar,loadedMarker),"Restored vehicle retains its template exemption");
-            }finally{UnityEngine.Object.DestroyImmediate(loadedCar);}
-        }
-        finally
-        {
-            value.SetValue(setting,original,null);selfValue.SetValue(self,originalSelf,null);
-            UnityEngine.Object.DestroyImmediate(car);UnityEngine.Object.DestroyImmediate(trailer);
-        }
-        yield break;
+        TrafficSetting("SelfDestruct",false);
+        Check(!(bool)typeof(Plugin).GetField("SelfDestruct",All).GetValue(null).GetType().GetProperty("Value").GetValue(typeof(Plugin).GetField("SelfDestruct",All).GetValue(null),null),"Always explode cars is off by default");
+        Check((float)Call("Explode","DefaultChance","War_rig")==0f&&(float)Call("Explode","DefaultChance","Truck_War_Rig")==0f
+            &&(float)Call("Explode","DefaultChance","Ordinary")==50f,"War Rig bus/truck default to zero; other templates default to fifty percent");
+        Check(!(bool)Call("Explode","Roll",50f,false,0.51f)&&(bool)Call("Explode","Roll",50f,false,0.49f),"Template probability rolls at the configured percentage boundary");
+        Check((bool)Call("Explode","Roll",0f,true,0.999f),"Always explode overrides zero chance without changing eligibility");
+        var car=new GameObject("Explosion eligibility fixture");car.AddComponent<Rigidbody>().isKinematic=true;
+        var marker=Call("PatrolMarker","Attach",car,"PipeRat","",null,"",null,Call("CarTemplate","ParseRams","Pedestrians"));
+        Check(!(bool)Call("Explode","Eligible",marker),"An empty car with no observed driver death never explodes");
+        Set(marker,"DriverDied",true);Check((bool)Call("Explode","Eligible",marker),"Driver death permits the explosion check");
+        Set(marker,"DriverBailed",true);Check(!(bool)Call("Explode","Eligible",marker),"An alive driver bailout cancels explosion even if a prior driver died");
+        Set(marker,"DriverBailed",false);Set(marker,"PlayerEntered",true);Check(!(bool)Call("Explode","Eligible",marker),"Player-owned cars remain protected");
+        Set(marker,"PlayerEntered",false);
+        var living=new GameObject("Turret survival fixture");var hp=living.AddComponent<PlayMakerFSM>();hp.FsmName="Health";hp.FsmVariables.FloatVariables=new[]{new HutongGames.PlayMaker.FsmFloat("Health"){Value=100}};
+        hp.FsmVariables.Init();
+        ((GameObject[])Get(marker,"Riders"))[0]=living;
+        Check((bool)Call("Explode","LivingOccupants",marker),"A living turret prevents the explosion until it vacates");
+        ((GameObject[])Get(marker,"Riders"))[0]=null;
+        Check(!(bool)Call("Explode","LivingOccupants",marker),"Empty seats and turret slots release the final occupant gate");
+        var data=new PatrolSaveData{version=12,cars=new[]{new PatrolCarData{faction="Coyotes",explodeChance=31,driverBailed=true,explodeRolled=true,explodeSelected=false,battleId="saved-battle",battleSide=1,battleSlot=4}}};
+        var restored=(PatrolSaveData)Call("PatrolPersistence","Deserialize",(byte[])Call("PatrolPersistence","Serialize",data));
+        Check(restored.cars[0].faction=="Coyotes"&&restored.cars[0].explodeChance==31&&restored.cars[0].driverBailed&&restored.cars[0].explodeRolled
+            &&restored.cars[0].battleId=="saved-battle"&&restored.cars[0].battleSlot==4,"Schema twelve retains faction, explosion roll and battle membership");
+        data.version=11;restored=(PatrolSaveData)Call("PatrolPersistence","Deserialize",(byte[])Call("PatrolPersistence","Serialize",data));
+        Check(restored.cars[0].faction=="Scrapyard"&&restored.cars[0].explodeChance==50&&restored.cars[0].battleId=="","Earlier car saves remain readable with safe faction and chance defaults");
+        UnityEngine.Object.DestroyImmediate(car);UnityEngine.Object.DestroyImmediate(living);yield break;
     }
 }

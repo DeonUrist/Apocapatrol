@@ -15,6 +15,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Reference Include="MapMagic"><HintPath>$(ManagedDir)\MapMagic.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Den.Tools"><HintPath>$(ManagedDir)\Den.Tools.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="0Harmony"><HintPath>$(BepInExCore)\0Harmony.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="NWH.Common"><HintPath>$(ManagedDir)\NWH.Common.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="NWH.VehiclePhysics2"><HintPath>$(ManagedDir)\NWH.VehiclePhysics2.dll</HintPath><Private>false</Private></Reference>
@@ -41,9 +43,11 @@
 
   <ItemGroup>
     <Compile Remove="verification\**\*.cs" />
+    <Compile Remove="debug\**\*.cs" />
     <!-- the "hardcoded" JSON car templates (Apocatemplater dumps), read by CarTemplates.LoadEmbedded -->
     <EmbeddedResource Include="BaseTemplates\*.json" LogicalName="Apocapatrol.DefaultTemplates.%(Filename)%(Extension)" />
     <EmbeddedResource Include="EditorDefaults.json" LogicalName="Apocapatrol.EditorDefaults.json" />
+    <EmbeddedResource Include="MerchantLayouts.defaults.json" LogicalName="Apocapatrol.MerchantLayouts.defaults.json" />
   </ItemGroup>
 
   <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(DeployToGame)' != 'false'">

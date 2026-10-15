@@ -21,7 +21,7 @@ namespace Apocapatrol
     {
         public const string GUID = "com.denis.apocalypter.apocapatrol";
         public const string NAME = "Apocapatrol";
-        public const string VERSION = "2.7.5";
+        public const string VERSION = "2.14.4";
 
         internal static ManualLogSource Log;
 
@@ -55,7 +55,6 @@ namespace Apocapatrol
         internal static ConfigEntry<float> StuckPedalChance, StuckPedalTakeoverSeconds, BailChance, StuckBailChance;
         // [Self-destruct]
         internal static ConfigEntry<bool> SelfDestruct;
-        internal static ConfigEntry<string> PreservedTemplates;
         internal static ConfigEntry<float> ExplodedLootPercent;
         // [AI]
         internal static ConfigEntry<bool> AiInvertSteering, AiOverlay, CustomPaintjobs;
@@ -70,7 +69,22 @@ namespace Apocapatrol
             AiIgnoreMassBelow, AiGiveUpDistance;
         // [Debug]
         internal static ConfigEntry<bool> VerboseLog;
+        internal static ConfigEntry<bool> BusPassengerPoseEditorEnabled;
+        internal static ConfigEntry<Key> BusPassengerPoseEditorKey;
         internal static ConfigEntry<float> ExitSpeedKmh;
+        // Experimental persistent world traffic. Explicit switch keeps existing saves/installations on the old spawner.
+        internal static ConfigEntry<bool> WorldTrafficEnabled, TrafficDebugMap, TacticalDriving;
+        internal static ConfigEntry<float> TrafficLoadRange, TrafficUnloadRange,
+            TrafficDestinationGrace, TrafficPatrolSpeed, TrafficConvoySpeed, ConvoyGuardRange,
+            PatrolMemorySeconds;
+        internal static ConfigEntry<int> TrafficMaxGroups, TrafficMaxRealCars;
+        internal static ConfigEntry<bool> TrafficRoadRouting;
+        internal static ConfigEntry<float> TrafficRoadConnector;
+        internal static ConfigEntry<bool> CarSpawnLimit, SimpleConvoyBanditsAI;
+        internal static ConfigEntry<int> MaxCarsInEvent, MaxCarsInDoubleEvent, MaxPatrols, MaxConvoys;
+        internal static ConfigEntry<int> MaxMerchants;internal static ConfigEntry<float> MerchantSpawnChance,MerchantCheckMinutes;
+        internal static ConfigEntry<float> CampTrafficRange;
+        internal static ConfigEntry<bool> RealPatrolNames, HideRouteType;
         // [Cleanup]
         internal static ConfigEntry<bool> CleanupEnabled;
         internal static ConfigEntry<float> CleanupMinutes, CleanupDistance;
@@ -116,8 +130,6 @@ namespace Apocapatrol
                 var moves = new List<KeyValuePair<ConfigDefinition, ConfigEntryBase>>
                 {
                     new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("General", "AudioVoices"), AudioVoices),
-                    new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Self-destruct", "SelfDestructingCars"), SelfDestruct),
-                    new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Scaling", "SelfDestruct"), SelfDestruct),   // 2.2.3: -> [General]
                     new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Convoy spawner", "Enabled"), ConvoyEnabled),
                     new KeyValuePair<ConfigDefinition, ConfigEntryBase>(new ConfigDefinition("Debug", "WitnessMeChance"), WitnessMeChance),   // 2.6.2: -> [Combat]
                 };
@@ -159,6 +171,11 @@ namespace Apocapatrol
         private void Awake()
         {
             Log = Logger;
+            BindExperimentalConfig();
+            try { TrafficSpace.Install(); } catch (Exception e) { Log.LogError("Traffic origin hook: " + e); }
+            TrafficRoads.Install();
+            TrafficCamps.Install();
+            SeatedLosGuard.Install();
             try { QuietFsm.Install(); } catch (Exception e) { Log.LogWarning("QuietFsm: " + e.Message); }
             try { Suspension.Install(); } catch (Exception e) { Log.LogWarning("Suspension: " + e.Message); }
             try { MotorcycleIntegration.Install(); }
@@ -166,6 +183,7 @@ namespace Apocapatrol
             Paint.Init(Info.Location);
             PatrolSkin.Init(Info.Location);
             var fixedSettings = HiddenConfig();
+            BindTrafficConfig();
             EditorStore.Load(Path.GetDirectoryName(Info.Location));
             CarTemplates.Init(Info.Location);
             bool exposePose = PoseConfigurationEnabled(Config.ConfigFilePath);
@@ -176,15 +194,8 @@ namespace Apocapatrol
             FuryRoad = Config.Bind("General", "Fury Road", false,
                 "Every patrol and convoy group can spawn from the start: their minimum distance travelled and minimum boss kills are ignored. " +
                 "Off = groups unlock with distance and bosses as set in the editor");
-            SelfDestruct = Config.Bind("General", "SelfDestruct", true,
-                "A raider car that is fully vacated (crew dead, bailed out, or the last passenger got out beside a dead driver) explodes: the frame " +
-                "goes black (trucks stay a lootable wreck), every part pops off with 0 condition and the dead chassis cannot be entered, " +
-                "fuelled or fitted with parts any more; it is removed once you are 1000 m away. Off = vacated cars stay as they are now. " +
-                "A car you have sat in never explodes");
-            PreservedTemplates = Config.Bind("General", "Preserve following templates", "War_rig, Truck_War_Rig",
-                "Comma-separated vehicle template names exempt from exploding-cars self-destruct when the crew is gone. " +
-                "Names match without regard to case; spaces around each name are ignored. Empty = no exemptions. " +
-                "Default: War_rig (bus), Truck_War_Rig (truck with tanker trailer)");
+            SelfDestruct = Config.Bind("General", "Always explode cars", false,
+                "Override template explodeChance with 100%. Requires a dead driver and all living passengers/turrets to leave. An alive driver bailout never explodes the car; captured cars are protected");
             Config.Bind("General", "Apocasetter", true,
                 "Show this mod in the Apocasetter Mods menu.\n" +
                 "To expose seat offsets, shared pose settings and all per-human controls, uncomment the next line and restart:\n" +
@@ -242,6 +253,8 @@ namespace Apocapatrol
                 "7/9 down/up (Shift = x5), 0 = next turret, 5 = save the spot into the car's template file, . = markers on/off");
 
             MenuKey = BindEditorConfigKey(Config);
+            BusPassengerPoseEditorEnabled=Config.Bind("Debug","Bus passenger pose editor",false,"Live arm, leg and seat adjustment for the nearest bus passenger. Num0 selects joint, Num/ selects side, Num8/2 bends, Num4/6 swings sideways, Num7/9 twists, Num5 saves. Disable other numpad editors while using this tool.");
+            BusPassengerPoseEditorKey=Config.Bind("Debug","Bus passenger pose editor key",Key.Insert,"Toggle the bus passenger pose adjustment overlay. Saved poses apply to all bus passengers and merchant types.");
             AllowDebugSpawns = Config.Bind("Debug", "AllowDebugSpawns", false, "Show Spawn Template, S group buttons and SPAWN in the editor");
             TemplateExporter.Configure(Config);
             PatrolSizePercent = Config.Bind("Scaling", "PatrolSizePercent", 100f, new ConfigDescription("Size of every patrol / convoy that spawns, for weaker PCs: below 100 the group loses cars at random down to this share (rounded down, never below one car; a convoy keeps all of its trucks)", new AcceptableValueRange<float>(10f, 100f)));
@@ -506,8 +519,47 @@ namespace Apocapatrol
             _runner.AddComponent<TemplateMenu>();
             _runner.AddComponent<TemplateExporter>();
             _runner.AddComponent<TurretSpotter>();
+            _runner.AddComponent<BusPassengerPoseEditor>();
             _runner.AddComponent<Convoy>();
+            _runner.AddComponent<WorldTraffic>();
             _runner.AddComponent<Cleanup>();
+        }
+
+        private void BindExperimentalConfig()
+        {
+            const string s="Experimental";
+            CarSpawnLimit=Config.Bind(s,"car spawn limit",true,"Limit physical encounter cars; pending builds count toward the same budget");
+            MaxCarsInEvent=Config.Bind(s,"Max cars in event",5,new ConfigDescription("Maximum cars in one patrol or convoy; cargo trucks have priority",new AcceptableValueRange<int>(1,24)));
+            MaxCarsInDoubleEvent=Config.Bind(s,"Max cars in double event",6,new ConfigDescription("Combined physical car budget when encounters overlap near the player",new AcceptableValueRange<int>(1,48)));
+            MaxPatrols=Config.Bind(s,"Max patrols",3,new ConfigDescription("Maximum tracked patrol groups, including arrived and passing Coyote groups; replaces density",new AcceptableValueRange<int>(0,64)));
+            MaxConvoys=Config.Bind(s,"Max convoys",1,new ConfigDescription("Maximum tracked convoy groups, including arrived groups; replaces density",new AcceptableValueRange<int>(0,64)));
+            MaxMerchants=Config.Bind(s,"Max merchants",3,new ConfigDescription("Maximum merchants, with at most one of each shop type. Zero disables automatic merchants.",new AcceptableValueRange<int>(0,3)));
+            MerchantSpawnChance=Config.Bind(s,"Merchant spawn chance",100f,new ConfigDescription("Average percentage of Max merchants represented by routes. Whole slots are guaranteed; the remaining fractional slot is rolled at each check. 100 fills the cap; zero creates no merchant routes.",new AcceptableValueRange<float>(0f,100f)));
+            MerchantCheckMinutes=Config.Bind(s,"Merchant check interval (minutes)",5f,new ConfigDescription("Check and adjust merchant route population this often, including replacing departed merchants. No immediate replacement when a route ends. Loaded merchants finish their visit before excess routes are removed.",new AcceptableValueRange<float>(1f,60f)));
+            CampTrafficRange=Config.Bind(s,"Camp traffic range",2500f,new ConfigDescription("Loaded, uncleared raider camps support base patrols and convoys; incoming Coyote patrols do not require camps",new AcceptableValueRange<float>(500f,10000f)));
+            SimpleConvoyBanditsAI=Config.Bind(s,"simple convoy bandits AI",true,"NPC Overhaul: no crew AI while seated; dismounted bandits persistently fight the player using baked-map navigation, without ghosts, forgetting or idle behaviour");
+            SimpleConvoyBanditsAI.SettingChanged+=(sender,args)=>SimpleBanditBridge.RefreshAll();
+            RealPatrolNames=Config.Bind(s,"Real patrol names",true,"Use each group's actual name on the game debug map; off labels groups Patrol or Convoy");
+            HideRouteType=Config.Bind(s,"hide route type",false,"Draw every traffic route and marker gray and label it Distant traffic; overrides Real patrol names");
+        }
+
+        private void BindTrafficConfig()
+        {
+            const string s = "World traffic prototype";
+            WorldTrafficEnabled = Config.Bind(s, "Enabled", false, "Persistent patrols and convoys between known camps; replaces automatic spawn timer. Experimental, opt in");
+            TrafficRoadRouting = Config.Bind(s, "FollowRoads", true, "Influence sparse patrol waypoints with cached road hints; missing hints use a cached snake route");
+            TrafficRoadConnector = Config.Bind(s, "MaxRoadConnectorMetres", 350f, new ConfigDescription("Maximum distance a coarse waypoint is attracted toward a cached road hint, m", new AcceptableValueRange<float>(25f, 1000f)));
+            TrafficDebugMap = Config.Bind(s, "DebugMap", false, "Draw traffic routes only on the game's debug map when it is open");
+            TacticalDriving = Config.Bind(s, "TacticalDriving", true, "Varied attack runs and vehicle-checked camp approaches");
+            TrafficMaxGroups = Config.Bind(s, "MaxGroups", 24, new ConfigDescription("Maximum simulated plus real groups", new AcceptableValueRange<int>(1, 128)));
+            TrafficMaxRealCars = Config.Bind(s, "MaxRealCars", 24, new ConfigDescription("Budget for nearby physical traffic cars; pending builds reserve slots", new AcceptableValueRange<int>(1, 100)));
+            TrafficLoadRange = Config.Bind(s, "LoadRange", 650f, new ConfigDescription("Load traffic within this distance of the player, m", new AcceptableValueRange<float>(100f, 2000f)));
+            TrafficUnloadRange = Config.Bind(s, "UnloadRange", 1000f, new ConfigDescription("Unload only once every group member is this far away; always at least LoadRange + 100 m", new AcceptableValueRange<float>(200f, 4000f)));
+            TrafficDestinationGrace = Config.Bind(s, "DestinationGraceSeconds", 180f, new ConfigDescription("An arrived group waits this long without a nearby player before removal; proximity resets the clock", new AcceptableValueRange<float>(10f, 3600f)));
+            TrafficPatrolSpeed = Config.Bind(s, "PatrolSpeedKmh", 55f, new ConfigDescription("Simulated/cruising patrol speed", new AcceptableValueRange<float>(10f, 100f)));
+            TrafficConvoySpeed = Config.Bind(s, "ConvoySpeedKmh", 38f, new ConfigDescription("Simulated/cruising convoy speed", new AcceptableValueRange<float>(10f, 80f)));
+            ConvoyGuardRange = Config.Bind(s, "ConvoyGuardRange", 300f, new ConfigDescription("Escort drivers attack within this range of the convoy; truck drivers keep travelling, m", new AcceptableValueRange<float>(20f, 1000f)));
+            PatrolMemorySeconds = Config.Bind(s, "PatrolMemorySeconds", 20f, new ConfigDescription("Search last known player position this long after losing sight/sound, then resume the route", new AcceptableValueRange<float>(0f, 120f)));
         }
 
         // Unity mixes at most numRealVoices sounds; the rest are virtual (silent until a slot frees up). Reset() restarts the audio system,

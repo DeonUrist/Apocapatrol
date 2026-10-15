@@ -47,6 +47,7 @@ namespace Apocapatrol
         private readonly System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<FsmFloat, float>> _heat =
             new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<FsmFloat, float>>();   // engine heat values + originals
         private bool _vacated;                // the crew is gone (dead or bailed): the self-destruct has been scheduled
+        private Collider[] _carColliders;
 
         private PatrolMarker Marker { get { if (_marker == null && _car != null) _marker = _car.GetComponent<PatrolMarker>(); return _marker; } }
 
@@ -115,7 +116,7 @@ namespace Apocapatrol
         // Same start-up as a fresh build, once the car's FSMs are initialized. Safe to call more than once.
         internal void Revive()
         {
-            if (_revived || _done || Explode.IsWreck(_car)) return;
+            if (_revived || _done || Marker?.SetupOnly==true || Explode.IsWreck(_car)) return;
             _revived = true;
             StartCoroutine(ReviveRoutine());
         }
@@ -246,7 +247,7 @@ namespace Apocapatrol
         {
             if (_driver == null) return;
             if (_driverFsms == null || _driverFsmsOf != _driver) { _driverFsms = _driver.GetComponents<PlayMakerFSM>(); _driverFsmsOf = _driver; }
-            MuteAi(_driverFsms, _driver.GetComponent<PassengerGuard>() != null ? PassengerGuard.CombatFsms : null);
+            MuteAi(_driverFsms, Marker?.SetupOnly!=true && _driver.GetComponent<PassengerGuard>() != null ? PassengerGuard.CombatFsms : null);
         }
 
         // healthVar: the FSM's Health variable, resolved once by the caller and kept (GetFsmFloat is a name search every call)
@@ -266,6 +267,7 @@ namespace Apocapatrol
         {
             if (_car == null) { Destroy(this); return; }
             if (Time.timeScale <= 0f) return;
+            if(Marker?.SetupOnly==true){Hold=true;if(!_dead&&!_done&&!DriverAlive())OnDriverDied();if(Time.time>=_nextGuard){_nextGuard=Time.time+0.5f;MuteAi();Crew.MuteAi(Marker.Passenger);}return;}
             if (Time.time >= _nextIgnore)
             {
                 _nextIgnore = Time.time + 2f;
@@ -273,7 +275,8 @@ namespace Apocapatrol
                 var pax = marker != null ? marker.Passenger : null;
                 if ((!_dead && _driver != null) || pax != null)
                 {
-                    var carCols = _car.GetComponentsInChildren<Collider>(true);   // once for both occupants
+                    if(_carColliders==null||Hold)_carColliders=_car.GetComponentsInChildren<Collider>(true);
+                    var carCols = _carColliders;
                     if (!_dead && _driver != null) Patrol.IgnoreCollisionsIfChanged(_driver, _car, carCols);
                     if (pax != null) Patrol.IgnoreCollisionsIfChanged(pax, _car, carCols);
                 }
@@ -288,7 +291,7 @@ namespace Apocapatrol
                 if (Time.time >= _nextGuard) { _nextGuard = Time.time + 0.5f; MuteAi(); }
                 _seated += Time.deltaTime;
                 float delay = _delayOverride >= 0f ? _delayOverride : 0f;
-                if (!_driving && !_outOfFuel && _seated >= delay && Time.time >= _nextEngineCheck)
+                if (!Hold&&!_driving && !_outOfFuel && _seated >= delay && Time.time >= _nextEngineCheck)
                 {
                     _nextEngineCheck = Time.time + 0.25f;
                     bool running = Nwh.EngineRunning(_car);
@@ -319,6 +322,7 @@ namespace Apocapatrol
         // StuckBailChance decides whether the crew gets out; otherwise it sits in the dead car. Returns true when it fired.
         private bool CheckDry()
         {
+            if(EventBudget.IsConvoy(_car)){_dryFor=0f;return false;}
             float fuel = -1f;
             if (_tank != null && _tank.Fsm.Initialized) { var v = _tank.FsmVariables.GetFsmFloat("Liquid"); if (v != null) fuel = v.Value; }
             bool standing = _rb == null || _rb.velocity.magnitude < 1f;
@@ -343,12 +347,12 @@ namespace Apocapatrol
         }
 
         // convoy: every car of the group is released together
-        internal void Release() { Hold = false; }
+        internal void Release() { Hold = false; _carColliders=null; }
 
         // NWH samples its input on the physics step, so the inputs are written here, not in Update.
         private void FixedUpdate()
         {
-            if (_car == null || _done || Time.timeScale <= 0f) return;
+            if (_car == null || _done || Time.timeScale <= 0f || Marker?.SetupOnly==true) return;
             if (!_dead)
             {
                 if (!_driving) return;
@@ -387,7 +391,7 @@ namespace Apocapatrol
             if (!_paxDecided)
             {
                 _paxDecided = true;
-                _paxBails = UnityEngine.Random.Range(0f, 100f) < Plugin.BailChance.Value;
+                _paxBails = !EventBudget.IsConvoy(_car)&&UnityEngine.Random.Range(0f, 100f) < Plugin.BailChance.Value;
                 Plugin.Verbose("Crew: passenger " + pax.name + " will " + (_paxBails ? "bail out" : "take the wheel") + " once the car stops ("
                     + Plugin.BailChance.Value + " % bail roll)");
             }
@@ -440,6 +444,7 @@ namespace Apocapatrol
         // instead of waiting: the car is left standing as an ordinary vehicle. Returns true if the crew left.
         internal bool OnStuck()
         {
+            if(EventBudget.IsConvoy(_car))return false;
             if (_dead || _done) return false;
             if (UnityEngine.Random.Range(0f, 100f) >= Plugin.StuckBailChance.Value) return false;
             var marker = Marker;
@@ -450,6 +455,7 @@ namespace Apocapatrol
             SeatLocked(false);
             var pax = marker != null ? marker.Passenger : null;
             bool paxGoes = pax != null && PassengerAlive(marker, pax), driverGoes = _driver != null && DriverAlive();
+            if(marker!=null&&driverGoes)marker.DriverBailed=true;
             // both doors open first; the crew gets out once they have swung open
             bool opened = false;
             if (paxGoes) opened |= Patrol.OpenDoorAt(_car, pax.transform.position);
@@ -482,6 +488,7 @@ namespace Apocapatrol
             var drv = Patrol.MoveToDriverSeat(_car, pax);
             if (drv == null) { Plugin.Log.LogWarning("Crew: could not seat the passenger as driver"); _paxBails = true; return; }
             marker.Promote(drv);
+            marker.DriverDied=false;marker.DriverBailed=false;
             _dead = false; _stuck = false; _done = false; _driving = false;
             _rolling = 0f; _deadFor = 0f; _paxDecided = false; _paxBails = false; _doorOpened = false; _doorWait = 0f;
             _delayOverride = Plugin.TakeoverSeconds;
@@ -506,6 +513,8 @@ namespace Apocapatrol
 
         private void OnDriverDied()
         {
+            var marker=Marker;
+            if(marker!=null&&!marker.DriverBailed)marker.DriverDied=(_healthVar!=null&&_healthVar.Value<=0f)||(_driver!=null&&Patrol.GetHealth(_driver)==0f);
             _dead = true;
             SeatLocked(false);                 // the player may take the car from now on
             if (_pilot != null) { _pilot.Detach(); _pilot = null; }

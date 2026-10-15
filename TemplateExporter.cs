@@ -38,8 +38,10 @@ namespace Apocapatrol
         private readonly EditorSession _session = new EditorSession();
         private Transform _draftCar;
         private string _templateName = "", _driverName = "Scraffa", _passengerName = "Sprokka", _lootId = "";
+        private string _faction="Scrapyard";
         private readonly string[] _turrets = { "None", "None", "None" };   // human turrets 1-3 as the dropdowns show them
         private readonly string[] _trailerTurrets = { "None", "None", "None", "None" };
+        private readonly bool[] _turretStanding=new bool[3],_trailerTurretStanding=new bool[4];
         private GameObject _draftTrailer;
         private bool _trailerPage;
         private Action _afterDraw;
@@ -62,9 +64,11 @@ namespace Apocapatrol
             if (!_session.Acquire()) return;
             _draftCar = car; _truck = PrefabName(car.name).Equals("Rustcargo", StringComparison.OrdinalIgnoreCase) && FrameChildren(car, "PhysicsLock").Any();
             _templateName = ""; _driverName = "Scraffa"; _passengerName = "None"; _turrets[0] = _turrets[1] = _turrets[2] = "None"; _ledgerDropdown.Close();
+            _faction=TrafficFactions.Normalize(car.GetComponent<PatrolMarker>()?.Faction);if(_faction=="Coyotes")_driverName="Bodyguard";
             _bike = MotorcycleIntegration.IsBody(PrefabName(car.name));
             _draftTrailer = TrailerSupport.Attached(car.gameObject); _trailerPage = false;
             for (int i = 0; i < 4; i++) _trailerTurrets[i] = "None";
+            Array.Clear(_turretStanding,0,_turretStanding.Length);Array.Clear(_trailerTurretStanding,0,_trailerTurretStanding.Length);
             var profiles = _truck ? EditorStore.Data.TruckLoot : EditorStore.Data.CarLoot; _lootId = _bike ? "" : !_truck && profiles.Any(p => p.Id == "car-empty") ? "car-empty" : profiles.Count > 0 ? profiles[0].Id : "";
         }
         private void Close() { _session.Close(); _draftCar = null; _draftTrailer = null; _ledgerDropdown.Close(); }
@@ -92,7 +96,7 @@ namespace Apocapatrol
             LedgerSkin.Window(_rect); LedgerSkin.Header(_rect.width);
             GUI.enabled = enabled && !_ledgerDropdown.IsOpen;
             if (LedgerSkin.Button(new Rect(_rect.width - 96, 24, 70, 34), "CLOSE", gameFont: true, transparent: true)) _afterDraw = Close;
-            var box = new Rect((_rect.width - 600) / 2, 92, 600, 496); LedgerSkin.Panel(box);
+            var box = new Rect((_rect.width - 600) / 2, 92, 600, 534); LedgerSkin.Panel(box);
             float x = box.x + 22, input = x + 160, w = box.width - 204;
             const float Row = 38f;
             LedgerSkin.Label(new Rect(x, box.y + 18, box.width - 44, 26), "Save vehicle template", LedgerSkin.DialogTitle);
@@ -102,12 +106,13 @@ namespace Apocapatrol
             LedgerSkin.Label(new Rect(x, y0, 144, 34), "Template name");
             _templateName = GUI.TextField(new Rect(input, y0, w, 34), _templateName, LedgerSkin.Input);
             if (_templateName.Length == 0 && GUI.GetNameOfFocusedControl() == "") LedgerSkin.Label(new Rect(input + 10, y0, w - 20, 34), "Automatic name", null, LedgerSkin.Muted);
-            var people = new[] { "None", "Scraffa", "Spanna", "Sprokka", "Boltjaw", "Flexa", "Lugnut", "Scrud" }.Select(n => new KeyValuePair<string, string>(n, n)).ToList();
-            DraftLedgerDropdown(new Rect(input, y0 + Row, w, 34), "Driver", _driverName, people, value => _driverName = value, box.yMax - 84);
-            DraftLedgerDropdown(new Rect(input, y0 + Row * 2, w, 34), "Passenger", _passengerName, people, value => _passengerName = value, box.yMax - 84);
+            DraftLedgerDropdown(new Rect(input,y0+Row,w,34),"Faction",_faction,new[]{"Scrapyard","Coyotes"}.Select(n=>new KeyValuePair<string,string>(n,n)).ToList(),value=>{_faction=value;if(!CrewFactions.Allowed(_driverName,value))_driverName="None";if(!CrewFactions.Allowed(_passengerName,value))_passengerName="None";for(int i=0;i<3;i++)if(!CrewFactions.Allowed(_turrets[i],value))_turrets[i]="None";for(int i=0;i<4;i++)if(!CrewFactions.Allowed(_trailerTurrets[i],value))_trailerTurrets[i]="None";},box.yMax-84);
+            var people = new[] { "None", "Scraffa", "Spanna", "Sprokka", "Boltjaw", "Flexa", "Lugnut", "Scrud" }.Concat(CrewFactions.Coyotes).Where(n=>CrewFactions.Allowed(n,_faction)).Select(n => new KeyValuePair<string, string>(n, n)).ToList();
+            DraftLedgerDropdown(new Rect(input, y0 + Row * 2, w, 34), "Driver", _driverName, people, value => _driverName = value, box.yMax - 84);
+            DraftLedgerDropdown(new Rect(input, y0 + Row * 3, w, 34), "Passenger", _passengerName, people, value => _passengerName = value, box.yMax - 84);
             var profiles = _truck ? EditorStore.Data.TruckLoot : EditorStore.Data.CarLoot;
             var profile = profiles.FirstOrDefault(p => p.Id == _lootId);
-            float yl = y0 + Row * 3;
+            float yl = y0 + Row * 4;
             if (_bike)
             {
                 LedgerSkin.Label(new Rect(x, yl, 144, 34), "Car loot");
@@ -122,23 +127,29 @@ namespace Apocapatrol
             // human turrets: 3 on a car's roof, 1 on a motorcycle, none on a truck
             int slots = Rider.Slots(PrefabName(_draftCar.name), _truck, false);
             var choices = _trailerPage ? _trailerTurrets : _turrets;
+            var poses=_trailerPage?_trailerTurretStanding:_turretStanding;
             if (_trailerPage) slots = 4;
-            var turretChoices = Rider.TurretChoices.Select(n => new KeyValuePair<string, string>(n, n)).ToList();
+            var turretChoices = Rider.TurretChoices.Where(n=>CrewFactions.Allowed(n,_faction)).Select(n => new KeyValuePair<string, string>(n, n)).ToList();
             for (int i = 0; i < choices.Length; i++)
             {
-                float yt = y0 + Row * (4 + i); int k = i;
+                float yt = y0 + Row * (5 + i); int k = i;
                 string label = (_trailerPage ? "Trailer turret " : "Human turret ") + (i + 1);
-                if (i < slots) DraftLedgerDropdown(new Rect(input, yt, w, 34), label, choices[i], turretChoices, value => choices[k] = value, box.yMax - 84);
+                if (i < slots)
+                {
+                    DraftLedgerDropdown(new Rect(input, yt, w-120, 34), label, choices[i], turretChoices, value => choices[k] = value, box.yMax - 84);
+                    bool usable=GUI.enabled;GUI.enabled=usable&&!string.IsNullOrEmpty(Rider.Stored(choices[i]));
+                    poses[i]=LedgerSkin.Toggle(new Rect(input+w-110,yt,110,34),poses[i],"Standing");GUI.enabled=usable;
+                }
                 else { LedgerSkin.Label(new Rect(x, yt, 144, 34), label); LedgerSkin.Label(new Rect(input, yt, w, 34), _truck ? "None - not on trucks" : "None - a motorcycle takes one", null, LedgerSkin.Muted); }
             }
-            float yn = y0 + Row * (4 + choices.Length) + 2;
+            float yn = y0 + Row * (5 + choices.Length) + 2;
             LedgerSkin.Label(new Rect(x, yn, box.width - 44, 20), _draftTrailer != null ? "Includes " + PrefabName(_draftTrailer.name) + " and its attached parts. Four trailer turret slots." : "Attached parts and adjusted hinges are recorded automatically. Stored in PlayerTemplates.", LedgerSkin.Small, LedgerSkin.Muted);
-            if (!_trailerPage) LedgerSkin.Label(new Rect(x, yn + 18, box.width - 44, 20), "Warboy = blast lances; gunners crouch and shoot all around.", LedgerSkin.Small, LedgerSkin.Muted);
+            if (!_trailerPage) LedgerSkin.Label(new Rect(x, yn + 18, box.width - 44, 20), "Warboy = blast lances. Standing unchecked = sitting.", LedgerSkin.Small, LedgerSkin.Muted);
             LedgerSkin.Rule(x, box.yMax - 73, box.width - 44);
             if (LedgerSkin.Button(new Rect(box.xMax - 213, box.yMax - 55, 77, 34), "Cancel")) _afterDraw = Close;
             if (LedgerSkin.Button(new Rect(box.xMax - 128, box.yMax - 55, 106, 34), "Save template", primary: true))
                 _afterDraw = () => { try { Dump(); Close(); } catch (Exception e) { Log.LogError("Template save failed: " + e); Toast("Template not saved: " + e.Message); } };
-            LedgerSkin.Rule(6, 590, _rect.width - 12);
+            LedgerSkin.Rule(6, 634, _rect.width - 12);
             GUI.enabled = enabled; _ledgerDropdown.Draw();
         }
         private string TurretFor(int i, string body) { return i < Rider.Slots(body, _truck, false) ? Rider.Stored(_turrets[i]) : ""; }
@@ -379,6 +390,7 @@ namespace Apocapatrol
             var file = new TemplateFile
             {
                 name = name, body = body, kind = kind, lootPreset = _truck || _bike ? "" : _lootId,
+                faction=_faction,
                 rams = kind == "truck" ? "Cars" : "Pedestrians",
                 driver = hasDriverSeat ? (_driverName == "None" ? "" : _driverName) : "",
                 passenger = hasPassengerSeat ? (_passengerName == "None" ? "" : _passengerName) : "",
@@ -386,6 +398,7 @@ namespace Apocapatrol
                 rider = TurretFor(0, body), rider2 = TurretFor(1, body), rider3 = TurretFor(2, body),
                 source = "Apocatemplater (" + Plugin.NAME + ") " + Plugin.VERSION + ", " + DateTime.Now.ToString("yyyy-MM-dd HH:mm") + ", from " + car.name,
             };
+            for(int i=0;i<3;i++)file.SetTurretStanding(i,_turretStanding[i]&&!string.IsNullOrEmpty(file.Turret(i)));
             // the lift kit's adjustment (only with a kit on the car; Part Adjustment's values when that mod is loaded)
             float sw, sh; Suspension.Read(car.gameObject, out sw, out sh);
             file.suspensionWidth = sw; file.suspensionHeight = sh;
@@ -399,8 +412,8 @@ namespace Apocapatrol
                 var tw = new Walker { Owner = this, Offsets = true, Player = w.Player };
                 tw.Walk(trailer.transform, trailer.transform, trailerAsset, -1);
                 file.schema = 3;
-                file.trailer = new TemplateFile { schema = 3, body = trailerBody, parts = tw.Parts.ToArray() };
-                for (int i = 0; i < 4; i++) file.trailer.SetTurret(i, Rider.Stored(_trailerTurrets[i]));
+                file.trailer = new TemplateFile { schema = 3, body = trailerBody, parts = tw.Parts.ToArray(),faction=_faction };
+                for (int i = 0; i < 4; i++){file.trailer.SetTurret(i, Rider.Stored(_trailerTurrets[i]));file.trailer.SetTurretStanding(i,_trailerTurretStanding[i]&&!string.IsNullOrEmpty(file.trailer.Turret(i)));}
                 w.Notes.AddRange(tw.Notes);
             }
             string path = Path.Combine(dir, name + ".json");

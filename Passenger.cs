@@ -12,7 +12,7 @@ namespace Apocapatrol
     {
         internal static readonly string[] CombatFsms = { "Detection", "Attack", "RangedAttackWait", "Damage Ranged", "WeaponType", "Sound2" };
         private static readonly string[] TargetFsms = { "Detection", "Attack", "RangedAttackWait", "Damage Ranged", "WeaponType" };
-        internal static readonly string[] RangedHumans = { "Boltjaw", "Flexa", "Lugnut", "Scrud", "Sprokka" };
+        internal static readonly string[] RangedHumans = { "Boltjaw", "Flexa", "Lugnut", "Scrud", "Sprokka", "Bolter", "Gunnar", "Lugger", "Pistoleer" };
 
         private GameObject _passenger, _car;
         private Transform _anchor;
@@ -66,7 +66,15 @@ namespace Apocapatrol
 
         // a human turret gunner (2.2.0) also needs [Combat] HumanTurrets
         private bool _turret; private float _turretArc;   // arc 0 = all around (roof); a motorcycle seat: BikeArc
-        private bool CombatAllowed { get { return Plugin.RangedCombat.Value && (!_turret || Plugin.RiderLances.Value); } }
+        private bool CombatAllowed
+        {
+            get
+            {
+                var traffic = WorldTraffic.AgentOf(_car);
+                if (traffic != null && _driverMode && traffic.Truck && WorldTraffic.Find(traffic.Journey)?.convoy == true) return false;
+                return Plugin.RangedCombat.Value && (!_turret || Plugin.RiderLances.Value) && WorldTraffic.CombatAllowed(_car);
+            }
+        }
 
         // a gunner on a turret spot (roof / motorcycle seat): passenger combat, but all around - no fire arc, the Pose turns the whole body
         internal static PassengerGuard AttachTurret(GameObject who, GameObject car, Transform anchor, float arc)
@@ -252,7 +260,8 @@ namespace Apocapatrol
                 return;
             }
 
-            GameObject target = FindVanillaTarget();
+            GameObject target = _car.GetComponent<PatrolMarker>()!=null?TrafficFactions.ForCar(_car):FindVanillaTarget();
+            if(_targetVars!=null)for(int i=0;i<_targetVars.Length;i++)_targetVars[i].Value=target;
             if (_turret && target != null && PlayerRef.GodMode) target = null;   // a human turret leaves a god-mode player alone
             Vector3 aimPoint = Vector3.zero;
             if (target != null) { _targetAcquired = true; aimPoint = AimPoint(target); }

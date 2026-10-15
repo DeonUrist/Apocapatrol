@@ -25,7 +25,7 @@ namespace Apocapatrol
         private float _itemChance = 100;
         private object _target;
         internal bool IsOpen { get { return _session.Open; } }
-        private List<SpawnGroup> Groups { get { return _tab == 1 ? EditorStore.Data.Convoys : EditorStore.Data.Patrols; } }
+        private List<SpawnGroup> Groups { get { return _tab == 2?EditorStore.Data.Merchants:_tab == 1 ? EditorStore.Data.Convoys : EditorStore.Data.Patrols; } }
         private SpawnGroup Selected { get { return Groups.FirstOrDefault(g => g.Id == _selectedGroup); } }
 
         private void Update()

@@ -9,7 +9,10 @@ namespace Apocapatrol
     {
         private Transform _root, _anchor;
         private Transform _hips, _spine, _spine1, _spine2;
-        private Transform _lUpLeg, _lLeg, _rUpLeg, _rLeg, _lArm, _lForeArm, _lHand, _rArm, _rForeArm, _rHand;
+        private Transform _lUpLeg, _lLeg, _lFoot, _rUpLeg, _rLeg, _rFoot, _lArm, _lForeArm, _lHand, _rArm, _rForeArm, _rHand;
+        private bool _busPassenger;
+        internal bool IsBusPassenger=>_busPassenger&&_anchor!=null&&!_turret;
+        internal void ConfigureBusPassenger(){_busPassenger=true;var preset=BusPassengerPoseStore.Current;}
         private ArmPoseProfile _armPose;
         private readonly List<WeaponRoot> _weapons = new List<WeaponRoot>();
         private bool _aimActive;
@@ -20,9 +23,10 @@ namespace Apocapatrol
         private bool _bike;                   // on a motorcycle: the driving arms reach out to the handlebar grips, not to a wheel
         private Quaternion _seatRotation;
         private bool _logged;
-        // 2.2.0 human turret gunner: crouched on a roof (squat legs, gun up, the whole body turns to the target, 360) or seated on a
-        // motorcycle (2.2.1: sits straight, seated legs, arms down until it aims, the upper body turns at most Rider.BikeArc)
+        // Sitting/standing is independent of platform: roof turrets turn freely; motorcycle turrets retain BikeArc.
         private bool _turret, _turretSeated;
+        private bool _turretBike,_turretWarboy;
+        private RiderGuard _turretRider;
         private float _turretYaw;
         // 2.6.1: a roof gunner animated by Apocaplayer's ModAPI (PlayerAnims): the player's crouch with the gun in the right hand, aiming; this
         // class then only turns the whole body to the target and keeps its feet on the spot. null = the bone squat below (bike seats always)
@@ -56,6 +60,7 @@ namespace Apocapatrol
             _spine = Find(all, "Spine"); _spine1 = Find(all, "Spine1"); _spine2 = Find(all, "Spine2");
             _lUpLeg = Find(all, "LeftUpLeg"); _lLeg = Find(all, "LeftLeg");
             _rUpLeg = Find(all, "RightUpLeg"); _rLeg = Find(all, "RightLeg");
+            _lFoot=Find(all,"LeftFoot");_rFoot=Find(all,"RightFoot");
             _lArm = Find(all, "LeftArm"); _lForeArm = Find(all, "LeftForeArm"); _lHand = Find(all, "LeftHand");
             _rArm = Find(all, "RightArm"); _rForeArm = Find(all, "RightForeArm"); _rHand = Find(all, "RightHand");
             FindWeapons();
@@ -96,16 +101,17 @@ namespace Apocapatrol
             _seatRotation = _root.localRotation;
         }
 
-        internal void ConfigureTurret(bool seated)
+        internal void ConfigureTurret(bool standing,bool bike,bool warboy=false)
         {
-            _turret = true; _turretSeated = seated;
+            _turret = true; _turretSeated = !standing;_turretBike=bike;_turretWarboy=warboy;
+            if(warboy)_turretRider=GetComponent<RiderGuard>();
             _lockSeatRotation = false;
             _turretYaw = 0f;
-            if (!seated && _body == null && PlayerAnims.Available)
+            if (!warboy && (standing || !bike) && _body == null && PlayerAnims.Available)
             {
                 var anim = _root != null ? _root.GetComponentInChildren<Animator>() : null;
                 if (anim != null && anim.isHuman) _body = PlayerAnims.Attach(anim);
-                if (_body != null) { PlayerAnims.Set(_body, true, false, false, 0f); Plugin.Verbose("Pose: human turret " + _root.name + " animated by Apocaplayer's ModAPI (crouched)"); }
+                if (_body != null) { PlayerAnims.Set(_body, !standing, false, false, 0f); Plugin.Verbose("Pose: human turret " + _root.name + " animated by Apocaplayer's ModAPI ("+(standing?"standing":"crouched")+")"); }
             }
         }
 
@@ -142,6 +148,7 @@ namespace Apocapatrol
         internal void Reseat(Transform anchor)
         {
             _anchor = anchor;
+            _busPassenger = false;
             _lockSeatRotation = false;
             _aimActive = false;
             _useProfile = false;   // now the driver: hands on the wheel (a shooting driver's guard switches to the gun pose while it fires)
@@ -193,11 +200,26 @@ namespace Apocapatrol
             var right = _anchor.right;
             var up = _anchor.up;
 
-            float thigh = Plugin.PoseThigh.Value, knee = Plugin.PoseKnee.Value;
-            Swing(_lUpLeg, -thigh, right); Swing(_lUpLeg, Plugin.PoseLeftLegCloser.Value, up); Swing(_lLeg, knee, right);
-            Swing(_rUpLeg, -thigh, right); Swing(_rUpLeg, -Plugin.PoseRightLegCloser.Value, up); Swing(_rLeg, knee, right);
+            var bus=_busPassenger?BusPassengerPoseStore.Current:null;
+            bool editing=BusPassengerPoseEditor.Editing(this);
+            if(bus!=null)
+            {
+                BusJoint(_lUpLeg,_lLeg,bus.left[0],right,up);BusJoint(_lLeg,_lFoot,bus.left[1],right,up);
+                BusJoint(_rUpLeg,_rLeg,bus.right[0],right,up);BusJoint(_rLeg,_rFoot,bus.right[1],right,up);
+            }
+            else
+            {
+                float thigh = Plugin.PoseThigh.Value, knee = Plugin.PoseKnee.Value;
+                Swing(_lUpLeg, -thigh, right); Swing(_lUpLeg, Plugin.PoseLeftLegCloser.Value, up); Swing(_lLeg, knee, right);
+                Swing(_rUpLeg, -thigh, right); Swing(_rUpLeg, -Plugin.PoseRightLegCloser.Value, up); Swing(_rLeg, knee, right);
+            }
 
-            if (_armPose != null && _useProfile)
+            if(bus!=null&&(!_aimActive||editing))
+            {
+                BusJoint(_lArm,_lForeArm,bus.left[2],right,up);BusJoint(_lForeArm,_lHand,bus.left[3],right,up);BusJoint(_lHand,_lForeArm,bus.left[4],right,up,true);
+                BusJoint(_rArm,_rForeArm,bus.right[2],right,up);BusJoint(_rForeArm,_rHand,bus.right[3],right,up);BusJoint(_rHand,_rForeArm,bus.right[4],right,up,true);
+            }
+            else if (_armPose != null && _useProfile)
             {
                 ApplyBone(_lArm, _lForeArm, _armPose.LeftArm, right, up, false);
                 ApplyBone(_lForeArm, _lHand, _armPose.LeftElbow, right, up, false);
@@ -218,7 +240,7 @@ namespace Apocapatrol
 
             // Arms remain permanently in the driver pose. Rotate that fixed upper-body pose through the spine only.
             float wantedYaw = 0f, wantedPitch = 0f;
-            if (_aimActive && _spine2 != null)
+            if (_aimActive && !editing && _spine2 != null)
             {
                 var local = _anchor.InverseTransformDirection(_aimPoint - _spine2.position);
                 float flat = Mathf.Sqrt(local.x * local.x + local.z * local.z);
@@ -239,6 +261,7 @@ namespace Apocapatrol
 
             var target = _anchor.position + _anchor.right * Plugin.DriverOffsetX.Value + _anchor.up * Plugin.DriverOffsetY.Value
                        + _anchor.forward * Plugin.DriverOffsetZ.Value;
+            if(bus!=null)target+=_anchor.right*bus.seatOffset.x+_anchor.up*bus.seatOffset.y+_anchor.forward*bus.seatOffset.z;
             var pivot = _hips != null ? _hips.position : _root.position;
             _root.position += target - pivot;
 
@@ -247,6 +270,17 @@ namespace Apocapatrol
 
         private void TurretPose()
         {
+            if(_turretWarboy)
+            {
+                // Preserve the lance throw's upper-body animation and the dismount/jump animation.
+                if(_turretRider!=null&&_turretRider.Mounted)
+                {
+                    // The Warboy's crouch/throw graph already poses his legs. Do not bend them a second time.
+                    if(_turretRider.AnimatedPose||_turretRider.StandingPose)_root.position=_anchor.position;
+                    else TurretLegs(false,true);
+                }
+                return;
+            }
             // the whole body turns about the spot's up toward the target (no limit); back to the car's forward without one
             float wantedYaw = 0f, wantedPitch = 0f;
             if (_aimActive && _spine2 != null)
@@ -256,37 +290,32 @@ namespace Apocapatrol
                 if (flat > 0.001f)
                 {
                     wantedYaw = Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg;
-                    if (_turretSeated) wantedYaw = Mathf.Clamp(wantedYaw, -Rider.BikeArc, Rider.BikeArc);
+                    if (_turretBike) wantedYaw = Mathf.Clamp(wantedYaw, -Rider.BikeArc, Rider.BikeArc);
                     wantedPitch = Mathf.Clamp(Mathf.Atan2(local.y, flat) * Mathf.Rad2Deg, -Plugin.MaxAimPitch.Value, Plugin.MaxAimPitch.Value);
                 }
             }
-            else wantedYaw = _turretSeated ? 0f : _turretYaw * 0.995f;   // idle: roof - stays roughly where it looked, easing home slowly; bike - straight
+            else wantedYaw = _turretBike ? 0f : _turretYaw * 0.995f;
             float step = Plugin.AimTurnSpeed.Value * Time.deltaTime;
             _turretYaw = Mathf.MoveTowardsAngle(_turretYaw, wantedYaw, step);
             _aimPitch = Mathf.MoveTowardsAngle(_aimPitch, wantedPitch, step);
             // roof: the whole body turns; motorcycle seat: the body sits straight, the upper body turns (spine, at most BikeArc)
-            _root.rotation = _turretSeated ? _anchor.rotation : _anchor.rotation * Quaternion.Euler(0f, _turretYaw, 0f);
+            _root.rotation = _turretBike ? _anchor.rotation : _anchor.rotation * Quaternion.Euler(0f, _turretYaw, 0f);
             if (_body != null && !PlayerAnims.Alive(_body)) _body = null;   // taken down by something else: the bone squat again
             if (_body != null)
             {
                 // the player's crouch: aiming at the target (+ pitch = looking down for the ModAPI), feet on the spot
                 BodyWeapon();
-                PlayerAnims.Set(_body, true, _aimActive, false, -_aimPitch);
+                PlayerAnims.Set(_body, _turretSeated, _aimActive, false, -_aimPitch);
                 _root.position = _anchor.position;
-                if (!_logged) { _logged = true; Plugin.Verbose("Pose: human turret crouched (Apocaplayer), feet at " + _anchor.position); }
+                if (!_logged) { _logged = true; Plugin.Verbose("Pose: human turret " + (_turretSeated?"crouched":"standing") + " (Apocaplayer), feet at " + _anchor.position); }
                 return;
             }
             var right = _root.right; var up = _root.up;
 
-            float thigh, knee, hip;
-            if (_turretSeated) { thigh = Plugin.PoseThigh.Value; knee = Plugin.PoseKnee.Value; hip = 0.08f; }   // the spot = the seat surface
-            else { thigh = Plugin.TurretThigh.Value; knee = Plugin.TurretKnee.Value; hip = Plugin.TurretHipHeight.Value; }
-            float spread = _turretSeated ? 0f : 10f;   // a squat opens the knees a little
-            Swing(_lUpLeg, -thigh, right); Swing(_lUpLeg, -spread, up); Swing(_lLeg, knee, right);
-            Swing(_rUpLeg, -thigh, right); Swing(_rUpLeg, spread, up); Swing(_rLeg, knee, right);
+            TurretLegs(!_turretSeated);
 
             // arms: the gun up (the human's shooting profile) - on a motorcycle only while it aims, the idle arms (down) otherwise
-            if (_armPose != null && (!_turretSeated || _aimActive))
+            if (_armPose != null && (!_turretBike || _aimActive))
             {
                 ApplyBone(_lArm, _lForeArm, _armPose.LeftArm, right, up, false);
                 ApplyBone(_lForeArm, _lHand, _armPose.LeftElbow, right, up, false);
@@ -297,21 +326,38 @@ namespace Apocapatrol
                 ApplyWeapons();
             }
 
-            _aimYaw = _turretSeated ? _turretYaw : 0f;   // roof: the body already faces the target, the spine only pitches
+            _aimYaw = _turretBike ? _turretYaw : 0f;
             AimSpine(_spine, 0.25f, up, right);
             AimSpine(_spine1, 0.35f, up, right);
             AimSpine(_spine2, 0.40f, up, right);
 
-            var target = _anchor.position + _anchor.up * hip;
-            var pivot = _hips != null ? _hips.position : _root.position;
-            _root.position += target - pivot;
-            if (!_logged) { _logged = true; Plugin.Verbose("Pose: human turret " + (_turretSeated ? "seated" : "crouched") + ", hips at " + target); }
+            if (!_logged) { _logged = true; Plugin.Verbose("Pose: human turret " + (_turretSeated ? (_turretBike?"seated":"crouched") : "standing")); }
+        }
+
+        private void TurretLegs(bool standing,bool forceCrouch=false)
+        {
+            if(standing){_root.position=_anchor.position;return;}
+            var right=_root.right;var up=_root.up;bool seat=_turretBike&&!forceCrouch;
+            float thigh=seat?Plugin.PoseThigh.Value:Plugin.TurretThigh.Value,knee=seat?Plugin.PoseKnee.Value:Plugin.TurretKnee.Value,spread=seat?0f:10f;
+            Swing(_lUpLeg,-thigh,right);Swing(_lUpLeg,-spread,up);Swing(_lLeg,knee,right);
+            Swing(_rUpLeg,-thigh,right);Swing(_rUpLeg,spread,up);Swing(_rLeg,knee,right);
+            var target=_anchor.position+_anchor.up*(seat?.08f:Plugin.TurretHipHeight.Value);
+            _root.position+=target-(_hips!=null?_hips.position:_root.position);
         }
 
         private static void Swing(Transform bone, float degrees, Vector3 axis)
         {
             if (bone == null || degrees == 0f) return;
             bone.rotation = Quaternion.AngleAxis(degrees, axis) * bone.rotation;
+        }
+
+        private static void BusJoint(Transform bone,Transform joint,Vector3 angles,Vector3 right,Vector3 up,bool hand=false)
+        {
+            if(bone==null)return;
+            Swing(bone,-angles.x,right);Swing(bone,angles.y,up);
+            if(angles.z==0f)return;
+            var axis=joint!=null?(hand?bone.position-joint.position:joint.position-bone.position):bone.forward;
+            if(axis.sqrMagnitude>.000001f)Swing(bone,angles.z,axis.normalized);
         }
 
         private void AimSpine(Transform bone, float weight, Vector3 up, Vector3 right)

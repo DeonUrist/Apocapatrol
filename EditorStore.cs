@@ -25,14 +25,24 @@ namespace Apocapatrol
             Root = Path.GetFullPath(root); StatePath = Path.Combine(Root, "PatrolsAndLoot.json");
             Directory.CreateDirectory(Root);
             Data = Defaults();
-            if (!File.Exists(StatePath)) { Save(); return; }
+            if (!File.Exists(StatePath)) { Save();File.WriteAllText(Path.Combine(Root,".coyote-traffic-v1"),"1");File.WriteAllText(Path.Combine(Root,".merchant-traffic-v1"),"1"); return; }
             try { Data = EditorData.FromJson(File.ReadAllText(StatePath)); }
             catch (Exception e)
             {
                 File.Copy(StatePath, UniquePath(Root, "PatrolsAndLoot.invalid-" + DateTime.Now.ToString("yyyyMMddHHmmss"), ".json"));
                 if (Plugin.Log != null) Plugin.Log.LogWarning("Editor settings invalid; preserved a copy and loaded defaults: " + e.Message);
             }
+            // Upgrade old all-Scrapyard presets once. A deliberately removed/disabled group stays removed.
+            if(!File.Exists(Path.Combine(Root,".coyote-traffic-v1")))
+            {if(!Data.Patrols.Any(g=>g.Id=="coyote-patrol")){Data.Patrols.Add(CoyoteGroup());Save();}File.WriteAllText(Path.Combine(Root,".coyote-traffic-v1"),"1");}
+            // Give existing merchant setups a roster for each native type once; later deletions stay deleted.
+            if(!File.Exists(Path.Combine(Root,".merchant-traffic-v1")))
+            {
+                if(Data.Merchants.Count>0){foreach(var group in MerchantCatalog.DefaultGroups())if(!Data.Merchants.Any(g=>MerchantCatalog.Selected(g.MerchantTypes)==MerchantCatalog.Selected(group.MerchantTypes))){while(Data.Merchants.Any(g=>g.Id==group.Id))group.Id+="-new";Data.Merchants.Add(group);}Save();}
+                File.WriteAllText(Path.Combine(Root,".merchant-traffic-v1"),"1");
+            }
         }
+        internal static SpawnGroup CoyoteGroup()=>new SpawnGroup{Id="coyote-patrol",Name="Coyote patrol",Faction="Coyotes",Chance=10,Templates=new List<string>{"Coyote_PipeRat","Coyote_PipeRat"}};
 
         internal static void Save() { AtomicWrite(StatePath, Data.ToJson()); }
         internal static void AtomicWrite(string path, string text)
@@ -80,17 +90,23 @@ namespace Apocapatrol
         }
 
         internal static List<CarTemplate> Compose(SpawnGroup group, bool convoy, Func<double> random)
+        {return ComposeRoster(group,convoy,random,true);}
+        internal static List<CarTemplate> ComposeFull(SpawnGroup group,bool convoy,Func<double> random)
+        {return ComposeRoster(group,convoy,random,false);}
+        private static List<CarTemplate> ComposeRoster(SpawnGroup group,bool convoy,Func<double> random,bool cap)
         {
             var list = new List<CarTemplate>();
             foreach (string name in group.Templates)
             {
                 var template = CarTemplate.Park.FirstOrDefault(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-                if (template != null && template.Available && (convoy || !template.IsTruck)) list.Add(template.CloneForSpawn());
+                if (template != null && template.Available && CrewFactions.Compatible(template,group.Faction) && (convoy || !template.IsTruck)) list.Add(template.CloneForSpawn());
             }
-            if (!convoy && list.Count == 0) list.Add(CarTemplate.FallbackCar.CloneForSpawn());
-            if (convoy && !list.Any(t => t.IsTruck)) { var fallback = CarTemplate.FallbackTruck.CloneForSpawn(); fallback.SpawnLoot = new Dictionary<string, int>(); fallback.SpawnCargoKey = ""; list.Insert(0, fallback); }
+            if (!convoy && list.Count == 0 && TrafficFactions.Normalize(group.Faction)=="Scrapyard") list.Add(CarTemplate.FallbackCar.CloneForSpawn());
+            if (convoy && !list.Any(t => t.IsTruck)) { var fallback = CarTemplate.FallbackTruck.CloneForSpawn();if(TrafficFactions.Normalize(group.Faction)=="Coyotes"){fallback.Faction="Coyotes";fallback.Driver="Bodyguard";fallback.Passenger="";fallback.Turrets=new string[4];} fallback.SpawnLoot = new Dictionary<string, int>(); fallback.SpawnCargoKey = ""; list.Insert(0, fallback); }
             if (convoy) list = list.OrderByDescending(t => t.IsTruck).ToList();
             Shrink(list, convoy, random);
+            if(cap&&Plugin.CarSpawnLimit!=null&&Plugin.CarSpawnLimit.Value&&list.Count>Plugin.MaxCarsInEvent.Value)
+                list.RemoveRange(Plugin.MaxCarsInEvent.Value,list.Count-Plugin.MaxCarsInEvent.Value);
             if (convoy) foreach (var truck in list.Where(t => t.IsTruck)) truck.SpawnCargoOptions = (group.AllowedCargo ?? new List<string>()).ToArray();
             if (convoy && group.UniformCargo)
             {
@@ -99,6 +115,7 @@ namespace Apocapatrol
                 var roll = shared != null ? shared.Roll(random) : new Dictionary<string, int>();
                     foreach (var truck in trucks) { truck.SpawnLoot = new Dictionary<string, int>(roll, StringComparer.OrdinalIgnoreCase); truck.SpawnCargoKey = CargoTexture(roll, shared != null ? shared.TextureKey : ""); }
             }
+            foreach(var car in list)car.Faction=TrafficFactions.Normalize(group.Faction);
             return list;
         }
 

@@ -18,7 +18,7 @@ namespace Apocapatrol
         private int _inGameFrame = -1;      // InGame() is asked by four runner components every frame: evaluated once per frame
         private bool _inGame;
 
-        internal static void ResetForScene() { Prefabs.Invalidate(); Register.Invalidate(); MeleeWheels.Reset(); DayLight.Reset(); _lightState = -1; SceneGen++; }
+        internal static void ResetForScene() { Prefabs.Invalidate(); Register.Invalidate(); MeleeWheels.Reset(); DayLight.Reset(); _lightState = -1; SceneGen++; WorldTraffic.ResetForScene(); }
 
         // bumped on every scene load: a build or a convoy that waited through a load does not continue in the new world
         internal static int SceneGen;
@@ -158,15 +158,21 @@ namespace Apocapatrol
             GameObject car = null;
             GameObject trailer = null;
             int gen = SceneGen;
+            var trafficSpawn = at.HasValue ? TrafficSpace.World(at.Value) : Vector3.zero;
             var saveOk = new bool[1];
+            string eventId=string.IsNullOrEmpty(tpl.TrafficId)?(string.IsNullOrEmpty(tpl.SpawnEvent)?Guid.NewGuid().ToString("N"):tpl.SpawnEvent):tpl.TrafficId;
+            bool reserved=false;
             try
             {
                 yield return WaitForSave(gen, saveOk);   // the game is saving: spawn after it, never half-built into the save
+                if(!CrewFactions.Compatible(tpl,tpl.Faction)){Plugin.Log.LogWarning("Template "+tpl.Name+" has crew from different factions; correct its driver, passenger or turret choices");yield break;}
                 if (!saveOk[0]) { Plugin.Verbose("Build of " + tpl.Name + " dropped: the game loaded or changed scene meanwhile"); yield break; }
+                if(!EventBudget.Reserve(eventId))yield break;
+                reserved=true;
                 string missing = tpl.MissingPrefab;
                 if (missing.Length > 0) { Plugin.Log.LogWarning("Template " + tpl.Name + " unavailable: prefab not loaded: " + missing); yield break; }
                 Vector3 pos;
-                if (at.HasValue) pos = at.Value;
+                if (at.HasValue) pos = string.IsNullOrEmpty(tpl.TrafficId) ? at.Value : TrafficSpace.Scene(trafficSpawn);
                 else
                 {
                     Vector3 p, fwd;
@@ -187,8 +193,9 @@ namespace Apocapatrol
                 }
 
                 car = UnityEngine.Object.Instantiate(body, pos, rot);
+                EncounterCar.Attach(car,eventId,tpl.ConvoyMember,true);
                 car.SetActive(true);
-                Paint.Apply(car, body.name);   // Textures/<body>.png or <texture>.png over the frame (e.g. poloska.png, junker.png)
+                Paint.Apply(car, body.name,tpl.Faction);
                 // The car, its parts and its cargo go into the game's save lists only once the car is complete (Register.Commit below):
                 // a save during the build (autosave, the player) does not store a half-built car
                 Register.Defer(car);
@@ -295,6 +302,11 @@ namespace Apocapatrol
                 var marker = PatrolMarker.Attach(car, body.name, tpl.Driver, driver, tpl.Passenger, passenger, tpl.Rams);
                 marker.CargoKey = lootKey ?? "";
                 marker.TemplateName = tpl.Name;
+                marker.SetupOnly=tpl.SetupOnly;if(tpl.SetupOnly){var setup=car.GetComponent<Crew>();if(setup!=null)setup.Hold=true;Nwh.StopEngine(car);Handbrake(car,true);foreach(var person in new[]{driver,passenger})if(person!=null)Crew.MuteAi(person);}
+                MerchantRuntime.Attach(car,tpl);
+                marker.Faction=TrafficFactions.Normalize(tpl.Faction);marker.ExplodeChance=tpl.ExplodeChance;
+                TrafficFactions.Crew(car,marker);
+                WorldTraffic.AttachPending(car, tpl.TrafficId, tpl.TrafficSlot);
                 marker.Trailer = trailer;
                 // human turrets: up to 3 on a car's roof, 1 on a motorcycle, none on a truck
                 int turretSlots = Rider.Slots(tpl.Body, tpl.IsTruck, tpl.IsMotorcycle);
@@ -303,7 +315,7 @@ namespace Apocapatrol
                     if (string.IsNullOrEmpty(tpl.Turrets[ti])) continue;
                     yield return null;
                     if (car == null) yield break;
-                    Rider.Seat(car, marker, ti, tpl.Turrets[ti], tpl.TurretPos[ti]);
+                    Rider.Seat(car, marker, ti, tpl.Turrets[ti], tpl.TurretPos[ti],standing:tpl.TurretStanding[ti]);
                 }
                 if (trailer != null)
                     for (int ti = 0; ti < PatrolMarker.TrailerTurretSlots; ti++)
@@ -311,7 +323,7 @@ namespace Apocapatrol
                         if (string.IsNullOrEmpty(tpl.Trailer.Turrets[ti])) continue;
                         yield return null;
                         if (car == null || trailer == null) yield break;
-                        Rider.Seat(car, marker, PatrolMarker.VehicleTurretSlots + ti, tpl.Trailer.Turrets[ti], tpl.Trailer.TurretPos[ti], trailer);
+                        Rider.Seat(car, marker, PatrolMarker.VehicleTurretSlots + ti, tpl.Trailer.Turrets[ti], tpl.Trailer.TurretPos[ti], trailer,tpl.Trailer.TurretStanding[ti]);
                     }
                 Paint.ApplyCargo(car, lootKey);   // the container's texture by load (Textures/cargo_*.png)
 
@@ -333,10 +345,11 @@ namespace Apocapatrol
                 Plugin.Verbose("Registered " + car.name + " for saving: " + Register.Commit(car) + " object(s)");
                 if (trailer != null) Register.Commit(trailer);
 
-                yield return StartUp(car);
+                if(!tpl.SetupOnly&&(car.GetComponent<MerchantHost>()==null||car.GetComponent<MerchantHost>().Data?.travelling==true))yield return StartUp(car);
             }
             finally
             {
+                if(reserved){EventBudget.Release(eventId);if(car!=null)EncounterCar.Attach(car,eventId,tpl.ConvoyMember);}
                 // stopped early (a wreck, an error): what exists is registered as before; a destroyed car's list is dropped
                 if (car != null) { if (Register.Pending(car)) Register.Commit(car); }
                 else Register.Discard(car);
@@ -745,6 +758,7 @@ namespace Apocapatrol
             if (sit == null) { Plugin.Log.LogWarning("No sitPos on " + car.name); return null; }
             var drv = SeatOccupant(car, prefabName, sit, "Driver", false, health);
             if (drv == null) return null;
+            SimpleBanditBridge.Mark(drv);
             if (Plugin.RangedCombat.Value && PassengerGuard.IsRangedHuman(drv)) PassengerGuard.AttachDriver(drv, car, sit);
             var crew = phase == CrewPhase.Waiting && seated <= 0f ? Crew.Attach(car, drv) : Crew.Restore(car, drv, phase, seated);
             crew.Hold = hold;
@@ -777,6 +791,8 @@ namespace Apocapatrol
             }
             var pax = SeatOccupant(car, prefabName, anchor, "Passenger", true, health);
             if (pax == null) { UnityEngine.Object.Destroy(anchor.gameObject); return null; }
+            if(chair!=null||string.Equals(TemplateExporter.PrefabName(car.name),"Rustliner",System.StringComparison.OrdinalIgnoreCase))
+                pax.GetComponent<Pose>()?.ConfigureBusPassenger();
             PassengerGuard.Attach(pax, car, anchor);
             return pax;
         }
@@ -794,6 +810,7 @@ namespace Apocapatrol
             var pos = anchor.position + anchor.right * off.x + anchor.up * off.y + anchor.forward * off.z;
             var rot = Quaternion.LookRotation(anchor.forward, anchor.up);
             var go = UnityEngine.Object.Instantiate(prefab, pos, rot);
+            SimpleBanditBridge.Mark(go);
             go.SetActive(true);
             if (passenger) PassengerGuard.Prepare(go, Plugin.RangedCombat.Value);
             else if (Plugin.RangedCombat.Value) PassengerGuard.Prepare(go, true);   // ranged-only rewiring + mute, before the FSMs' Start
@@ -1023,6 +1040,8 @@ namespace Apocapatrol
                 return null;
             }
             var mob = UnityEngine.Object.Instantiate(prefab, pos + Vector3.up * 0.5f, rot);
+            SimpleBanditBridge.Fight(mob);
+            TrafficFactions.Dismount(mob,car);
             mob.SetActive(true);
             // stand it on the ground: the prefab pivot may sit mid-body, so lift it by its collider's lowest point
             var rootCol = mob.GetComponent<Collider>();

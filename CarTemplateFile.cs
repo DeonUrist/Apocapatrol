@@ -11,6 +11,8 @@ namespace Apocapatrol
     public class TemplateFile
     {
         public int schema = 2;
+        public float explodeChance=50f;
+        public string faction="Scrapyard";
         public string name = "";            // template name (spawner menu, logs); "" = the file name
         public string body = "";            // frame prefab (PipeRat, Poloska, TinyTyrant, Junker, Rustcargo, Halfbreed ...)
         public string kind = "";            // one or more kinds, ';'-separated: "small", "junker", "truck", "small;motorcycle" ...
@@ -28,9 +30,12 @@ namespace Apocapatrol
         public float[] riderPos2 = new float[0], riderPos3 = new float[0];
         public string rider4 = ""; // trailers have four spots; towing vehicles retain their existing limits
         public float[] riderPos4 = new float[0];
+        public bool riderStanding, riderStanding2, riderStanding3, riderStanding4; // false = sitting
         public TemplateFile trailer; // its own frame, fitted parts and frame-local turret positions
         public string Turret(int i) { CheckSlot(i); return i == 0 ? rider : i == 1 ? rider2 : i == 2 ? rider3 : rider4; }
         public float[] TurretPos(int i) { CheckSlot(i); return i == 0 ? riderPos : i == 1 ? riderPos2 : i == 2 ? riderPos3 : riderPos4; }
+        public bool TurretStanding(int i) { CheckSlot(i); return i == 0 ? riderStanding : i == 1 ? riderStanding2 : i == 2 ? riderStanding3 : riderStanding4; }
+        public void SetTurretStanding(int i, bool value) { CheckSlot(i); if(i==0)riderStanding=value;else if(i==1)riderStanding2=value;else if(i==2)riderStanding3=value;else riderStanding4=value; }
         public void SetTurret(int i, string v) { CheckSlot(i); v = v ?? ""; if (i == 0) rider = v; else if (i == 1) rider2 = v; else if (i == 2) rider3 = v; else rider4 = v; }
         public void SetTurretPos(int i, float[] p) { CheckSlot(i); p = p ?? new float[0]; if (i == 0) riderPos = p; else if (i == 1) riderPos2 = p; else if (i == 2) riderPos3 = p; else riderPos4 = p; }
         private static void CheckSlot(int i) { if (i < 0 || i >= 4) throw new ArgumentOutOfRangeException(nameof(i)); }
@@ -58,6 +63,8 @@ namespace Apocapatrol
             var sb = new StringBuilder();
             sb.Append("{\n");
             P(sb, "schema", schema); P(sb, "name", name); P(sb, "body", body); P(sb, "kind", kind);
+            P(sb,"explodeChance",explodeChance);
+            P(sb,"faction",faction);
             if (!CargoTruck || !string.IsNullOrEmpty(lootPreset)) P(sb, "lootPreset", lootPreset);   // a truck's lootPreset = a fixed cargo option (editor "E")
             P(sb, "rams", rams); P(sb, "driver", driver); P(sb, "passenger", passenger);
             P(sb, "rider", rider);
@@ -68,6 +75,8 @@ namespace Apocapatrol
             V3(sb, "riderPos3", riderPos3);
             if (!string.IsNullOrEmpty(rider4)) P(sb, "rider4", rider4);
             V3(sb, "riderPos4", riderPos4);
+            P(sb,"riderStanding",riderStanding);P(sb,"riderStanding2",riderStanding2);
+            P(sb,"riderStanding3",riderStanding3);P(sb,"riderStanding4",riderStanding4);
             if (trailer != null) sb.Append("    \"trailer\": ").Append(trailer.ToJson().TrimEnd()).Append(",\n");
 
             sb.Append("    \"bumpers\": [");
@@ -124,6 +133,9 @@ namespace Apocapatrol
             var f = new TemplateFile();
             f.schema = (int)Json.Num(root, "schema", f.schema);
             f.name = Json.Text(root, "name", f.name); f.body = Json.Text(root, "body", f.body);
+            f.explodeChance=Json.Num(root,"explodeChance",Explode.DefaultChance(f.name));
+            if(float.IsNaN(f.explodeChance)||float.IsInfinity(f.explodeChance))throw new FormatException("Invalid explodeChance");
+            f.explodeChance=Math.Max(0f,Math.Min(100f,f.explodeChance));
             f.kind = Json.Text(root, "kind", f.kind);
             f.spawns = Json.Bool(root, "spawns", f.spawns); f.weight = Json.Num(root, "weight", f.weight);
             f.rams = Json.Text(root, "rams", f.rams); f.driver = Json.Text(root, "driver", f.driver); f.passenger = Json.Text(root, "passenger", f.passenger);
@@ -131,6 +143,8 @@ namespace Apocapatrol
             f.rider2 = Json.Text(root, "rider2", f.rider2); f.riderPos2 = Json.Floats(root, "riderPos2");
             f.rider3 = Json.Text(root, "rider3", f.rider3); f.riderPos3 = Json.Floats(root, "riderPos3");
             f.rider4 = Json.Text(root, "rider4", f.rider4); f.riderPos4 = Json.Floats(root, "riderPos4");
+            f.riderStanding=Json.Bool(root,"riderStanding",false);f.riderStanding2=Json.Bool(root,"riderStanding2",false);
+            f.riderStanding3=Json.Bool(root,"riderStanding3",false);f.riderStanding4=Json.Bool(root,"riderStanding4",false);
             object trailerObject;
             if (root.TryGetValue("trailer", out trailerObject) && trailerObject != null)
             {
@@ -167,6 +181,7 @@ namespace Apocapatrol
                 }
                 f.parts = l.ToArray();
             }
+            f.faction=TrafficFactions.Normalize(Json.Text(root,"faction",CrewFactions.Infer(f)));
             return f;
         }
     }

@@ -1,0 +1,115 @@
+{
+  "riderStanding": true,
+  "riderStanding2": true,
+  "riderStanding3": false,
+  "riderStanding4": false,
+  "schema": 2,
+  "name": "Coyote_Trader",
+  "body": "Rustliner",
+  "kind": "small",
+  "explodeChance": 0,
+  "lootPreset": "car-medical",
+  "rams": "Pedestrians",
+  "driver": "Bodyguard",
+  "passenger": "Merchant",
+  "rider": "Gunnar",
+  "riderPos": [
+    -0.1,
+    0.763,
+    -3.961
+  ],
+  "bumpers": [],
+  "fillFuel": true,
+  "releaseHandbrake": false,
+  "parts": [
+    {
+      "parent": -1,
+      "hinge": "hinge_windshield",
+      "prefab": "windshield_2_grid"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_bumper_front",
+      "prefab": "bumper_14"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_bumper_rear",
+      "prefab": "bumper_13"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_headlight",
+      "prefab": "Headlight"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_headlight#1",
+      "prefab": "Headlight"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_seat_driver",
+      "prefab": "poloska_seat_front"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_steeringwheel",
+      "prefab": "steeringwheel_5"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_exhaust",
+      "prefab": "exhaust_duo_big",
+      "hingePos": [
+        0,
+        1.453,
+        2.166
+      ],
+      "hingeRot": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_engine",
+      "prefab": "7L I6 165HP 542Nm Diesel"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_radiator",
+      "prefab": "radiator_truck_big"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_FL",
+      "prefab": "truck_wheel_3"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_FR",
+      "prefab": "truck_wheel_3"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_RL",
+      "prefab": "truck_wheel_3"
+    },
+    {
+      "parent": -1,
+      "hinge": "hinge_wheel_RR",
+      "prefab": "truck_wheel_3"
+    }
+  ],
+  "source": "Apocatemplater (Apocapatrol) 2.3.11, 2026-10-06 10:45, from Rustliner(Clone)236",
+  "faction": "Coyotes",
+  "displayName": "Coyote Trader bus",
+  "rider2": "Gunnar",
+  "riderPos2": [
+    -0.95,
+    0.763,
+    -0.361
+  ]
+}

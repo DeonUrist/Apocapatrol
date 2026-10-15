@@ -30,7 +30,7 @@ namespace Apocapatrol
         // Called by the Crew when the car is vacated. Re-checks after a short delay: a car the player took or sits in is never blown up.
         internal static void Schedule(Crew crew, GameObject car, PatrolMarker marker, string why)
         {
-            if (!Plugin.SelfDestruct.Value || car == null || marker == null || marker.Exploded || Preserved(car, marker)) return;
+            if (car == null || marker == null || marker.Exploded || !Eligible(marker)) return;
             crew.StartCoroutine(Routine(car, marker, why));
         }
 
@@ -38,7 +38,11 @@ namespace Apocapatrol
         {
             yield return new WaitForSeconds(Delay);
             if (car == null || marker == null || marker.Exploded || marker.PlayerEntered) yield break;
-            if (!Plugin.SelfDestruct.Value || Preserved(car, marker)) yield break;
+            if (!Eligible(marker)) yield break;
+            while(car!=null&&marker!=null&&LivingOccupants(marker))yield return new WaitForSeconds(0.25f);
+            if(car==null||marker==null||marker.PlayerEntered||!Eligible(marker))yield break;
+            if(!marker.ExplodeRolled){marker.ExplodeRolled=true;marker.ExplodeSelected=Roll(marker.ExplodeChance,Plugin.SelfDestruct.Value,UnityEngine.Random.value);}
+            if(!marker.ExplodeSelected&&!Plugin.SelfDestruct.Value)yield break;
             if (PlayerRef.PlayerCar == car) yield break;
             marker.Exploded = true;
             Plugin.Verbose("Explode: " + car.name + " (" + why + ")");
@@ -111,22 +115,26 @@ namespace Apocapatrol
         // New saves retain template identity. For older saves, recover only the two known rig identities.
         internal static bool Preserved(GameObject car, PatrolMarker marker)
         {
-            if (Plugin.PreservedTemplates == null || car == null || marker == null) return false;
-            string name = marker.TemplateName;
-            if (string.IsNullOrEmpty(name))
-            {
-                if (string.Equals(marker.BodyPrefab, "Rustliner", StringComparison.OrdinalIgnoreCase)) name = "War_rig";
-                else
-                {
-                    var trailer = marker.Trailer ?? TrailerSupport.Attached(car);
-                    if (trailer != null && string.Equals(TemplateExporter.PrefabName(trailer.name), "WarRig", StringComparison.OrdinalIgnoreCase)) name = "Truck_War_Rig";
-                }
-            }
-            if (string.IsNullOrEmpty(name)) return false;
-            foreach (var entry in (Plugin.PreservedTemplates.Value ?? "").Split(','))
-                if (string.Equals(name, entry.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+            return marker!=null&&marker.ExplodeChance<=0f&&!Plugin.SelfDestruct.Value;
+        }
+        internal static float DefaultChance(string name)=>string.Equals(name,"War_rig",StringComparison.OrdinalIgnoreCase)||string.Equals(name,"Truck_War_Rig",StringComparison.OrdinalIgnoreCase)?0f:50f;
+        internal static bool Roll(float chance,bool always,float roll)=>always||roll*100f<Mathf.Clamp(chance,0f,100f);
+        internal static bool Eligible(PatrolMarker marker)=>marker!=null&&marker.DriverDied&&!marker.DriverBailed&&!marker.PlayerEntered;
+        internal static void BattleWreck(GameObject car)
+        {
+            var marker=car.GetComponent<PatrolMarker>();if(marker==null||marker.PlayerEntered)return;
+            marker.Exploded=true;marker.DriverDied=true;Nwh.StopEngine(car);Nwh.SetHandbrake(car,1f);
+            foreach(var part in Parts(car))SetCondition(part,0f);
+            bool truck=IsTruck(marker.BodyPrefab);if(!truck)Darken(car);Blast(car);QuietHinges(car);Patrol.Headlights(car,false);Deaden(car,truck);
+        }
+        private static bool LivingOccupants(PatrolMarker marker)
+        {
+            if(SeatAlive(marker.Driver)||SeatAlive(marker.Passenger))return true;
+            foreach(var rider in marker.Riders)if(SeatAlive(rider))return true;
             return false;
         }
+        private static bool SeatAlive(GameObject npc)
+        {if(npc==null)return false;foreach(var f in npc.GetComponents<PlayMakerFSM>())if(f.FsmName=="Health"){var health=f.FsmVariables.GetFsmFloat("Health");if(health!=null)return health.Value>0f;}return !npc.name.Contains("_Dead");}
 
         // the cargo trucks (Rustcargo...): same test as the convoy / template code
         internal static bool IsTruck(string body) { return (body ?? "").StartsWith("Rust", StringComparison.OrdinalIgnoreCase); }

@@ -15,13 +15,24 @@ namespace Apocapatrol
     internal class CarTemplate
     {
         internal string Name = "";
+        internal string TrafficId = "";
+        internal int TrafficSlot = -1;
+        internal string SpawnEvent = "";
+        internal bool ConvoyMember;
+        internal string[] MerchantTypes;
+        internal string MerchantGroup="";
+        internal bool MerchantTravelling;internal string MerchantSaveJson;
+        internal bool SetupOnly;
+        internal string Faction="Scrapyard";
+        internal float ExplodeChance=50f;
         internal RamTargets Rams = RamTargets.Pedestrians;
         internal string Body = "", Wheel = "", Engine = "", Radiator = "", SteeringWheel = "", Exhaust = "", Seat = "", PassengerSeat = "";
         internal string Driver = "", Passenger = "";
         // human turrets (2.2.0; turret 1 = the 2.1.0 blast-lance rider): "Warboy" / a non-ranged human = blast lances, a ranged human = a gunner;
         // "" = none. Spots: frame-local feet positions, empty = automatic
-        internal readonly string[] Turrets = { "", "", "", "" };
-        internal readonly float[][] TurretPos = { new float[0], new float[0], new float[0], new float[0] };
+        internal string[] Turrets = { "", "", "", "" };
+        internal float[][] TurretPos = { new float[0], new float[0], new float[0], new float[0] };
+        internal bool[] TurretStanding = new bool[4];
         internal CarTemplate Trailer; // optional attached trailer; four independent human turret slots
         internal string Rider { get { return Turrets[0]; } }
         internal string RearWheel = "";       // wheel item for hinge_wheel_RL/RR; "" = the same as Wheel
@@ -42,7 +53,7 @@ namespace Apocapatrol
         internal Dictionary<string, int> SpawnLoot;
         internal string SpawnCargoKey;
         internal string[] SpawnCargoOptions;
-        internal CarTemplate CloneForSpawn() { return (CarTemplate)MemberwiseClone(); }
+        internal CarTemplate CloneForSpawn() {var copy=(CarTemplate)MemberwiseClone();copy.Turrets=(string[])Turrets.Clone();copy.TurretPos=(float[][])TurretPos.Clone();copy.TurretStanding=(bool[])TurretStanding.Clone();if(Trailer!=null)copy.Trailer=Trailer.CloneForSpawn();return copy;}
         internal string Origin = "built-in";  // built-in | embedded | file (for the log and the spawner menu)
 
         private string _missingPrefab = "";

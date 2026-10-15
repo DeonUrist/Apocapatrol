@@ -1,5 +1,11 @@
 {
+    "riderStanding": false,
+    "riderStanding2": false,
+    "riderStanding3": false,
+    "riderStanding4": false,
+    "faction": "Scrapyard",
     "schema": 1,
+    "explodeChance": 50,
     "name": "TinyTyrant_Basic",
     "body": "TinyTyrant",
     "kind": "small",

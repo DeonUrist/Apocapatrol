@@ -26,8 +26,7 @@ namespace Apocapatrol
         {
             if (_rider == null || !_rider.Mounted || _anchor == null) return;
             if (transform.parent != _anchor) transform.SetParent(_anchor, true);
-            // Warboys' crouch/throw clips put their feet at the anchor. Gunner height is owned by Pose,
-            // which also supports the legacy bone pose; keep its calculated offset.
+            // Every turret's sitting/standing height is owned by Pose, including lance throwers.
             if (!_gunner) transform.position = _anchor.position;
             if (_body == null) return;
             if (!_body.isKinematic) _body.isKinematic = true;

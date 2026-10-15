@@ -1,0 +1,22 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+V:\Repos\Apocalypter\Apocapatrol\EditorData.cs(83,106): error CS0103: The name 'MerchantCatalog' does not exist in the current context [V:\Repos\Apocalypter\Apocapatrol\Apocapatrol.csproj]
+V:\Repos\Apocalypter\Apocapatrol\EditorData.cs(112,150): error CS0103: The name 'MerchantCatalog' does not exist in the current context [V:\Repos\Apocalypter\Apocapatrol\Apocapatrol.csproj]
+V:\Repos\Apocalypter\Apocapatrol\Templates.cs(22,27): warning CS0649: Field 'CarTemplate.MerchantTypes' is never assigned to, and will always have its default value null [V:\Repos\Apocalypter\Apocapatrol\Apocapatrol.csproj]
+
+Build FAILED.
+
+V:\Repos\Apocalypter\Apocapatrol\Templates.cs(22,27): warning CS0649: Field 'CarTemplate.MerchantTypes' is never assigned to, and will always have its default value null [V:\Repos\Apocalypter\Apocapatrol\Apocapatrol.csproj]
+V:\Repos\Apocalypter\Apocapatrol\EditorData.cs(83,106): error CS0103: The name 'MerchantCatalog' does not exist in the current context [V:\Repos\Apocalypter\Apocapatrol\Apocapatrol.csproj]
+V:\Repos\Apocalypter\Apocapatrol\EditorData.cs(112,150): error CS0103: The name 'MerchantCatalog' does not exist in the current context [V:\Repos\Apocalypter\Apocapatrol\Apocapatrol.csproj]
+    1 Warning(s)
+    2 Error(s)
+
+Time Elapsed 00:00:01.79
+Apocapatrol build failed
+At V:\Repos\Apocalypter\Apocapatrol\verification\Run.ps1:8 char:28
++ if ($LASTEXITCODE -ne 0) { throw 'Apocapatrol build failed' }
++                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Apocapatrol build failed:String) [], RuntimeException
+    + FullyQualifiedErrorId : Apocapatrol build failed
+ 

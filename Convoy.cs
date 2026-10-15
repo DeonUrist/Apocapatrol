@@ -39,6 +39,7 @@ namespace Apocapatrol
         // [Debug] AiOverlay with no raider car driving: the real time until the next automatic roll
         internal static string OverlayLine()
         {
+            if (Plugin.WorldTrafficEnabled.Value) return WorldTraffic.OverlayLine();
             if (_inst == null) return "Raiders: spawner not running";
             if (!Plugin.ConvoyEnabled.Value || Plugin.MaxConvoyCooldown.Value <= 0f) return "Raiders: automatic spawns off";
             float s = _inst._cooldown;
@@ -67,6 +68,7 @@ namespace Apocapatrol
             if (_patrol == null) _patrol = GetComponent<Patrol>();
             if (_patrol == null || !_patrol.InGame()) return;
             if (Time.unscaledTime >= _nextHeatScan) { _nextHeatScan = Time.unscaledTime + 5f; UpdateHeat(); }
+            if (Plugin.WorldTrafficEnabled.Value) return;
             if (Plugin.MaxConvoyCooldown.Value <= 0f) return;
             if (_cooldown < 0f) { ResetCooldown("start"); return; }
             _cooldown -= Time.deltaTime;
@@ -109,6 +111,15 @@ namespace Apocapatrol
         // [General] Fury Road: every group's minimum distance / boss kills count as met
         private float RollKm { get { return Plugin.FuryRoad.Value ? 1e6f : _km; } }
         private int RollBosses { get { return Plugin.FuryRoad.Value ? 999 : _bosses; } }
+        internal static SpawnGroup TrafficGroup(bool convoy,string faction=null)
+        {
+            if (_inst == null) return null;
+            return SpawnGroup.Roll((convoy ? EditorStore.Data.Convoys : EditorStore.Data.Patrols).Where(g=>(faction==null||TrafficFactions.Normalize(g.Faction)==faction)
+                &&(convoy||TrafficFactions.Normalize(g.Faction)!="Coyotes"||CoyoteRoster(g))),
+                _inst.RollKm, _inst.RollBosses, () => UnityEngine.Random.value);
+        }
+        private static bool CoyoteRoster(SpawnGroup group)=>group.Templates.Any(n=>{var t=CarTemplate.Find(n);return t!=null&&t.Available&&!t.IsTruck&&CrewFactions.Compatible(t,"Coyotes");});
+        internal static bool HasTrafficFaction(string faction)=>_inst!=null&&EditorStore.Data.Patrols.Any(g=>TrafficFactions.Normalize(g.Faction)==faction&&g.Eligible(_inst.RollKm,_inst.RollBosses)&&(faction!="Coyotes"||CoyoteRoster(g)));
 
         internal static float HeatFor(float km) { return Mathf.Clamp(km / Mathf.Max(1f, Plugin.HeatIntervalKm.Value) * 0.25f, 0f, Mathf.Max(0f, Plugin.MaxHeat.Value)); }
 
@@ -244,6 +255,8 @@ namespace Apocapatrol
         {
             CarTemplates.Refresh(false);
             var group = EditorStore.Compose(definition, convoy, () => UnityEngine.Random.value);
+            string eventId=Guid.NewGuid().ToString("N");
+            foreach(var t in group){t.SpawnEvent=eventId;t.ConvoyMember=convoy;}
             if (_patrol == null) _patrol = GetComponent<Patrol>();
             Vector3 origin, dir; bool driving;
             if (!Heading(out origin, out dir, out driving)) return false;
@@ -314,7 +327,7 @@ namespace Apocapatrol
         }
 
         // open terrain straight below: the nearest hit of a downward ray from high above must be the terrain (not a roof, rock or car)
-        private static bool GroundAt(Vector3 p, out Vector3 ground)
+        internal static bool GroundAt(Vector3 p, out Vector3 ground)
         {
             ground = p;
             var hits = Physics.RaycastAll(new Vector3(p.x, p.y + 200f, p.z), Vector3.down, 600f, ~0, QueryTriggerInteraction.Ignore);

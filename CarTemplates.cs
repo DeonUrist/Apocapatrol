@@ -65,6 +65,14 @@ namespace Apocapatrol
             {
                 var t = Parse(File.ReadAllText(path), Path.GetFileNameWithoutExtension(path), favorite ? "base" : "player", path);
                 if (t == null || (!favorite && list.ContainsKey(t.Name))) continue;
+                if(list.TryGetValue(t.Name,out var previous)&&previous.Origin!="default"&&
+                    string.Equals(Path.GetDirectoryName(previous.SourcePath),Path.GetFullPath(folder),StringComparison.OrdinalIgnoreCase))
+                {
+                    bool canonical=string.Equals(Path.GetFileNameWithoutExtension(path),t.Name,StringComparison.OrdinalIgnoreCase);
+                    bool previousCanonical=string.Equals(Path.GetFileNameWithoutExtension(previous.SourcePath),t.Name,StringComparison.OrdinalIgnoreCase);
+                    if(previousCanonical&&!canonical){Warn("Duplicate template "+t.Name+": using "+previous.SourcePath+"; ignored alias "+path);continue;}
+                    Warn("Duplicate template "+t.Name+": using "+path+" instead of "+previous.SourcePath);
+                }
                 t.IsDefault = _defaults.ContainsKey(t.Name); t.Favorite = favorite || t.IsDefault; t.SourcePath = Path.GetFullPath(path); list[t.Name] = t;
             }
             catch (Exception e) { Warn("Template file preserved: " + path + ": " + e.Message); }
@@ -118,6 +126,8 @@ namespace Apocapatrol
             var t = new CarTemplate
             {
                 Name = S(f.name).Length > 0 ? S(f.name) : fallbackName,
+                ExplodeChance=f.explodeChance,
+                Faction=f.faction,
                 Body = S(f.body),
                 Kind = S(f.kind),
                 Kinds = ParseKinds(f.kind),
@@ -134,7 +144,7 @@ namespace Apocapatrol
                 Origin = origin,
             };
             if (t.LootPreset.Length == 0 && f.schema < 2) t.LootPreset = t.IsTruck ? (f.cargo.Length > 0 ? "truck-food" : "truck-empty") : "car-standard";
-            for (int i = 0; i < (isTrailer ? 4 : 3); i++) { t.Turrets[i] = S(f.Turret(i)); t.TurretPos[i] = f.TurretPos(i) ?? new float[0]; }
+            for (int i = 0; i < (isTrailer ? 4 : 3); i++) { t.Turrets[i] = S(f.Turret(i)); t.TurretPos[i] = f.TurretPos(i) ?? new float[0]; t.TurretStanding[i]=f.TurretStanding(i); }
             if (f.trailer != null)
             {
                 t.Trailer = Parse(f.trailer.ToJson(), t.Name + " trailer", origin, where + " trailer", true);

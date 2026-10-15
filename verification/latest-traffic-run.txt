@@ -1,0 +1,225 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Apocapatrol -> V:\Repos\Apocalypter\Apocapatrol\bin\Release\Apocapatrol.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.23
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  NativeVerifier -> V:\Repos\Apocalypter\Apocapatrol\verification\bin\Release\ApocapatrolTrailerVerifier.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.34
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  NPCAI -> V:\Repos\Apocalypter\npcai\bin\Release\NPCAI.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:00.91
+PASS: A missing seated-NPC LOS target returns not visible without entering the dictionary lookup
+PASS: Valid LOS targets retain the normal sensor path
+PASS: All shipped patrol and convoy definitions default to Scrapyard
+PASS: Scrapyard patrol map color is red
+PASS: Scrapyard convoy map color is orange, leaving yellow unused
+PASS: Coyote convoy map color is light blue
+PASS: Coyote patrol map color is green
+PASS: Hide route type overrides faction colors with gray
+PASS: Faction choices round-trip through the patrol editor store
+PASS: Shipped explosion chance: Big_Tyrant
+PASS: Shipped explosion chance: Bike
+PASS: Shipped explosion chance: Bike_with_Rider_Flexa
+PASS: Shipped explosion chance: Bike_with_Rider_Scrud
+PASS: Shipped explosion chance: Blast_Bike
+PASS: Shipped explosion chance: Chariot
+PASS: Shipped explosion chance: Example_PipeRat
+PASS: Shipped explosion chance: Fast_Blast_Bike
+PASS: Shipped explosion chance: Junker_Advanced
+PASS: Shipped explosion chance: Junker_Basic
+PASS: Shipped explosion chance: Junker_Warboy
+PASS: Shipped explosion chance: Piperat_Bandit
+PASS: Shipped explosion chance: PipeRat_Basic
+PASS: Shipped explosion chance: Piperat_Scout
+PASS: Shipped explosion chance: Porcupine
+PASS: Shipped explosion chance: Rustcargo_Loot
+PASS: Shipped explosion chance: Rustcargo_Loot_Advanced
+PASS: Shipped explosion chance: Spikeback_Motorcycle
+PASS: Shipped explosion chance: Tiny_Tyrant
+PASS: Shipped explosion chance: Truck_War_Rig
+PASS: Shipped explosion chance: Vulture_Gunner
+PASS: Shipped explosion chance: Warboy_Armored_Tyrant
+PASS: Shipped explosion chance: Warboy_Bike
+PASS: Shipped explosion chance: Warboy_Tyrant
+PASS: Shipped explosion chance: Warboy_Vulture
+PASS: Shipped explosion chance: War_rig
+PASS: Shipped explosion chance: Weak_Warboy
+PASS: One big car equals three small cars, and a small car/semibike equals two bikes
+PASS: Two encounter sides divide six cars in their original eight-to-four roster proportion
+PASS: The weaker faction still appears within double-event and individual event caps
+PASS: Offscreen resolution eliminates the weaker faction and retains a five-minute aftermath
+PASS: Equal weighted strengths resolve as mutual losses
+PASS: Friendly Coyotes leave the player alone while Scrapyard remains hostile
+PASS: Coyote traffic reads the game's real faction OnOff hostility flag
+PASS: Always explode cars is off by default
+PASS: War Rig bus/truck default to zero; other templates default to fifty percent
+PASS: Template probability rolls at the configured percentage boundary
+PASS: Always explode overrides zero chance without changing eligibility
+PASS: An empty car with no observed driver death never explodes
+PASS: Driver death permits the explosion check
+PASS: An alive driver bailout cancels explosion even if a prior driver died
+PASS: Player-owned cars remain protected
+PASS: A living turret prevents the explosion until it vacates
+PASS: Empty seats and turret slots release the final occupant gate
+PASS: Schema twelve retains faction, explosion roll and battle membership
+PASS: Earlier car saves remain readable with safe faction and chance defaults
+PASS: Real patrol names defaults to named traffic
+PASS: Disabling real names labels both traffic roles generically
+PASS: Hidden route type overrides names and gives both roles the same gray color
+PASS: Terrain routing retains a bounded sparse waypoint chain and exact endpoints
+PASS: Cached elevation guides the entire route around a 400 m mountain instead of cutting between low endpoints: peak=0.5215057
+Terrain worker benchmark: 4.76 ms, 11 waypoints, no Unity Terrain or Physics reads
+PASS: Lazy road cache round-trips coarse heights without recalculating terrain
+PASS: Old road caches still load and safely fall back until elevation is captured
+PASS: A loaded nearby camp supports traffic
+PASS: Unloaded camps do not increase local traffic population
+PASS: Dead actors do not clear a camp while its spawn population is unresolved
+PASS: Confirmed resident deaths clear a completed camp and remove its population contribution
+PASS: Cleared base status persists across save/reload
+PASS: Virtual journeys involving a cleared base are cancelled
+PASS: Live traffic reroutes from a cleared destination to a surviving base
+PASS: With every base cleared, live traffic holds instead of driving into a cleared camp
+PASS: An alive resident despawn never marks a camp cleared
+PASS: Single encounter admits reserved car 1
+PASS: Single encounter admits reserved car 2
+PASS: Single encounter admits reserved car 3
+PASS: Single encounter admits reserved car 4
+PASS: Single encounter admits reserved car 5
+PASS: One event cannot reserve a sixth car
+PASS: Overlapping events share six cars including builds in progress
+PASS: Cancelled build reservations release their budget
+PASS: Live cars and overlapping group reservations use the same budget
+PASS: A building car is counted once through its reservation, not twice through its scene tag
+PASS: Convoy crew never bails or marks itself abandoned when stuck
+PASS: A convoy is not abandoned by the dry-tank bailout path
+PASS: Repeated rock recovery remains active, bounded and never enters permanent bailout/wait
+PASS: Rock recovery never schedules the convoy's vacated-car explosion
+PASS: Driving skips planning before its next decision and retains existing controls
+PASS: Encounter identity and convoy persistence survive save/reload in schema 11
+PASS: Schema 10 saves remain readable with safe encounter defaults
+PASS: New convoy rosters cap at five and preserve cargo truck priority
+PASS: Disabling car spawn limit restores the existing spawn budget
+PASS: Fixed patrol cap counts arrived groups and does not scale with camp distances
+PASS: Zero max convoys disables convoy replenishment
+PASS: Lazy discovery startup preserves saved journeys until camp availability has been established
+PASS: No loaded nearby camps removes virtual traffic even when the configured maximum is positive
+PASS: Density controls have been replaced by fixed max patrols/convoys
+PASS: Experimental options are bound first for the settings menu
+PASS: Optional NPC Overhaul adapter marks this mod's raiders for simple AI
+PASS: Turning simple convoy bandits AI off restores ordinary NPC Overhaul behaviour
+PASS: Simple bandits ignore sound/engine/gunshot investigation assignments
+PASS: Seated/simple crew has no autonomous target acquisition before a combat dismount
+PASS: Combat dismount immediately targets the real player without a sight acquisition roll
+PASS: Dismounted bandits never forget a distant target or replace it with a ghost
+PASS: A bandit seated again stops its autonomous combat AI
+PASS: Simple bandits still request NPC Overhaul baked-map waypoints and steer to them
+PASS: Simple AI defers its next thought instead of running the full tactical loop
+PASS: Simple combat handoff pursues an explicit opposing faction target
+PASS: A friendly faction's null target clears simple combat instead of falling back to the player
+PASS: Sparse route is curved and influenced by cached roads
+PASS: Coarse waypoints preserve exact departure and destination positions
+PASS: Missing road hints produce a bounded snake route without waiting for generation
+PASS: The fallback is cached deterministic geometry, not random changes while driving
+PASS: Very long journeys retain a fixed small waypoint budget
+PASS: Cached route distances preserve bend interpolation
+PASS: Sparse route driving still brakes before a sharp bend
+PASS: Cached map texture draws the waypoint bend instead of the endpoint chord
+PASS: Map segments crossing the viewport are clipped and retained even when both endpoints are outside
+PASS: An existing physical patrol adopts a cached curved route instead of keeping its old direct line
+PASS: Road-route adoption leaves the physical car and simulated position unchanged
+PASS: Saved patrols retain the same sparse waypoint chain used by driving and the map
+PASS: Existing binary road caches remain compatible with lazy coarse hints
+PASS: A dense old tile is reduced to at most 192 cached hints
+PASS: Lazy road files reject another world identity
+PASS: Both actual MyDesert road sources supply coarse cached hints
+PASS: Activating a world does not synchronously load all its road files
+PASS: Road hint cache identity survives kilometre origin shifts
+PASS: Tile finalization captures 65x65 world-height samples before MapMagic clears its normalized products
+PASS: Native generated roads are captured coarsely before MapMagic clears its products
+PASS: Coarse hints survive terrain product clearing and unloading
+PASS: World activation leaves an existing road file on disk until a journey requests its tile
+PASS: Lazy route requests queue IO without reading a road file synchronously
+PASS: Requested road files load asynchronously into bounded reusable hints
+PASS: Virtual travel crosses route legs without losing distance
+PASS: Virtual arrival stops at the destination
+PASS: A nearby player keeps an arrived group indefinitely
+PASS: Unattended arrival expires only after its catch-up grace
+PASS: Density scales with area and respects population cap
+PASS: Zero density creates no groups
+PASS: Day/night/twilight change patrol sight range
+PASS: Engine power increases detection and idle halves its range
+PASS: Convoy truck never pursues even with a detected nearby player
+PASS: Convoy escorts engage inside 300 m and return outside it
+PASS: Patrol requires detection and retains a last-known search
+PASS: Strategic route detours around another known camp footprint
+PASS: Discovery recognizes camp instances without treating campfire props as bases
+PASS: Native world records deserialize before materialization: (101000.0, 2000.0, 101000.0) leg=1 roster=1
+PASS: Frozen production template resolves on reload
+PASS: Native terrain provides a safe materialization floor
+PASS: Native chassis corridor is clear at the fixture
+PASS: Nearby virtual group materializes through the production vehicle builder
+PASS: Physical representation retains its world identity and roster slot
+PASS: Native patrol sees a player in daylight with clear line of sight
+PASS: Native convoy truck follows its route toward the destination during close player contact
+PASS: Production truck pilot enters destination driving instead of charging the player
+PASS: Native escort switches to engagement near its convoy
+PASS: Native escort leaves pursuit beyond guard range
+PASS: Trailer-mounted guards share convoy engagement limits
+PASS: Vehicle fixture exposes native part condition
+PASS: Far real group unloads without deleting its world journey
+PASS: Unload preserves actual part damage and driver health
+PASS: Unloaded group continues travelling and can be caught again
+PASS: Schema 10 round-trips world traffic and physical membership
+PASS: Schema 9 saves remain readable without traffic membership
+PASS: Explicit JSON retains nested crew/damage data and route progress
+PASS: Catching up materializes the same saved journey again: timeScale=1 live=1 retired=False
+PASS: Second materialization applies retained crew health and part condition within float serialization precision
+PASS: Origin synchronization patches the active NWH FloatingOrigin Jump method
+PASS: Standalone minimap and its Fit camps controls have been removed
+PASS: Native kilometre-scale NWH jump preserves stable player coordinates: (1250.0, 25.0, -950.0)
+PASS: Native origin jump preserves real/simulated route records and camp positions
+PASS: Camp identity survives origin rebasing without duplicate discovery
+PASS: Origin jump leaves a stationary patrol at the same map pixel
+PASS: Native kilometre-scale NWH jump preserves stable player coordinates: (-1150.0, -10.0, 1450.0)
+PASS: Native origin jump preserves real/simulated route records and camp positions
+PASS: Camp identity survives origin rebasing without duplicate discovery
+PASS: Origin jump leaves a stationary patrol at the same map pixel
+PASS: Physical traffic stays aligned with its stable route after repeated real game shifts
+PASS: Committed attack aim and run-out start translate with the scene
+PASS: Patrol detection memory stays stable and player velocity history translates
+PASS: Load/unload distance is unchanged by origin rebasing
+PASS: Convoy driver receives the route lookahead in the current shifted scene frame
+PASS: Virtual travel advances normally after multiple coordinate shifts
+PASS: Traffic saves persist MapMagic-local positions instead of shifted scene coordinates
+PASS: Save reload uses restored MapMagic offset even when NWH accumulated offset is unrelated
+PASS: Original prototype saves migrate coordinates and camp membership once
+PASS: Stripped vehicles cannot virtualize into repaired replacements
+PASS: Live arrived group stays when the player is around
+PASS: Arrived unattended group retires after grace
+PASS: Battle fixture provides safe terrain in its stable coordinate frame
+PASS: An opposed road encounter pauses both groups in one battle record
+PASS: Both battle factions materialize through the production vehicle builder
+PASS: Native skirmish builds six cars with four Scrapyard and two Coyote slots; actual=0:0,1:0,0:1,1:1,0:3,0:2
+PASS: Native crew receives its chosen faction tag
+PASS: Friendly Coyote crews target the opposing raiders instead of the player
+PASS: Battle rosters and paused journeys survive world serialization
+PASS: Only weighted survivors resume the destination journey after offscreen resolution
+PASS: Revisiting a resolved battle lazily constructs casualty vehicles and actual corpse prefabs
+PASS: The skull record and its physical aftermath expire after five minutes

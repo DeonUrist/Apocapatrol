@@ -19,9 +19,10 @@ namespace Apocapatrol
         public PatrolCarData[] cars = new PatrolCarData[0];
         public float convoyCooldown = -1f;    // seconds until the next automatic convoy roll (schema 3), -1 = unknown
         public string lastGroup = "";         // the group id of the last automatic spawn (schema 8)
+        public string trafficJson = "";       // schema 10: remembered camps and persistent journeys
     }
 
-    public class PatrolCarData
+    [Serializable] public class PatrolCarData
     {
         public string carName, bodyPrefab, ramTargets;
         public float positionX, positionY, positionZ;
@@ -37,6 +38,16 @@ namespace Apocapatrol
         public float suspensionWidth = 1f, suspensionHeight = 0f;   // schema 7: lift-kit adjustment (1 / 0 = standard)
         public string cargoKey = "";         // schema 6: the loot type it was built with ("" = none / unknown) - picks the container texture
         public string templateName = "";     // schema 9: editable self-destruct exemptions keep their identity after loading
+        public string trafficId = "";
+        public int trafficSlot = -1;
+        public string encounterId = "";
+        public bool convoyMember;
+        public string faction="Scrapyard";
+        public float explodeChance=50f;
+        public bool driverDied,driverBailed,explodeRolled,explodeSelected;
+        public bool setupOnly;
+        public string battleId="";public int battleSide,battleSlot=-1;
+        public string merchantJson="";
     }
 
     internal sealed class PatrolMarker : MonoBehaviour
@@ -58,11 +69,18 @@ namespace Apocapatrol
         internal float SuspensionWidth = 1f, SuspensionHeight;   // 2.3.0: the template's lift-kit adjustment (saved, re-applied after a load)
         internal string CargoKey = "";        // loot type at build (Food, Water, ...; "" = none): the container texture, kept across saves
         internal string TemplateName = "";    // the template this car was built from (2.1.0; "" for restored cars) - the rider spot tweaker saves into it
+        internal string TrafficId = "";
+        internal string Faction="Scrapyard";
+        internal float ExplodeChance=50f;
+        internal bool DriverDied,DriverBailed,ExplodeRolled,ExplodeSelected;
+        internal float FactionCheck;internal GameObject FactionTarget;
+        internal int TrafficSlot = -1;
         // human turrets (2.2.0; slot 0 = the 2.1.0 rider): the body on each spot (null once it jumped, leapt or died) and the spot itself.
         // Not saved: a restored car has none.
         internal const int VehicleTurretSlots = 3, TrailerTurretSlots = 4, TotalTurretSlots = 7;
         internal GameObject Trailer;
         internal readonly GameObject[] Riders = new GameObject[TotalTurretSlots];
+        internal bool SetupOnly;
         internal readonly Transform[] RiderAnchors = new Transform[TotalTurretSlots];
         internal GameObject Rider { get { foreach (var r in Riders) if (r != null) return r; return null; } }
         internal Transform RiderAnchor { get { foreach (var a in RiderAnchors) if (a != null) return a; return null; } }
@@ -83,6 +101,7 @@ namespace Apocapatrol
         }
 
         internal GameObject Passenger { get { return _passenger; } }
+        internal GameObject Driver { get { return _driver; } }
         internal string PassengerPrefab { get { return _passengerPrefab; } }
 
         // the passenger's Health FSM and its Health variable, resolved once per passenger (the Crew asks every frame after the
@@ -130,11 +149,18 @@ namespace Apocapatrol
             // an alive autonomous driver with no occupant.
             if (!driverPresent && (phase == CrewPhase.Waiting || phase == CrewPhase.Driving)) phase = CrewPhase.Released;
             var p = transform.position;
+            var encounter=GetComponent<EncounterCar>();
             return new PatrolCarData
             {
                 carName = gameObject.name,
                 bodyPrefab = _bodyPrefab,
                 templateName = TemplateName ?? "",
+                trafficId = TrafficId ?? "", trafficSlot = TrafficSlot,
+                encounterId=encounter!=null?encounter.Event:"",convoyMember=encounter!=null&&encounter.Convoy,
+                faction=Faction,explodeChance=ExplodeChance,driverDied=DriverDied,driverBailed=DriverBailed,explodeRolled=ExplodeRolled,explodeSelected=ExplodeSelected,
+                battleId=GetComponent<BattleCar>()?.Battle??"",battleSide=GetComponent<BattleCar>()?.Side??0,battleSlot=GetComponent<BattleCar>()?.Slot??-1,
+                merchantJson=GetComponent<MerchantHost>()?.Snapshot()??"",
+                setupOnly=SetupOnly,
                 ramTargets = _rams.ToString(),
                 positionX = p.x, positionY = p.y, positionZ = p.z,
                 driverPrefab = _driverPrefab,
@@ -155,13 +181,14 @@ namespace Apocapatrol
 
     internal static class PatrolPersistence
     {
-        private const int SchemaVersion = 9;   // 9 = template name   // 8 = last spawn group   // 7 = suspension width / height   // 1 = no ramTargets (read as Pedestrians), 2 = no convoy cooldown, 3 = no cleanup fields, 4 = no exploded flag, 5 = no cargo key
+        private const int SchemaVersion = 14;  // 14 = parked setup vehicles; older saves remain readable
         private const int Magic = 0x434F5041; // "APOC" in little-endian; rejects unrelated/corrupt files.
         private const int MaxCarsPerSave = 1024;
         private static PlayMakerFSM _saveLoad, _newGoSave;
         private static string _lastState, _loadSlot;
         private static float _nextScan;
         private static bool _restoreRunning;
+        internal static bool Restoring { get { return _restoreRunning; } }
         // 1.9.0: the same data also goes INTO the game's save file (Easy Save key EsKey, base64 of the sidecar bytes), so it travels with
         // the save (Steam Cloud, copied saves). Written ~1 s after the save returns to isPlay, to the ES3 cache and the file (the game stores
         // its cache to disk at the end of a save and would wipe a key written to the file mid-save). The BepInEx sidecar stays as a fallback.
@@ -191,7 +218,7 @@ namespace Apocapatrol
             {
                 if (state == "SaveGame") Save(CurrentSaveSlot(), CurrentSeed());
                 if (state == "LoadGame") _loadSlot = CurrentSaveSlot();
-                if (state == "LoadGame" || state == "setSeed") Convoy.SetCooldown(-1f);   // new game / load: the clock is re-rolled (or restored from the sidecar)
+                if (state == "LoadGame" || state == "setSeed") { Convoy.SetCooldown(-1f); WorldTraffic.ResetForScene(); }
                 if (state == "isPlay" && _pendingData != null) _flushAt = Time.unscaledTime + 1f;
                 if (state == "isPlay" && !string.IsNullOrEmpty(_loadSlot) && !_restoreRunning)
                 {
@@ -242,7 +269,7 @@ namespace Apocapatrol
             if (!TryPath(slot, out path)) { Plugin.Log.LogWarning("Persistence: invalid save slot " + slot); return; }
             try
             {
-                var data = new PatrolSaveData { version = SchemaVersion, saveFile = Path.GetFileName(slot), worldSeed = seed, convoyCooldown = Convoy.CurrentCooldown(), lastGroup = Convoy.LastGroup ?? "" };
+                var data = new PatrolSaveData { version = SchemaVersion, saveFile = Path.GetFileName(slot), worldSeed = seed, convoyCooldown = Convoy.CurrentCooldown(), lastGroup = Convoy.LastGroup ?? "", trafficJson = WorldTraffic.SaveJson() };
                 var cars = new List<PatrolCarData>();
                 foreach (var marker in PatrolMarker.All)
                     if (marker != null && !Register.Pending(marker.gameObject)) cars.Add(marker.Snapshot());   // still being built: not in the game's save either
@@ -271,6 +298,8 @@ namespace Apocapatrol
 
             if (data.convoyCooldown >= 0f) Convoy.SetCooldown(data.convoyCooldown);
             Convoy.LastGroup = data.lastGroup ?? "";
+            try { WorldTraffic.RestoreJson(data.trafficJson); }
+            catch (Exception e) { Plugin.Log.LogWarning("Persistence: world traffic skipped: " + e.Message); }
             var savedCars = data.cars ?? new PatrolCarData[0];
             var pending = new List<PatrolCarData>(savedCars);
             float until = Time.realtimeSinceStartup + 15f;
@@ -301,7 +330,7 @@ namespace Apocapatrol
             }
             Plugin.Verbose("Persistence: restored " + (savedCars.Length - pending.Count) + "/" + savedCars.Length
                 + " patrol car(s) from " + slot);
-            foreach (var missing in pending) Plugin.Log.LogWarning("Persistence: saved patrol car not found: " + missing.carName);
+            foreach (var missing in pending) { WorldTraffic.MissingRestored(missing); Plugin.Log.LogWarning("Persistence: saved patrol car not found: " + missing.carName); }
             _restoreRunning = false;
             // a second, cheap pass a few seconds later: anything the game's own load applied after us (materials) is fixed again
             yield return new WaitForSecondsRealtime(3f);
@@ -334,7 +363,7 @@ namespace Apocapatrol
         {
             if (car.GetComponent<PatrolMarker>() != null) return;
             RepairFrame(car, data.bodyPrefab);    // older saves: broken material references -> the body's own materials
-            Paint.Apply(car, data.bodyPrefab);   // the game rebuilt the frame from its prefab: the mod's paint again
+            Paint.Apply(car, data.bodyPrefab,data.faction);
             Paint.ApplyCargo(car, data.cargoKey);
             GameObject driver = null, passenger = null;
             CrewPhase phase;
@@ -346,6 +375,7 @@ namespace Apocapatrol
                 dead.TemplateName = data.templateName ?? "";
                 dead.PlayerEntered = data.playerEntered; dead.FarSeconds = data.farSeconds; dead.Exploded = true; dead.CargoKey = data.cargoKey ?? "";
                 Explode.RestoreDead(car, data.bodyPrefab);
+                dead.Faction=TrafficFactions.Normalize(data.faction);dead.ExplodeChance=data.explodeChance;WorldTraffic.BindBattle(dead,data);
                 Plugin.Verbose("Persistence: dead chassis restored: " + car.name);
                 return;
             }
@@ -365,13 +395,21 @@ namespace Apocapatrol
 
             var mk = PatrolMarker.Attach(car, data.bodyPrefab, data.driverPrefab, driver, data.passengerPrefab, passenger, CarTemplate.ParseRams(data.ramTargets));
             mk.TemplateName = data.templateName ?? "";
+            mk.TrafficId = data.trafficId ?? ""; mk.TrafficSlot = data.trafficSlot;
+            if(!string.IsNullOrEmpty(data.encounterId))EncounterCar.Attach(car,data.encounterId,data.convoyMember);
+            var factionMarker=car.GetComponent<PatrolMarker>();
+            if(factionMarker!=null){factionMarker.Faction=TrafficFactions.Normalize(data.faction);factionMarker.ExplodeChance=data.explodeChance;factionMarker.DriverDied=data.driverDied;factionMarker.DriverBailed=data.driverBailed;factionMarker.ExplodeRolled=data.explodeRolled;factionMarker.ExplodeSelected=data.explodeSelected;TrafficFactions.Crew(car,factionMarker);}
             mk.PlayerEntered = data.playerEntered;
+            mk.SetupOnly=data.setupOnly;if(data.setupOnly){var setup=car.GetComponent<Crew>();if(setup!=null)setup.Hold=true;Nwh.StopEngine(car);Patrol.Handbrake(car,true);}
+            MerchantRuntime.Restore(car,data.merchantJson);
+            WorldTraffic.BindRestored(mk);
+            WorldTraffic.BindBattle(mk,data);
             mk.FarSeconds = data.farSeconds;
             mk.CargoKey = data.cargoKey ?? "";
             mk.SuspensionWidth = data.suspensionWidth; mk.SuspensionHeight = data.suspensionHeight;
             if (data.suspensionWidth != 1f || data.suspensionHeight != 0f) Suspension.Apply(car, data.suspensionWidth, data.suspensionHeight, "restored");
             var crew = car.GetComponent<Crew>();
-            if (crew != null && phase != CrewPhase.Released && phase != CrewPhase.DeadRolling) crew.Revive();   // handbrake off + ignition, like a fresh build
+            if (crew != null && !data.setupOnly && (car.GetComponent<MerchantHost>()==null || car.GetComponent<MerchantHost>().Data.travelling) && phase != CrewPhase.Released && phase != CrewPhase.DeadRolling) crew.Revive();
             Plugin.Verbose("Persistence: crew restored on " + car.name + " (" + phase + ")");
         }
 
@@ -477,6 +515,7 @@ namespace Apocapatrol
                 foreach (var car in cars) WriteCar(writer, car, data.version);
                 writer.Write(data.convoyCooldown);
                 WriteString(writer, data.lastGroup ?? "");
+                if (data.version >= 10) WriteString(writer, data.trafficJson ?? "");
                 writer.Flush();
                 return stream.ToArray();
             }
@@ -499,8 +538,10 @@ namespace Apocapatrol
                 for (int i = 0; i < count; i++) cars[i] = ReadCar(reader, version);
                 float cooldown = version >= 3 ? reader.ReadSingle() : -1f;
                 string lastGroup = version >= 8 ? reader.ReadString() : "";
+                string traffic = version >= 10 ? reader.ReadString() : "";
+                if (traffic.Length > 8000000) throw new InvalidDataException("World traffic save too large");
                 if (stream.Position != stream.Length) Plugin.Verbose("Persistence: raider data has trailing bytes");
-                return new PatrolSaveData { version = version, saveFile = slot, worldSeed = seed, cars = cars, convoyCooldown = cooldown, lastGroup = lastGroup };
+                return new PatrolSaveData { version = version, saveFile = slot, worldSeed = seed, cars = cars, convoyCooldown = cooldown, lastGroup = lastGroup, trafficJson = traffic };
             }
         }
 
@@ -517,6 +558,12 @@ namespace Apocapatrol
             WriteString(writer, car.cargoKey);
             writer.Write(car.suspensionWidth); writer.Write(car.suspensionHeight);
             if (version >= 9) WriteString(writer, car.templateName);
+            if (version >= 10) { WriteString(writer, car.trafficId); writer.Write(car.trafficSlot); }
+            if(version>=11){WriteString(writer,car.encounterId);writer.Write(car.convoyMember);}
+            if(version>=12){WriteString(writer,car.faction);writer.Write(car.explodeChance);writer.Write(car.driverDied);writer.Write(car.driverBailed);writer.Write(car.explodeRolled);writer.Write(car.explodeSelected);}
+            if(version>=12){WriteString(writer,car.battleId);writer.Write(car.battleSide);writer.Write(car.battleSlot);}
+            if(version>=13)WriteString(writer,car.merchantJson);
+            if(version>=14)writer.Write(car.setupOnly);
         }
 
         private static PatrolCarData ReadCar(BinaryReader reader, int version)
@@ -536,6 +583,13 @@ namespace Apocapatrol
             if (version >= 6) car.cargoKey = ReadString(reader);
             if (version >= 7) { car.suspensionWidth = reader.ReadSingle(); car.suspensionHeight = reader.ReadSingle(); }
             if (version >= 9) car.templateName = ReadString(reader);
+            if (version >= 10) { car.trafficId = ReadString(reader); car.trafficSlot = reader.ReadInt32(); }
+            if(version>=11){car.encounterId=ReadString(reader);car.convoyMember=reader.ReadBoolean();}
+            if(version>=12){car.faction=ReadString(reader);car.explodeChance=reader.ReadSingle();car.driverDied=reader.ReadBoolean();car.driverBailed=reader.ReadBoolean();car.explodeRolled=reader.ReadBoolean();car.explodeSelected=reader.ReadBoolean();}
+            else {car.explodeChance=Explode.DefaultChance(car.templateName);car.driverDied=car.driverPhase=="DeadRolling"||car.driverPhase=="DeadStuck";}
+            if(version>=12){car.battleId=ReadString(reader);car.battleSide=reader.ReadInt32();car.battleSlot=reader.ReadInt32();}
+            if(version>=13)car.merchantJson=ReadString(reader);
+            if(version>=14)car.setupOnly=reader.ReadBoolean();
             return car;
         }
 

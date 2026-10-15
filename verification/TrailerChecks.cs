@@ -14,12 +14,17 @@ using ES3Internal;
 
 [BepInPlugin("com.denis.apocapatrol.trailer-verifier", "Trailer Verifier", "0.1.0")]
 [BepInDependency(Apocapatrol.Plugin.GUID)]
+[BepInDependency("com.denis.apocalypter.npcai",BepInDependency.DependencyFlags.SoftDependency)]
 public class TrailerProbe : BaseUnityPlugin
 {
     public static string Output, Templates;
     void Awake() { var arg = Environment.GetCommandLineArgs().FirstOrDefault(a => a.StartsWith("-trailer-output=")); if(arg == null) return; Output = arg.Substring(arg.IndexOf('=') + 1); Directory.CreateDirectory(Output); Templates = Environment.GetCommandLineArgs().First(a => a.StartsWith("-trailer-templates=")).Substring(19); Application.runInBackground = true; new Harmony("trailer.verifier").PatchAll(typeof(TrailerProbe).Assembly); var h = new GameObject("TrailerVerifier") { hideFlags = HideFlags.HideAndDontSave }; DontDestroyOnLoad(h); h.AddComponent<TrailerRunner>().StartCoroutine("Run"); }
     [HarmonyPatch(typeof(PlayMakerFSM), "OnEnable")]
     class BlockWorld { static bool Prefix(PlayMakerFSM __instance) { return false; } }
+    // Fixtures deliberately live far from the vanilla player. Registration can reactivate this FSM.
+    [HarmonyPatch(typeof(HutongGames.PlayMaker.Actions.DestroyObject), "OnEnter")]
+    class KeepDistantFixtures
+    {static bool Prefix(HutongGames.PlayMaker.Actions.DestroyObject __instance){if(__instance.Fsm?.Name!="DeleteFarAwayItems")return true;__instance.Finish();return false;}}
     [HarmonyPatch]
     class NoActiveSave { static MethodBase TargetMethod() { return typeof(Apocapatrol.Plugin).Assembly.GetType("Apocapatrol.Patrol").GetMethod("SaveBusy",BindingFlags.Instance|BindingFlags.NonPublic); } static bool Prefix(ref bool __result) { __result=false; return false; } }
 }
@@ -66,13 +71,13 @@ public partial class TrailerRunner : MonoBehaviour
     {
         if(!drawUi) return;
         var old=(GUISkin)Call("LedgerSkin","Begin");
-        try { GUI.Window(80127,new Rect(16,16,1028,660),id=>uiDraw.Invoke(ui,new object[]{id}),"",GUIStyle.none); }
+        try { GUI.Window(80127,new Rect(16,16,1028,((Rect)Get(ui,"_rect")).height),id=>uiDraw.Invoke(ui,new object[]{id}),"",GUIStyle.none);if(ui.GetType().Name=="TemplateMenu")TrafficInvoke(Get(ui,"_dropdown"),"Flush"); }
         finally { GUI.skin=old; }
     }
     object Call(string type, string method, params object[] args) { return asm.GetType("Apocapatrol." + type).GetMethod(method,All).Invoke(null,args); }
     object Get(object o,string name) { return o.GetType().GetField(name,All).GetValue(o); }
     void Set(object o,string name,object value) { o.GetType().GetField(name,All).SetValue(o,value); }
-    void Check(bool yes,string text) { if(!yes) throw new Exception(text); lines.Add("PASS: "+text); }
+    void Check(bool yes,string text) { if(!yes) throw new Exception(text); lines.Add("PASS: "+text); File.AppendAllText(Path.Combine(TrailerProbe.Output,"progress.txt"),Environment.NewLine+"PASS: "+text); }
     GameObject Asset(string name) { return (GameObject)Call("Prefabs","FindAny",name); }
     Transform Find(GameObject go,string name) { return (Transform)Call("Patrol","FindChild",go.transform,name); }
     IEnumerator Checks()
@@ -81,6 +86,12 @@ public partial class TrailerRunner : MonoBehaviour
         // These fixtures spawn above the world and test construction/serialization, not driving.
         // Keep their geometry stable for the native 20 cm hitch raycast and optional UI screenshots.
         Physics.autoSimulation = false;
+        if (Environment.GetCommandLineArgs().Contains("-pose-only")) {yield return TurretPoseChecks();yield break;}
+        if (Environment.GetCommandLineArgs().Contains("-merchant-only")) {yield return MerchantProbe();yield break;}
+        if (Environment.GetCommandLineArgs().Contains("-battle-only")) { yield return FactionChecks();yield return PreservationChecks();yield return NativeBattleChecks();yield break; }
+        if (Environment.GetCommandLineArgs().Contains("-road-perf-only")) { yield return RoadPerformanceChecks(); yield break; }
+        if (Environment.GetCommandLineArgs().Contains("-traffic-only")) {TrafficSetting("MaxMerchants",0);yield return TrafficUpgrade213Checks(); yield return FactionChecks();yield return PreservationChecks(); yield return UpgradeChecks(); yield return ExperimentalChecks(); yield return RoadChecks(); yield return TrafficChecks();yield return NativeBattleChecks();yield return TrafficMerchantChecks(); yield break; }
+        TrafficSetting("CarSpawnLimit",false);
         yield return PreservationChecks();
         yield return ModVehicleChecks();
         // All shipped JSON stays compatible, including nested attachments and the three older turret spots.
@@ -110,11 +121,17 @@ public partial class TrailerRunner : MonoBehaviour
             fixture.name="Verifier_"+size; fixture.schema=3;
             fixture.trailer=new TemplateFile{body=size,parts=new[]{new TemplatePart{hinge="hinge_wheel_L",prefab="small_wheel_1"},new TemplatePart{hinge="hinge_wheel_R",prefab="small_wheel_1"}}};
             string[] people={"Warboy","Flexa","Scrud","Boltjaw"};
-            for(int i=0;i<4;i++){fixture.trailer.SetTurret(i,people[i]);fixture.trailer.SetTurretPos(i,new[]{(i%2==0?-.4f:.4f),.8f,(i<2?.5f:-.5f)});}
+            for(int i=0;i<3;i++)fixture.SetTurretStanding(i,i==1);
+            for(int i=0;i<4;i++){fixture.trailer.SetTurret(i,people[i]);fixture.trailer.SetTurretStanding(i,i%2==0);fixture.trailer.SetTurretPos(i,new[]{(i%2==0?-.4f:.4f),.8f,(i<2?.5f:-.5f)});}
             var f=TemplateFile.FromJson(fixture.ToJson());
             Check(f.trailer.parts.Length==2 && Enumerable.Range(0,4).All(i=>f.trailer.Turret(i)==people[i] && f.trailer.TurretPos(i).SequenceEqual(fixture.trailer.TurretPos(i))),size+" JSON retains all four turret names and spots");
+            Check(Enumerable.Range(0,4).All(i=>f.trailer.TurretStanding(i)==(i%2==0))&&f.riderStanding2&&!f.riderStanding,size+" JSON retains independent vehicle and four trailer postures");
             var tpl=Call("CarTemplates","Parse",f.ToJson(),f.name,"verification",f.name,false);
             Check(tpl!=null && Get(tpl,"Trailer")!=null,size+" loader accepts trailer data");
+            var clone=TrafficInvoke(tpl,"CloneForSpawn");((bool[])Get(clone,"TurretStanding"))[0]=true;((bool[])Get(Get(clone,"Trailer"),"TurretStanding"))[1]=true;
+            Check(!((bool[])Get(tpl,"TurretStanding"))[0]&&!((bool[])Get(Get(tpl,"Trailer"),"TurretStanding"))[1],size+" spawned posture changes cannot modify the source template or trailer");
+            var frozen=Call("WorldTraffic","Freeze",tpl);var thawed=Call("WorldTraffic","Thaw",frozen);
+            Check(((bool[])Get(thawed,"TurretStanding"))[1]&&((bool[])Get(Get(thawed,"Trailer"),"TurretStanding")).SequenceEqual(new[]{true,false,true,false}),size+" cached traffic definition preserves every turret posture");
             var host=new GameObject("Build verifier"); var patrol=host.AddComponent(asm.GetType("Apocapatrol.Patrol")); ((Behaviour)patrol).enabled=false;
             GameObject tow=null;
             var build=(IEnumerator)patrol.GetType().GetMethod("Build",All).Invoke(patrol,new object[]{tpl,(Vector3?)new Vector3(20,20,0),Quaternion.identity,false,true,(Action<GameObject>)(g=>tow=g)});
@@ -149,20 +166,23 @@ public partial class TrailerRunner : MonoBehaviour
             var message=RiderApi.SaveAnchor(tow,6);
             var saved=TemplateFile.FromJson(File.ReadAllText(source));
             Check(saved.trailer.riderPos4.SequenceEqual(new[]{.5f,1.2f,-.8f}) && saved.rider==f.rider,size+" fourth spot API writes trailer and preserves car turret");
-            Call("TemplateMenu","SaveTemplateEdit",template,"None","None","car-empty",new[]{"Warboy","Flexa","Scrud"},new[]{"Flexa","Scrud","Boltjaw","None"});
+            Call("TemplateMenu","SaveTemplateEdit",template,"None","None","car-empty",new[]{"Warboy","Flexa","Scrud"},new[]{"Flexa","Scrud","Boltjaw","None"},50f,null,new[]{true,false,true},new[]{false,true,false,true});
             saved=TemplateFile.FromJson(File.ReadAllText(source));
             Check(saved.trailer.rider4=="" && saved.trailer.rider=="Flexa" && saved.trailer.parts.Length==2 && saved.trailer.riderPos4.SequenceEqual(new[]{.5f,1.2f,-.8f}),size+" editor changes trailer crew without losing parts or positions");
+            Check(saved.riderStanding&&!saved.riderStanding2&&saved.riderStanding3&&!saved.trailer.riderStanding&&saved.trailer.riderStanding2&&!saved.trailer.riderStanding4,size+" editor saves separate postures and resets an empty trailer slot to sitting");
             RiderWakeChecks(tow,trailer,marker,size);
             if(chief && Environment.GetCommandLineArgs().Contains("-trailer-ui"))
             {
                 ((Behaviour)exporter).enabled=false;
                 Set(exporter,"_draftCar",tow.transform);Set(exporter,"_draftTrailer",trailer);Set(exporter,"_trailerPage",true);Set(exporter,"_rect",new Rect(0,0,1028,660));
                 var selections=(string[])Get(exporter,"_trailerTurrets");for(int i=0;i<4;i++)selections[i]=people[i];
+                var exportStanding=(bool[])Get(exporter,"_trailerTurretStanding");for(int i=0;i<4;i++)exportStanding[i]=i%2==0;
                 ui=exporter;uiDraw=exporter.GetType().GetMethod("DrawDraft",All);drawUi=true;
                 yield return new WaitForSecondsRealtime(.5f);ScreenCapture.CaptureScreenshot(Path.Combine(TrailerProbe.Output,"save-trailer.png"));yield return new WaitForSecondsRealtime(.5f);
                 var menu=host.AddComponent(asm.GetType("Apocapatrol.TemplateMenu"));((Behaviour)menu).enabled=false;
                 Set(menu,"_rect",new Rect(0,0,1028,660));Set(menu,"_modal","editTemplate");Set(menu,"_target",template);Set(menu,"_editTrailerPage",true);
                 var editing=(string[])Get(menu,"_editTrailerTurrets");for(int i=0;i<4;i++)editing[i]=people[i];
+                var editStanding=(bool[])Get(menu,"_editTrailerTurretStanding");for(int i=0;i<4;i++)editStanding[i]=i%2==0;
                 ui=menu;uiDraw=menu.GetType().GetMethod("DrawWindow",All);
                 yield return new WaitForSecondsRealtime(.5f);ScreenCapture.CaptureScreenshot(Path.Combine(TrailerProbe.Output,"edit-trailer.png"));yield return new WaitForSecondsRealtime(.5f);drawUi=false;
             }

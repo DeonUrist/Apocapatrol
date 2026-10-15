@@ -27,6 +27,7 @@ namespace Apocapatrol
 
         private void Update()
         {
+            if(BusPassengerPoseEditor.Active){Hide();return;}
             if (Plugin.TurretSpotEditor == null || !Plugin.TurretSpotEditor.Value) { _car = null; Hide(); return; }
             if (Time.unscaledTime >= _nextFind) { _nextFind = Time.unscaledTime + 0.5f; _car = Nearest(); }
             if (_car == null) { Hide(); return; }
